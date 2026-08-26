@@ -1,0 +1,55 @@
+impacket:
+  installer: uv
+  source: git+https://github.com/fortra/impacket
+  check_command: secretsdump.py
+
+bloodyad:
+  installer: uv
+  source: git+https://github.com/CravateRouge/bloodyAD
+  check_command: bloodyad
+
+certipy:
+  installer: uv
+  source: git+https://github.com/ly4k/Certipy
+  check_command: certipy
+
+ssh-audit:
+  installer: uv
+  source: git+https://github.com/jtesta/ssh-audit
+  check_command: ssh-audit
+
+asrepcatcher:
+  installer: uv
+  source: git+https://github.com/Yaxxine7/ASRepCatcher
+  check_command: asrepcatcher
+
+netexec:
+  installer: uv
+  source: git+https://github.com/Pennyw0rth/NetExec
+  check_command: netexec
+
+wsuks:
+  installer: uv
+  source: git+https://github.com/NeffIsBack/wsuks
+  check_command: wsuks
+
+conpass:
+  installer: uv
+  source: git+https://github.com/login-securite/conpass
+  check_command: conpass
+
+rusthound-ce:
+  installer: github_release
+  repo: g0h4n/RustHound-CE
+  asset_pattern: Linux-gnu-x86_64
+  binary_name: rusthound-ce
+  check_command: rusthound-ce
+  description: BloodHound data collector
+
+kerbrute:
+  installer: github_release
+  repo: ropnop/kerbrute
+  asset_pattern: linux_amd64
+  binary_name: kerbrute
+  check_command: kerbrute
+  description: Kerberos enumeration toolkit

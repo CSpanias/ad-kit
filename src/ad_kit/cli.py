@@ -1,0 +1,80 @@
+"""
+Main AD-Kit command-line interface.
+"""
+
+import typer
+from rich.console import Console
+from rich.table import Table
+
+from ad_kit.commands.install import install_tool
+from ad_kit.commands.status import show_status
+from ad_kit.registry import ToolRegistry
+
+app = typer.Typer(
+    name="ad-kit",
+    help="Active Directory Pentest Toolkit Manager.",
+    no_args_is_help=True,
+)
+
+console = Console()
+
+
+@app.command(
+    help="List all tools available in the registry."
+)
+def tools() -> None:
+    """
+    List all tools available in the registry.
+    """
+    registry = ToolRegistry()
+
+    table = Table()
+
+    table.add_column("Name", style="cyan")
+    table.add_column("Installer", style="green")
+    table.add_column("Description")
+
+    for tool in registry.get_all_tools():
+        table.add_row(
+            tool.name,
+            tool.installer,
+            tool.description,
+        )
+
+    console.print(table)
+
+
+@app.command(
+    help="Show the installation status of registered tools."
+)
+def status() -> None:
+    """
+    Show the installation status of all registered tools.
+    """
+    show_status()
+
+
+@app.command(
+    help="Install a tool from the AD-Kit registry."
+)
+def install(
+    tool: str = typer.Argument(
+        ...,
+        help="Tool name to install.",
+    ),
+) -> None:
+    """
+    Install a tool defined in the AD-Kit registry.
+
+    The tool name must exist in the registry. The appropriate
+    installer implementation will be selected automatically
+    based on the tool's configured installer type.
+
+    Args:
+        tool: Name of the tool to install.
+    """
+    install_tool(tool)
+
+
+if __name__ == "__main__":
+    app()
