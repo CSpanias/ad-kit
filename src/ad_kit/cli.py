@@ -12,12 +12,34 @@ from ad_kit.registry import ToolRegistry
 
 app = typer.Typer(
     name="ad-kit",
-    help="Active Directory Pentest Toolkit Manager.",
+    help=(
+        "Active Directory Pentest Toolkit Manager."
+    ),
+    epilog="""
+Examples:
+
+  ad-kit tools
+  ad-kit status
+  ad-kit install netexec
+  ad-kit install kerbrute
+  ad-kit install all
+""",
     no_args_is_help=True,
+    context_settings={
+        "help_option_names": ["-h", "--help"],
+    },
 )
 
 console = Console()
 
+@app.callback()
+def main() -> None:
+    """
+    Active Directory Pentest Toolkit Manager.
+
+    Use one of the available commands below to manage
+    assessment tooling.
+    """
 
 @app.command(
     help="List all tools available in the registry."
