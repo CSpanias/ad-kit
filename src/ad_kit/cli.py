@@ -11,6 +11,7 @@ from ad_kit.commands.status import show_status
 from ad_kit.registry import ToolRegistry
 
 app = typer.Typer(
+    add_completion=False,
     name="ad-kit",
     help=(
         "Active Directory Pentest Toolkit Manager."
