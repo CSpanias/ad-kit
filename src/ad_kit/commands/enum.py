@@ -12,6 +12,7 @@ from pathlib import Path
 from rich.table import Table
 
 from ad_kit.core.console import print_error, print_info, print_success, print_section, console
+from ad_kit.core.util import get_artefacts_dir, get_session_file
 from ad_kit.commands.rusthound import run_rusthound
 
 
@@ -20,6 +21,7 @@ from ad_kit.commands.rusthound import run_rusthound
 # Current implementation relies on resolvectl and
 # /etc/resolv.conf and may need additional discovery
 # methods or fallback prompting.
+
 def discover_domain() -> str:
     """
     Discover the Active Directory domain.
@@ -163,16 +165,23 @@ def write_results(
         dc_ips: DC IP addresses.
     """
 
-    Path("domain.txt").write_text(f"{domain}\n", encoding="utf-8")
+    artefacts_dir = get_artefacts_dir()
+
+    (artefacts_dir / "domain.txt").write_text(f"{domain}\n", encoding="utf-8")
 
     dc_hostnames = sorted(dc_hostnames)
-    Path("dc-hostnames.txt").write_text(
+
+    (artefacts_dir / "dc-hostnames.txt").write_text(
         "\n".join(dc_hostnames) + "\n",
         encoding="utf-8",
     )
 
     dc_ips = sorted(dc_ips)
-    Path("dc-ips.txt").write_text("\n".join(dc_ips) + "\n", encoding="utf-8")
+
+    (artefacts_dir / "dc-ips.txt").write_text(
+        "\n".join(dc_ips) + "\n",
+        encoding="utf-8",
+    )
 
 
 def configure_nxc() -> None:
@@ -254,8 +263,11 @@ def validate_credentials(
 def save_session(
     session_data: dict,
 ) -> None:
-    Path(".ad-kit-session.json").write_text(
-        json.dumps(session_data, indent=4),
+    get_session_file().write_text(
+        json.dumps(
+            session_data,
+            indent=4,
+        ),
         encoding="utf-8",
     )
 
@@ -296,14 +308,15 @@ def export_domain_users(
             "nxc", "ldap", dc_ip,
             "-u", username,
             "-p", password,
-            "--users-export", "domain-users.txt",
+            "--users-export", "--users-export",
+            str(get_artefacts_dir() / "domain-users.txt"),
         ],
         check=False,
         capture_output=True,
         text=True,
     )
 
-    users_file = Path("domain-users.txt")
+    users_file = (get_artefacts_dir() / "domain-users.txt")
 
     if not users_file.exists():
         raise RuntimeError("Failed to export domain users.")
@@ -322,8 +335,9 @@ def export_domain_users(
         if user.lower() not in excluded_users
     ]
 
-    Path(
-        "domain-users-filtered.txt"
+    (
+        get_artefacts_dir()
+        / "domain-users-filtered.txt"
     ).write_text(
         "\n".join(filtered_users) + "\n",
         encoding="utf-8",
@@ -336,7 +350,7 @@ def export_domain_computers(
     dc_ip: str,
     username: str,
     password: str,
-) -> None:
+) -> int:
     """
     Export domain computer accounts.
 
@@ -367,8 +381,13 @@ def export_domain_computers(
         if candidate.endswith("$"):
             computers.append(candidate)
 
-    Path("domain-computers.txt").write_text(
-        "\n".join(sorted(set(computers))) + "\n",
+    computers = sorted(set(computers))
+
+    (
+        get_artefacts_dir()
+        / "domain-computers.txt"
+    ).write_text(
+        "\n".join(computers) + "\n",
         encoding="utf-8",
     )
 
@@ -377,7 +396,6 @@ def export_domain_computers(
 
 def print_summary(
     session_data: dict,
-    dc_count: int,
 ) -> None:
     """
     Print an enumeration summary.
@@ -391,7 +409,7 @@ def print_summary(
     table.add_column("Value", style="green")
 
     table.add_row("Domain", session_data["domain"])
-    table.add_row("Domain Controllers", str(dc_count))
+    table.add_row("Domain Controllers", str(session_data["dc_count"]))
     table.add_row(
             "Standard User Validated",
             "Yes" if session_data["standard_user_validated"] else "No"
@@ -400,9 +418,8 @@ def print_summary(
         "DA Validated",
         "Yes" if session_data["da_validated"] else "No"
     )
-    table.add_row("Domain Users", str(session_data["domain_users_count"]))
     table.add_row(
-        "Filtered Users", 
+        "Domain Users", 
         str(session_data["domain_users_filtered_count"])
     )
     table.add_row(
@@ -571,9 +588,9 @@ def run_enumeration() -> None:
         print_success(f"Exported {computer_count} computer accounts.")
 
         session_data["excluded_users"] = sorted(excluded_users)
-        session_data["domain_users_count"] = user_count
         session_data["domain_users_filtered_count"] = filtered_count
-        session_data["domain_users_exported"] = True
+
+        save_session(session_data)
 
         #-----------------------------------------------------------------------
         # BloodHound collection
