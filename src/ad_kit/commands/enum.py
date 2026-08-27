@@ -554,7 +554,6 @@ def run_enumeration() -> None:
             excluded_users,
         )
 
-        user_count = export_domain_users(dc_ip, std_user, std_pass)
         session_data["domain_users_exported"] = True
         session_data["domain_users_count"] = user_count
         print_success(f"Exported {user_count} domain users.")
