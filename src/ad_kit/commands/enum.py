@@ -298,7 +298,7 @@ def export_domain_users(
             "nxc", "ldap", dc_ip,
             "-u", username,
             "-p", password,
-            "--users-export", str(get_artefacts_dir() / str(users_file)),
+            "--users-export", users_file,
         ],
         check=False,
         capture_output=True,
