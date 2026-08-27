@@ -49,4 +49,4 @@ def print_error(message: str) -> None:
 
 
 def print_section(title: str) -> None:
-    console.print(f"\n[bold cyan][ {title} ][/bold cyan]\n")
+    console.print(f"\n[bold cyan][{title}][/bold cyan]\n")

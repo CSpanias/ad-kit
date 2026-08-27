@@ -243,18 +243,15 @@ def run_enumeration() -> None:
         # Output files
         #-----------------------------------------------------------------------
         print_section("Artefact Generation")
-        print("")
 
         write_results(domain, dc_hostnames, dc_ips)
         print("")
         print_success("Results written successfully.")
-        print("")
 
         #-----------------------------------------------------------------------
         # Domain account(s) validation
         #-----------------------------------------------------------------------
         print_section("Credential Validation")
-        print("")
 
         dc_ip = dc_ips[0]
 
@@ -274,6 +271,8 @@ def run_enumeration() -> None:
             print_error("Standard user appears privileged.")
         else:
             print_success("Standard user validated.")
+
+        print("")
 
         # Domain Admin
         print_info("Enter Domain Admin credentials.")
@@ -317,7 +316,6 @@ def run_enumeration() -> None:
         # Domain data collection
         #-----------------------------------------------------------------------
         print_section("BloodHound Collection")
-        print("")
         
         collect = typer.confirm("Run RustHound collection?", default=True)
 
