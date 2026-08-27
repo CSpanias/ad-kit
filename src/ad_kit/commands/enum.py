@@ -225,6 +225,10 @@ def print_summary(
     table.add_row("Domain", session_data["domain"])
     table.add_row("Domain Controllers", str(dc_count))
     table.add_row(
+            "Standard User Validated",
+            "Yes" if session_data["standard_user_validated"] else "No"
+    )
+    table.add_row(
         "DA Validated",
         "Yes" if session_data["da_validated"] else "No"
     )
@@ -358,7 +362,6 @@ def run_enumeration() -> None:
 
             if success:
                 session_data["rusthound_collected"] = True
-
                 save_session(session_data)
 
         #-----------------------------------------------------------------------
