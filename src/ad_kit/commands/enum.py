@@ -597,7 +597,7 @@ def run_enumeration() -> None:
         #-----------------------------------------------------------------------
         # Summary table
         #-----------------------------------------------------------------------
-        print_summary(session_data, len(dc_hostnames))
+        print_summary(session_data)
 
 
     except Exception as exc:
