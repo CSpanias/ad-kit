@@ -6,7 +6,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-
+from ad_kit.commands.dump import run_dump
 from ad_kit.commands.enum import run_enumeration
 from ad_kit.commands.install import install_tool
 from ad_kit.commands.rusthound import run_rusthound
@@ -114,7 +114,7 @@ def enum() -> None:
     run_enumeration()
 
 #-------------------------------------------------------------------------------
-# rusthound module
+# Rusthound functionality within the enum module
 #-------------------------------------------------------------------------------
 @app.command(help="Collect BloodHound data using RustHound-CE.")
 def rusthound() -> None:
@@ -122,6 +122,17 @@ def rusthound() -> None:
     Run RustHound collection.
     """
     run_rusthound()
+
+#-------------------------------------------------------------------------------
+# dump module
+#-------------------------------------------------------------------------------
+@app.command(help="Dump NTDS hashes.")
+def dump() -> None:
+    """
+    Dump NTDS hashes using a validated
+    Domain Admin account.
+    """
+    run_dump()
 
 
 if __name__ == "__main__":

@@ -346,6 +346,7 @@ def run_enumeration() -> None:
             "domain_admin": da_user,
             "da_validated": True,
             "rusthound_collected": False,
+            "ntds_dumped": False,
         }
 
         save_session(session_data)
