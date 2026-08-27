@@ -293,9 +293,88 @@ def configure_nxc() -> None:
     print_success("NetExec audit mode configured.")
 
 
+def export_domain_users(
+    dc_ip: str,
+    username: str,
+    password: str,
+) -> None:
+    """
+    Export domain users.
+    """
+
+    subprocess.run(
+        [
+            "nxc", "ldap", dc_ip,
+            "-u", username,
+            "-p", password,
+            "--users-export", "domain-users.txt",
+        ],
+        check=False,
+    )
+
+    users_file = Path("domain-users.txt")
+
+    if not users_file.exists():
+        raise RuntimeError("Failed to export domain users.")
+
+    user_count = sum(
+        1
+        for line in users_file.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    )
+
+    return user_count
+
+
+def export_domain_computers(
+    dc_ip: str,
+    username: str,
+    password: str,
+) -> None:
+    """
+    Export domain computer accounts.
+
+    Args:
+        dc_ip: Domain Controller IP address.
+        username: LDAP username.
+        password: LDAP password.
+
+    Raises:
+        RuntimeError: If the export fails.
+    """
+    result = subprocess.run(
+        [
+            "nxc", "ldap", dc_ip,
+            "-u", username,
+            "-p", password,
+            "--computers",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    computers = []
+
+    for line in result.stdout.splitlines():
+        candidate = line.strip().split()[-1]
+
+        if candidate.endswith("$"):
+            computers.append(candidate)
+
+    Path("domain-computers.txt").write_text(
+        "\n".join(sorted(set(computers))) + "\n",
+        encoding="utf-8",
+    )
+
+    return len(computers)
+
+
 def run_enumeration() -> None:
     """
-    Perform initial domain enumeration.
+    Bootstrap an Active Directory assessment.
+
+    This includes domain discovery, Domain Controller enumeration, credential 
+    validation, domain data collection, and BloodHound collection.
     """
 
     #-----------------------------------------------------------------------
@@ -330,7 +409,7 @@ def run_enumeration() -> None:
         write_results(domain, dc_hostnames, dc_ips)
 
         #-----------------------------------------------------------------------
-        # NetExec Configuration
+        # NetExec Configuration (audit mode)
         #-----------------------------------------------------------------------
         print_section("NXC Configuration")
         configure_nxc()
@@ -392,10 +471,20 @@ def run_enumeration() -> None:
             "domain": domain,
             "dc_ip": dc_ip,
             "dc_hostname": dc_hostnames[0],
+            "dc_count": len(dc_hostnames),
+
             "standard_user": std_user,
             "standard_user_validated": True,
+
             "domain_admin": da_user,
             "da_validated": True,
+
+            "domain_users_exported": False,
+            "domain_users_count": 0,
+
+            "domain_computers_exported": False,
+            "domain_computers_count": 0,
+
             "rusthound_collected": False,
             "ntds_dumped": False,
             "jumpbox_host": "",
@@ -408,6 +497,24 @@ def run_enumeration() -> None:
         #-----------------------------------------------------------------------
         # Domain data collection
         #-----------------------------------------------------------------------
+        print_section("Domain Data Collection")
+
+        export_domain_users(dc_ip, std_user, std_pass)
+        user_count = export_domain_users(dc_ip, std_user, std_pass)
+        session_data["domain_users_exported"] = True
+        session_data["domain_users_count"] = user_count
+        print_success(f"Exported {user_count} domain users.")
+
+        export_domain_computers(dc_ip, std_user, std_pass)
+        computer_count = export_domain_computers(dc_ip, std_user, std_pass)
+        session_data["domain_computers_exported"] = True
+        session_data["domain_computers_count"] = computer_count
+        print_success(f"Exported {computer_count} computer accounts.")
+
+        #-----------------------------------------------------------------------
+        # BloodHound collection
+        #-----------------------------------------------------------------------
+        
         print_section("BloodHound Collection")
         
         collect = typer.confirm("Run RustHound collection?", default=True)
