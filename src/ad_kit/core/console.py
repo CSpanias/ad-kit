@@ -8,7 +8,6 @@ from rich.console import Console
 
 console = Console()
 
-
 def print_info(message: str) -> None:
     """
     Display an informational message.
@@ -49,14 +48,5 @@ def print_error(message: str) -> None:
     console.print(f"[red][-][/red] {message}")
 
 
-from rich.console import Console
-from rich.rule import Rule
-
-console = Console()
-
-
 def print_section(title: str) -> None:
-    """
-    Print a section header.
-    """
-    console.print(Rule(title, style="cyan"))
+    console.print(f"\n[bold cyan][ {title} ][/bold cyan]\n")

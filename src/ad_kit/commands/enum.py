@@ -227,15 +227,7 @@ def run_enumeration() -> None:
         print("")
 
         dc_hostnames = enumerate_domain_controllers(domain)
-
-        for hostname in dc_hostnames:
-            print_success(hostname)
-
-        print("")
         dc_ips = resolve_domain_controllers(dc_hostnames)
-
-        for ip in dc_ips:
-            print_success(ip)
 
         table = Table(title="")
 
@@ -250,6 +242,9 @@ def run_enumeration() -> None:
         #-----------------------------------------------------------------------
         # Output files
         #-----------------------------------------------------------------------
+        print_section("Artefact Generation")
+        print("")
+
         write_results(domain, dc_hostnames, dc_ips)
         print("")
         print_success("Results written successfully.")
@@ -269,8 +264,6 @@ def run_enumeration() -> None:
         std_pass = typer.prompt("Password", hide_input=True)
         print("")
 
-        print_info("Validating standard user...")
-
         valid, pwned = validate_credentials(dc_ip, std_user, std_pass)
 
         if not valid:
@@ -287,8 +280,6 @@ def run_enumeration() -> None:
 
         da_user = typer.prompt("Username")
         da_pass = typer.prompt("Password", hide_input=True)
-
-        print_info("Validating Domain Admin...")
 
         valid, pwned = validate_credentials(dc_ip, da_user, da_pass)
 
