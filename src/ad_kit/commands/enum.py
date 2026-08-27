@@ -63,8 +63,9 @@ def discover_domain() -> str:
         pass
 
     domain = typer.prompt(
-        "Unable to determine domain automatically. Enter domain"
-        )
+        "Unable to determine domain automatically.\n"
+        "Enter domain"
+    )
 
     return domain
 
@@ -86,6 +87,7 @@ def enumerate_domain_controllers(
     """
 
     print_info("Querying Active Directory DNS...")
+    print("")
 
     result = subprocess.run(
         [
@@ -224,7 +226,6 @@ def run_enumeration() -> None:
         # Domain Controller(s) enumeration
         #-----------------------------------------------------------------------
         print_section("Domain controllers")
-        print("")
 
         dc_hostnames = enumerate_domain_controllers(domain)
         dc_ips = resolve_domain_controllers(dc_hostnames)
@@ -245,7 +246,6 @@ def run_enumeration() -> None:
         print_section("Artefact Generation")
 
         write_results(domain, dc_hostnames, dc_ips)
-        print("")
         print_success("Results written successfully.")
 
         #-----------------------------------------------------------------------
