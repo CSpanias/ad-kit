@@ -8,6 +8,7 @@ import typer
 from pathlib import Path
 
 from ad_kit.core.console import print_error, print_info, print_success
+from ad_kit.core.util import get_artefacts_dir
 
 
 def run_rusthound(
@@ -15,13 +16,15 @@ def run_rusthound(
     dc_ip: str,
     username: str,
     password: str,
-) -> None:
+) -> bool:
     """
     Collect BloodHound data using RustHound.
+
+    Returns:
+    True if collection succeeds, otherwise False.
     """
 
-    output_dir = Path("bloodhound")
-    output_dir.mkdir(exist_ok=True)
+    output_dir = get_artefacts_dir()
 
     print_info(f"Running RustHound against {domain} ({dc_ip})...")
 
@@ -49,7 +52,7 @@ def run_rusthound(
         if result.stderr:
             print_error(result.stderr.strip())
 
-        return
+        return False
 
     print_success("RustHound collection completed.")
     print_info(f"Output directory: {output_dir.resolve()}")

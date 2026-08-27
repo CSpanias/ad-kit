@@ -5,7 +5,6 @@ NTDS dumping functionality.
 import subprocess
 import typer
 
-from pathlib import Path
 from rich.table import Table
 
 from ad_kit.core.console import (
@@ -140,6 +139,8 @@ def run_dump() -> None:
 
             if result.stderr:
                 print_error(result.stderr.strip())
+            elif result.stdout:
+                print_error(result.stdout.strip())
 
             return
 
