@@ -544,6 +544,16 @@ def run_enumeration() -> None:
         #-----------------------------------------------------------------------
         print_section("Domain Data Collection")
 
+        # Filter testing accounts
+        excluded_users = {std_user.lower(), da_user.lower()}
+
+        user_count, filtered_count = export_domain_users(
+            dc_ip,
+            std_user,
+            std_pass,
+            excluded_users,
+        )
+
         user_count = export_domain_users(dc_ip, std_user, std_pass)
         session_data["domain_users_exported"] = True
         session_data["domain_users_count"] = user_count
@@ -553,18 +563,6 @@ def run_enumeration() -> None:
         session_data["domain_computers_exported"] = True
         session_data["domain_computers_count"] = computer_count
         print_success(f"Exported {computer_count} computer accounts.")
-
-        #-----------------------------------------------------------------------
-        # Filter testing accounts
-        #-----------------------------------------------------------------------
-        excluded_users = {std_user.lower(), da_user.lower()}
-
-        user_count, filtered_count = export_domain_users(
-            dc_ip,
-            std_user,
-            std_pass,
-            excluded_users,
-        )
 
         session_data["excluded_users"] = sorted(excluded_users)
         session_data["domain_users_count"] = user_count
