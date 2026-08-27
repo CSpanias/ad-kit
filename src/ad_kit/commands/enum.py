@@ -291,20 +291,20 @@ def export_domain_users(
         RuntimeError: If the user export fails.
     """
 
+    users_file = (get_artefacts_dir() / "domain-users.txt")
+
     subprocess.run(
         [
             "nxc", "ldap", dc_ip,
             "-u", username,
             "-p", password,
             "--users-export", "--users-export",
-            str(get_artefacts_dir() / "domain-users.txt"),
+            str(get_artefacts_dir() / str(users_file)),
         ],
         check=False,
         capture_output=True,
         text=True,
     )
-
-    users_file = (get_artefacts_dir() / "domain-users.txt")
 
     if not users_file.exists():
         raise RuntimeError("Failed to export domain users.")
