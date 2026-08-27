@@ -7,6 +7,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ad_kit.commands.install import install_tool
+from ad_kit.commands.enum import run_enumeration
 from ad_kit.commands.status import show_status
 from ad_kit.registry import ToolRegistry
 
@@ -42,9 +43,10 @@ def main() -> None:
     assessment tooling.
     """
 
-@app.command(
-    help="List all tools available in the registry."
-)
+#-------------------------------------------------------------------------------
+# tools module
+#-------------------------------------------------------------------------------
+@app.command(help="List all tools available in the registry.")
 def tools() -> None:
     """
     List all tools available in the registry.
@@ -66,10 +68,10 @@ def tools() -> None:
 
     console.print(table)
 
-
-@app.command(
-    help="Show the installation status of registered tools."
-)
+#-------------------------------------------------------------------------------
+# tools status submodule
+#-------------------------------------------------------------------------------
+@app.command(help="Show the installation status of registered tools.")
 def status() -> None:
     """
     Show the installation status of all registered tools.
@@ -77,9 +79,10 @@ def status() -> None:
     show_status()
 
 
-@app.command(
-    help="Install a tool from the AD-Kit registry."
-)
+#-------------------------------------------------------------------------------
+# tools install submodule
+#-------------------------------------------------------------------------------
+@app.command(help="Install a tool from the AD-Kit registry.")
 def install(
     tool: str = typer.Argument(
         ...,
@@ -97,6 +100,16 @@ def install(
         tool: Name of the tool to install.
     """
     install_tool(tool)
+
+#-------------------------------------------------------------------------------
+# enum module
+#-------------------------------------------------------------------------------
+@app.command(help="Perform initial domain enumeration.")
+def enum() -> None:
+    """
+    Perform initial domain and domain controller discovery.
+    """
+    run_enumeration()
 
 
 if __name__ == "__main__":
