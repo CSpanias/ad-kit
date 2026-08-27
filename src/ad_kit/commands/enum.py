@@ -49,10 +49,16 @@ def discover_domain() -> str:
         with open("/etc/resolv.conf", encoding="utf-8") as handle:
             for line in handle:
                 if line.startswith("search "):
-                    return line.split()[1].strip()
+                    candidate = line.split()[1].strip()
 
+                    if "." in candidate and candidate != ".":
+                        return candidate
+                    
     except OSError:
         pass
+
+    print_info(f"resolvectl output: {result.stdout.strip()}")
+    print_info(f"resolv.conf search domain: {candidate}")
 
     raise RuntimeError("Unable to determine domain name.")
 
