@@ -125,6 +125,7 @@ def install(
         "Perform basic domain enumeration:\n\n"
         "  • Discover the target domain\n"
         "  • Enumerate domain controllers\n"
+        "  • Configure NetExec's audit mode\n"
         "  • Validate a standard user account\n"
         "  • Validate a Domain Admin account\n"
         "  • Collect BloodHound data using RustHound-CE"
