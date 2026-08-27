@@ -53,3 +53,5 @@ def run_rusthound(
 
     print_success("RustHound collection completed.")
     print_info(f"Output directory: {output_dir.resolve()}")
+
+    return True
