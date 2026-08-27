@@ -5,6 +5,8 @@ Initial engagement enumeration functionality.
 import re
 import socket
 import subprocess
+import typer
+
 from pathlib import Path
 
 from ad_kit.core.console import print_error, print_info, print_success
@@ -57,10 +59,11 @@ def discover_domain() -> str:
     except OSError:
         pass
 
-    print_info(f"resolvectl output: {result.stdout.strip()}")
-    print_info(f"resolv.conf search domain: {candidate}")
+    domain = typer.prompt(
+        "Unable to determine domain automatically. Enter domain"
+        )
 
-    raise RuntimeError("Unable to determine domain name.")
+    return domain
 
 
 def enumerate_domain_controllers(
