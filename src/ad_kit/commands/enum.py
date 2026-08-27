@@ -347,6 +347,9 @@ def run_enumeration() -> None:
             "da_validated": True,
             "rusthound_collected": False,
             "ntds_dumped": False,
+            "jumpbox_host": "",
+            "jumpbox_user": "",
+            "ssh_key": "",
         }
 
         save_session(session_data)
