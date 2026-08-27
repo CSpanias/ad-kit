@@ -16,17 +16,17 @@ from ad_kit.registry import ToolRegistry
 app = typer.Typer(
     add_completion=False,
     name="ad-kit",
-    help=(
-        "Active Directory Pentest Toolkit Manager."
-    ),
+    help=("Active Directory Assessment Toolkit."),
     epilog="""
 Examples:
-
   ad-kit tools
   ad-kit status
+
   ad-kit install netexec
-  ad-kit install kerbrute
   ad-kit install all
+
+  ad-kit enum
+  ad-kit dump
 """,
     no_args_is_help=True,
     context_settings={
@@ -48,7 +48,11 @@ def main() -> None:
 #-------------------------------------------------------------------------------
 # tools module
 #-------------------------------------------------------------------------------
-@app.command(help="List all tools available in the registry.")
+@app.command(
+    help=(
+        "Display all tools registered in AD-Kit and their installation source."
+    )
+)
 def tools() -> None:
     """
     List all tools available in the registry.
@@ -73,7 +77,7 @@ def tools() -> None:
 #-------------------------------------------------------------------------------
 # tools status submodule
 #-------------------------------------------------------------------------------
-@app.command(help="Show the installation status of registered tools.")
+@app.command(help=("Check which registered tools are currently installed."))
 def status() -> None:
     """
     Show the installation status of all registered tools.
@@ -84,11 +88,17 @@ def status() -> None:
 #-------------------------------------------------------------------------------
 # tools install submodule
 #-------------------------------------------------------------------------------
-@app.command(help="Install a tool from the AD-Kit registry.")
+@app.command(
+    help=(
+        "Install one or more tools from the AD-Kit registry.\n\n"
+        "Use 'all' to install every registered tool."
+    )
+)
 def install(
     tool: str = typer.Argument(
         ...,
-        help="Tool name to install.",
+        help="Install one or more tools from the AD-Kit registry.\n\n"
+            "Use 'all' to install every registered tool."
     ),
 ) -> None:
     """
@@ -100,37 +110,46 @@ def install(
 
     Args:
         tool: Name of the tool to install.
+
+    Examples:
+        ad-kit install netexec
+        ad-kit install all
     """
     install_tool(tool)
 
 #-------------------------------------------------------------------------------
 # enum module
 #-------------------------------------------------------------------------------
-@app.command(help="Perform initial domain enumeration.")
+@app.command(
+    help=(
+        "Perform engagement bootstrap activities.\n\n"
+        "The workflow:\n"
+        "  • Discover the target domain\n"
+        "  • Enumerate domain controllers\n"
+        "  • Validate a standard user account\n"
+        "  • Validate a Domain Admin account\n"
+        "  • Collect BloodHound data using RustHound-CE"
+    )
+)
 def enum() -> None:
     """
     Perform initial domain and domain controller discovery.
+
+    Examples:
+        ad-kit enum
     """
     run_enumeration()
 
 #-------------------------------------------------------------------------------
-# Rusthound functionality within the enum module
-#-------------------------------------------------------------------------------
-@app.command(help="Collect BloodHound data using RustHound-CE.")
-def rusthound() -> None:
-    """
-    Run RustHound collection.
-    """
-    run_rusthound()
-
-#-------------------------------------------------------------------------------
 # dump module
 #-------------------------------------------------------------------------------
-@app.command(help="Dump NTDS hashes.")
+@app.command(help=("Perform an NTDS extraction using Impacket secretsdump."))
 def dump() -> None:
     """
-    Dump NTDS hashes using a validated
-    Domain Admin account.
+    Dump NTDS hashes using a validated Domain Admin account.
+
+    Examples:
+        ad-kit dump
     """
     run_dump()
 
