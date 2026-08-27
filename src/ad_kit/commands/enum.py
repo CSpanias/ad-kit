@@ -402,6 +402,10 @@ def print_summary(
     )
     table.add_row("Domain Users", str(session_data["domain_users_count"]))
     table.add_row(
+        "Filtered Users", 
+        str(session_data["domain_users_filtered_count"])
+    )
+    table.add_row(
         "Computer Accounts",
         str(session_data["domain_computers_count"])
     )
@@ -526,6 +530,9 @@ def run_enumeration() -> None:
 
             "domain_users_exported": False,
             "domain_users_count": 0,
+            "domain_users_filtered_count": 0,
+            "domain_users_exported": False,
+
 
             "domain_computers_exported": False,
             "domain_computers_count": 0,
