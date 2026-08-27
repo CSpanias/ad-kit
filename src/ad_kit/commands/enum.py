@@ -207,6 +207,44 @@ def validate_credentials(
     return (is_valid, is_pwned)
 
 
+def print_summary(
+    session_data: dict,
+    dc_count: int,
+) -> None:
+    """
+    Print an enumeration summary.
+    """
+
+    print_section("Summary")
+
+    table = Table(show_header=False)
+
+    table.add_column("Item", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row("Domain", session_data["domain"])
+    table.add_row("Domain Controllers", str(dc_count))
+    table.add_row(
+        "DA Validated",
+        "Yes" if session_data["da_validated"] else "No"
+    )
+    table.add_row(
+        "RustHound", 
+        ("Completed" if session_data["rusthound_collected"] else "Skipped")
+    )
+
+    console.print(table)
+
+
+def save_session(
+    session_data: dict,
+) -> None:
+    Path(".ad-kit-session.json").write_text(
+        json.dumps(session_data, indent=4),
+        encoding="utf-8",
+    )
+
+
 def run_enumeration() -> None:
     """
     Perform initial domain enumeration.
@@ -230,7 +268,7 @@ def run_enumeration() -> None:
         dc_hostnames = enumerate_domain_controllers(domain)
         dc_ips = resolve_domain_controllers(dc_hostnames)
 
-        table = Table(title="")
+        table = Table()
 
         table.add_column("Hostname", style="green")
         table.add_column("IP Address", style="cyan")
@@ -240,18 +278,16 @@ def run_enumeration() -> None:
 
         console.print(table)
 
-        #-----------------------------------------------------------------------
-        # Output files
-        #-----------------------------------------------------------------------
-        print_section("Artefact Generation")
-
+        # Write results into disk
         write_results(domain, dc_hostnames, dc_ips)
-        print_success("Results written successfully.")
 
         #-----------------------------------------------------------------------
         # Domain account(s) validation
         #-----------------------------------------------------------------------
         print_section("Credential Validation")
+
+        if not dc_ips:
+            raise RuntimeError("No domain controller IPs could be resolved.")
 
         dc_ip = dc_ips[0]
 
@@ -302,15 +338,13 @@ def run_enumeration() -> None:
             "dc_ip": dc_ip,
             "dc_hostname": dc_hostnames[0],
             "standard_user": std_user,
+            "standard_user_validated": True,
             "domain_admin": da_user,
             "da_validated": True,
             "rusthound_collected": False,
         }
 
-        Path(".ad-kit-session.json").write_text(
-            json.dumps(session_data,indent=4,),
-            encoding="utf-8",
-        )
+        save_session(session_data)
 
         #-----------------------------------------------------------------------
         # Domain data collection
@@ -325,10 +359,13 @@ def run_enumeration() -> None:
             if success:
                 session_data["rusthound_collected"] = True
 
-                Path(".ad-kit-session.json").write_text(
-                    json.dumps(session_data, indent=4),
-                    encoding="utf-8",
-                )
+                save_session(session_data)
+
+        #-----------------------------------------------------------------------
+        # Summary table
+        #-----------------------------------------------------------------------
+        print_summary(session_data, len(dc_hostnames))
+
 
     except Exception as exc:
         print_error(str(exc))
