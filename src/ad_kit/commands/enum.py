@@ -249,6 +249,50 @@ def save_session(
     )
 
 
+def configure_nxc() -> None:
+    """
+    Ensure NetExec audit mode is enabled.
+    """
+
+    nxc_config = Path.home() / ".nxc" / "nxc.conf"
+
+    if not nxc_config.exists():
+        subprocess.run(
+            ["netexec", "--help"],
+            capture_output=True,
+            text=True,
+        )
+
+    if not nxc_config.exists():
+        print_info(
+            "NetExec configuration not found. Run NetExec once to generate it."
+        )
+        return
+
+    content = nxc_config.read_text(encoding="utf-8")
+
+    if "audit_mode = *" in content:
+        print_success("NetExec audit mode already configured.")
+        return
+
+    updated = []
+    audit_mode_found = False
+
+    for line in content.splitlines():
+        if line.startswith("audit_mode"):
+            updated.append("audit_mode = *")
+            audit_mode_found = True
+        else:
+            updated.append(line)
+
+    if not audit_mode_found:
+        updated.append("audit_mode = *")
+
+    nxc_config.write_text("\n".join(updated) + "\n", encoding="utf-8")
+
+    print_success("NetExec audit mode configured.")
+
+
 def run_enumeration() -> None:
     """
     Perform initial domain enumeration.
@@ -284,6 +328,13 @@ def run_enumeration() -> None:
 
         # Write results into disk
         write_results(domain, dc_hostnames, dc_ips)
+
+        #-----------------------------------------------------------------------
+        # NetExec Configuration
+        #-----------------------------------------------------------------------
+        print_section("NXC Configuration")
+        configure_nxc()
+        print("")
 
         #-----------------------------------------------------------------------
         # Domain account(s) validation

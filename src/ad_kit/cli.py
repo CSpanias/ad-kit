@@ -3,6 +3,7 @@ Main AD-Kit command-line interface.
 """
 
 import typer
+
 from rich.console import Console
 from rich.table import Table
 
@@ -90,15 +91,14 @@ def status() -> None:
 #-------------------------------------------------------------------------------
 @app.command(
     help=(
-        "Install one or more tools from the AD-Kit registry.\n\n"
-        "Use 'all' to install every registered tool."
+        "Install one or more tools from the AD-Kit registry. Use 'all' to "
+        "install every registered tool."
     )
 )
 def install(
     tool: str = typer.Argument(
         ...,
-        help="Install one or more tools from the AD-Kit registry.\n\n"
-            "Use 'all' to install every registered tool."
+        help="Tool name or 'all'."
     ),
 ) -> None:
     """
@@ -122,8 +122,7 @@ def install(
 #-------------------------------------------------------------------------------
 @app.command(
     help=(
-        "Perform engagement bootstrap activities.\n\n"
-        "The workflow:\n"
+        "Perform basic domain enumeration:\n\n"
         "  • Discover the target domain\n"
         "  • Enumerate domain controllers\n"
         "  • Validate a standard user account\n"
