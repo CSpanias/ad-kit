@@ -2,6 +2,7 @@
 Initial engagement enumeration functionality.
 """
 
+import json
 import re
 import socket
 import subprocess
@@ -171,11 +172,46 @@ def write_results(
     Path("dc-ips.txt").write_text("\n".join(dc_ips) + "\n", encoding="utf-8")
 
 
+def validate_credentials(
+    dc_ip: str,
+    username: str,
+    password: str,
+) -> tuple[bool, bool]:
+    """
+    Validate credentials using NetExec.
+
+    Returns:
+        (
+            authentication_successful,
+            privileged_access,
+        )
+    """
+    result = subprocess.run(
+        [
+            "nxc", "smb", dc_ip,
+            "-u", username,
+            "-p", password,
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    output = result.stdout
+
+    is_valid = "[+]" in output
+    is_pwned = "Pwn3d!" in output
+
+    return (is_valid, is_pwned)
+
+
 def run_enumeration() -> None:
     """
     Perform initial domain enumeration.
     """
 
+    #-----------------------------------------------------------------------
+    # Domain enumeration
+    #-----------------------------------------------------------------------
     print_info("Discovering domain...")
 
     try:
@@ -183,6 +219,9 @@ def run_enumeration() -> None:
 
         print_success(f"Domain: {domain}")
 
+        #-----------------------------------------------------------------------
+        # Domain Controller(s) enumeration
+        #-----------------------------------------------------------------------
         print_info("Enumerating domain controllers...")
 
         print("")
@@ -190,8 +229,11 @@ def run_enumeration() -> None:
 
         for hostname in dc_hostnames:
             print_success(hostname)
-
         print("")
+
+        #-----------------------------------------------------------------------
+        # Domain Controller(s) name resolution
+        #-----------------------------------------------------------------------
         print_info("Resolving domain controllers...")
 
         dc_ips = resolve_domain_controllers(dc_hostnames)
@@ -202,14 +244,84 @@ def run_enumeration() -> None:
         for ip in dc_ips:
             print_success(ip)
 
+        #-----------------------------------------------------------------------
+        # Output files
+        #-----------------------------------------------------------------------
         write_results(domain, dc_hostnames, dc_ips)
         print("")
         print_success("Results written successfully.")
+        print("")
 
+        #-----------------------------------------------------------------------
+        # Domain account(s) validation
+        #-----------------------------------------------------------------------
+        dc_ip = dc_ips[0]
+
+        # Standard user
+        print_info("Enter standard user credentials.")
+        std_user = typer.prompt("Username")
+        std_pass = typer.prompt("Password", hide_input=True)
+        print("")
+
+        print_info("Validating standard user...")
+
+        valid, pwned = validate_credentials(dc_ip, std_user, std_pass)
+
+        if not valid:
+            print_error("Standard user validation failed.")
+            return
+
+        if pwned:
+            print_error("Standard user appears privileged.")
+        else:
+            print_success("Standard user validated.")
+
+        # Domain Admin
+        print_info("Enter Domain Admin credentials.")
+
+        da_user = typer.prompt("Username")
+        da_pass = typer.prompt("Password", hide_input=True)
+
+        print_info("Validating Domain Admin...")
+
+        valid, pwned = validate_credentials(dc_ip, da_user, da_pass)
+
+        if not valid:
+            print_error("Domain Admin validation failed.")
+            return
+
+        if not pwned:
+            print_error(
+                "Account authenticated but does not appear to be privileged."
+            )
+            return
+
+        print_success("Domain Admin validated.")
+
+        #-----------------------------------------------------------------------
+        # Session metadata
+        #-----------------------------------------------------------------------
+        session_data = {
+            "domain": domain,
+            "dc_ip": dc_ip,
+            "dc_hostname": dc_hostnames[0],
+            "standard_user": std_user,
+            "domain_admin": da_user,
+            "da_validated": True,
+        }
+
+        Path(".ad-kit-session.json").write_text(
+            json.dumps(session_data,indent=4,),
+            encoding="utf-8",
+        )
+
+        #-----------------------------------------------------------------------
+        # Domain data collection
+        #-----------------------------------------------------------------------
         collect = typer.confirm("Run RustHound collection?", default=True)
 
         if collect:
-            run_rusthound(domain, dc_ips[0])
+            run_rusthound(domain, dc_ip, std_user, std_pass)
 
     except Exception as exc:
         print_error(str(exc))

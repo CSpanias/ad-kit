@@ -13,6 +13,8 @@ from ad_kit.core.console import print_error, print_info, print_success
 def run_rusthound(
     domain: str,
     dc_ip: str,
+    username: str,
+    password: str,
 ) -> None:
     """
     Collect BloodHound data using RustHound.
