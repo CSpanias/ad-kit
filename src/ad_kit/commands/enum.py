@@ -10,6 +10,7 @@ import typer
 from pathlib import Path
 
 from ad_kit.core.console import print_error, print_info, print_success
+from ad_kit.commands.rusthound import run_rusthound
 
 
 # TODO:
@@ -204,6 +205,11 @@ def run_enumeration() -> None:
         write_results(domain, dc_hostnames, dc_ips)
         print("")
         print_success("Results written successfully.")
+
+        collect = typer.confirm("Run RustHound collection?", default=True)
+
+        if collect:
+            run_rusthound(domain, dc_ips[0])
 
     except Exception as exc:
         print_error(str(exc))
