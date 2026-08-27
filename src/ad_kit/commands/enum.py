@@ -308,6 +308,7 @@ def run_enumeration() -> None:
             "standard_user": std_user,
             "domain_admin": da_user,
             "da_validated": True,
+            "rusthound_collected": False,
         }
 
         Path(".ad-kit-session.json").write_text(
@@ -321,7 +322,15 @@ def run_enumeration() -> None:
         collect = typer.confirm("Run RustHound collection?", default=True)
 
         if collect:
-            run_rusthound(domain, dc_ip, std_user, std_pass)
+            success = run_rusthound(domain, dc_ip, std_user, std_pass)
+
+            if success:
+                session_data["rusthound_collected"] = True
+
+                Path(".ad-kit-session.json").write_text(
+                    json.dumps(session_data, indent=4),
+                    encoding="utf-8",
+                )
 
     except Exception as exc:
         print_error(str(exc))

@@ -20,9 +20,6 @@ def run_rusthound(
     Collect BloodHound data using RustHound.
     """
 
-    username = typer.prompt("Username")
-    password = typer.prompt("Password",hide_input=True)
-
     output_dir = Path("bloodhound")
     output_dir.mkdir(exist_ok=True)
 
