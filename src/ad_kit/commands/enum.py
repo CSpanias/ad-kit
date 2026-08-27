@@ -224,6 +224,11 @@ def print_summary(
 
     table.add_row("Domain", session_data["domain"])
     table.add_row("Domain Controllers", str(dc_count))
+    table.add_row("Domain Users", str(session_data["domain_users_count"]))
+    table.add_row(
+        "Computer Accounts",
+        str(session_data["domain_computers_count"])
+    )
     table.add_row(
             "Standard User Validated",
             "Yes" if session_data["standard_user_validated"] else "No"
@@ -499,13 +504,11 @@ def run_enumeration() -> None:
         #-----------------------------------------------------------------------
         print_section("Domain Data Collection")
 
-        export_domain_users(dc_ip, std_user, std_pass)
         user_count = export_domain_users(dc_ip, std_user, std_pass)
         session_data["domain_users_exported"] = True
         session_data["domain_users_count"] = user_count
         print_success(f"Exported {user_count} domain users.")
 
-        export_domain_computers(dc_ip, std_user, std_pass)
         computer_count = export_domain_computers(dc_ip, std_user, std_pass)
         session_data["domain_computers_exported"] = True
         session_data["domain_computers_count"] = computer_count
