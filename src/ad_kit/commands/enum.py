@@ -82,6 +82,8 @@ def enumerate_domain_controllers(
         RuntimeError: If enumeration fails.
     """
 
+    print_info("Querying Active Directory DNS...")
+
     result = subprocess.run(
         [
             "nslookup",
@@ -108,7 +110,10 @@ def enumerate_domain_controllers(
             dc_hostnames.add(hostname)
 
     if not dc_hostnames:
-        raise RuntimeError("No domain controllers were found in DNS.")
+        raise RuntimeError("" \
+        "No domain controllers were found in DNS. Ensure your DNS server is "
+        "pointing at a domain controller."
+    )
 
     return sorted(dc_hostnames)
 
@@ -153,20 +158,16 @@ def write_results(
         dc_ips: DC IP addresses.
     """
 
-    Path("domain.txt").write_text(
-        f"{domain}\n",
-        encoding="utf-8",
-    )
+    Path("domain.txt").write_text(f"{domain}\n", encoding="utf-8")
 
+    dc_hostnames = sorted(dc_hostnames)
     Path("dc-hostnames.txt").write_text(
         "\n".join(dc_hostnames) + "\n",
         encoding="utf-8",
     )
 
-    Path("dc-ips.txt").write_text(
-        "\n".join(dc_ips) + "\n",
-        encoding="utf-8",
-    )
+    dc_ips = sorted(dc_ips)
+    Path("dc-ips.txt").write_text("\n".join(dc_ips) + "\n", encoding="utf-8")
 
 
 def run_enumeration() -> None:
@@ -183,11 +184,13 @@ def run_enumeration() -> None:
 
         print_info("Enumerating domain controllers...")
 
+        print("")
         dc_hostnames = enumerate_domain_controllers(domain)
 
         for hostname in dc_hostnames:
             print_success(hostname)
 
+        print("")
         print_info("Resolving domain controllers...")
 
         dc_ips = resolve_domain_controllers(dc_hostnames)
@@ -199,6 +202,7 @@ def run_enumeration() -> None:
             print_success(ip)
 
         write_results(domain, dc_hostnames, dc_ips)
+        print("")
         print_success("Results written successfully.")
 
     except Exception as exc:

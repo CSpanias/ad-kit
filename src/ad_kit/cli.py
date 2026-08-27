@@ -6,8 +6,10 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from ad_kit.commands.install import install_tool
+
 from ad_kit.commands.enum import run_enumeration
+from ad_kit.commands.install import install_tool
+from ad_kit.commands.rusthound import run_rusthound
 from ad_kit.commands.status import show_status
 from ad_kit.registry import ToolRegistry
 
@@ -110,6 +112,16 @@ def enum() -> None:
     Perform initial domain and domain controller discovery.
     """
     run_enumeration()
+
+#-------------------------------------------------------------------------------
+# rusthound module
+#-------------------------------------------------------------------------------
+@app.command(help="Collect BloodHound data using RustHound-CE.")
+def rusthound() -> None:
+    """
+    Run RustHound collection.
+    """
+    run_rusthound()
 
 
 if __name__ == "__main__":
