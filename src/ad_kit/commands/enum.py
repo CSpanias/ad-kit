@@ -175,85 +175,6 @@ def write_results(
     Path("dc-ips.txt").write_text("\n".join(dc_ips) + "\n", encoding="utf-8")
 
 
-def validate_credentials(
-    dc_ip: str,
-    username: str,
-    password: str,
-) -> tuple[bool, bool]:
-    """
-    Validate credentials using NetExec.
-
-    Returns:
-        (
-            authentication_successful,
-            privileged_access,
-        )
-    """
-    result = subprocess.run(
-        [
-            "nxc", "smb", dc_ip,
-            "-u", username,
-            "-p", password,
-        ],
-        capture_output=True,
-        text=True,
-    )
-
-    output = result.stdout
-
-    is_valid = "[+]" in output
-    is_pwned = "Pwn3d!" in output
-
-    return (is_valid, is_pwned)
-
-
-def print_summary(
-    session_data: dict,
-    dc_count: int,
-) -> None:
-    """
-    Print an enumeration summary.
-    """
-
-    print_section("Summary")
-
-    table = Table(show_header=False)
-
-    table.add_column("Item", style="cyan")
-    table.add_column("Value", style="green")
-
-    table.add_row("Domain", session_data["domain"])
-    table.add_row("Domain Controllers", str(dc_count))
-    table.add_row("Domain Users", str(session_data["domain_users_count"]))
-    table.add_row(
-        "Computer Accounts",
-        str(session_data["domain_computers_count"])
-    )
-    table.add_row(
-            "Standard User Validated",
-            "Yes" if session_data["standard_user_validated"] else "No"
-    )
-    table.add_row(
-        "DA Validated",
-        "Yes" if session_data["da_validated"] else "No"
-    )
-    table.add_row(
-        "RustHound", 
-        ("Completed" if session_data["rusthound_collected"] else "Skipped")
-    )
-
-    console.print(table)
-
-
-def save_session(
-    session_data: dict,
-) -> None:
-    Path(".ad-kit-session.json").write_text(
-        json.dumps(session_data, indent=4),
-        encoding="utf-8",
-    )
-
-
 def configure_nxc() -> None:
     """
     Ensure NetExec audit mode is enabled.
@@ -298,13 +219,76 @@ def configure_nxc() -> None:
     print_success("NetExec audit mode configured.")
 
 
+def validate_credentials(
+    dc_ip: str,
+    username: str,
+    password: str,
+) -> tuple[bool, bool]:
+    """
+    Validate credentials using NetExec.
+
+    Returns:
+        (
+            authentication_successful,
+            privileged_access,
+        )
+    """
+    result = subprocess.run(
+        [
+            "nxc", "smb", dc_ip,
+            "-u", username,
+            "-p", password,
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    output = result.stdout
+
+    is_valid = "[+]" in output
+    is_pwned = "Pwn3d!" in output
+
+    return (is_valid, is_pwned)
+
+
+def save_session(
+    session_data: dict,
+) -> None:
+    Path(".ad-kit-session.json").write_text(
+        json.dumps(session_data, indent=4),
+        encoding="utf-8",
+    )
+
+
 def export_domain_users(
     dc_ip: str,
     username: str,
     password: str,
-) -> None:
+    excluded_users: set[str],
+) -> tuple[int, int]:
     """
-    Export domain users.
+    Export and filter domain user accounts.
+
+    Domain users are exported from Active Directory using
+    NetExec and written to 'domain-users.txt'. Testing
+    accounts specified in 'excluded_users' are removed
+    from the exported dataset and the resulting list is
+    written to 'domain-users-filtered.txt'.
+
+    Args:
+        dc_ip: Domain Controller IP address.
+        username: LDAP username.
+        password: LDAP password.
+        excluded_users: User accounts to exclude from
+            the filtered dataset.
+
+    Returns:
+        A tuple containing:
+        - Total exported users.
+        - Total users after filtering.
+
+    Raises:
+        RuntimeError: If the user export fails.
     """
 
     subprocess.run(
@@ -315,6 +299,8 @@ def export_domain_users(
             "--users-export", "domain-users.txt",
         ],
         check=False,
+        capture_output=True,
+        text=True,
     )
 
     users_file = Path("domain-users.txt")
@@ -322,13 +308,28 @@ def export_domain_users(
     if not users_file.exists():
         raise RuntimeError("Failed to export domain users.")
 
-    user_count = sum(
-        1
+    users = [
+        line.strip()
         for line in users_file.read_text(encoding="utf-8").splitlines()
         if line.strip()
+    ]
+
+    user_count = len(users)
+
+    filtered_users = [
+        user
+        for user in users
+        if user.lower() not in excluded_users
+    ]
+
+    Path(
+        "domain-users-filtered.txt"
+    ).write_text(
+        "\n".join(filtered_users) + "\n",
+        encoding="utf-8",
     )
 
-    return user_count
+    return user_count, len(filtered_users)
 
 
 def export_domain_computers(
@@ -374,6 +375,46 @@ def export_domain_computers(
     return len(computers)
 
 
+def print_summary(
+    session_data: dict,
+    dc_count: int,
+) -> None:
+    """
+    Print an enumeration summary.
+    """
+
+    print_section("Summary")
+
+    table = Table(show_header=False)
+
+    table.add_column("Item", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row("Domain", session_data["domain"])
+    table.add_row("Domain Controllers", str(dc_count))
+    table.add_row(
+            "Standard User Validated",
+            "Yes" if session_data["standard_user_validated"] else "No"
+    )
+    table.add_row(
+        "DA Validated",
+        "Yes" if session_data["da_validated"] else "No"
+    )
+    table.add_row("Domain Users", str(session_data["domain_users_count"]))
+    table.add_row(
+        "Computer Accounts",
+        str(session_data["domain_computers_count"])
+    )
+    table.add_row(
+        "RustHound", 
+        ("Completed" if session_data["rusthound_collected"] else "Skipped")
+    )
+
+    console.print(table)
+
+#-------------------------------------------------------------------------------
+# Main function
+#-------------------------------------------------------------------------------
 def run_enumeration() -> None:
     """
     Bootstrap an Active Directory assessment.
@@ -382,14 +423,13 @@ def run_enumeration() -> None:
     validation, domain data collection, and BloodHound collection.
     """
 
-    #-----------------------------------------------------------------------
+    #---------------------------------------------------------------------------
     # Domain enumeration
-    #-----------------------------------------------------------------------
+    #---------------------------------------------------------------------------
     print_section("Domain")
 
     try:
         domain = discover_domain()
-
         print_success(f"Domain: {domain}")
 
         #-----------------------------------------------------------------------
@@ -513,6 +553,23 @@ def run_enumeration() -> None:
         session_data["domain_computers_exported"] = True
         session_data["domain_computers_count"] = computer_count
         print_success(f"Exported {computer_count} computer accounts.")
+
+        #-----------------------------------------------------------------------
+        # Filter testing accounts
+        #-----------------------------------------------------------------------
+        excluded_users = {std_user.lower(), da_user.lower()}
+
+        user_count, filtered_count = export_domain_users(
+            dc_ip,
+            std_user,
+            std_pass,
+            excluded_users,
+        )
+
+        session_data["excluded_users"] = sorted(excluded_users)
+        session_data["domain_users_count"] = user_count
+        session_data["domain_users_filtered_count"] = filtered_count
+        session_data["domain_users_exported"] = True
 
         #-----------------------------------------------------------------------
         # BloodHound collection

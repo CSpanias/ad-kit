@@ -128,6 +128,7 @@ def install(
         "  • Configure NetExec's audit mode\n"
         "  • Validate a standard user account\n"
         "  • Validate a Domain Admin account\n"
+        "  • Create user and machine account lists\n"
         "  • Collect BloodHound data using RustHound-CE"
     )
 )
