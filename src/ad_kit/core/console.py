@@ -47,3 +47,16 @@ def print_error(message: str) -> None:
         message: Message to display.
     """
     console.print(f"[red][-][/red] {message}")
+
+
+from rich.console import Console
+from rich.rule import Rule
+
+console = Console()
+
+
+def print_section(title: str) -> None:
+    """
+    Print a section header.
+    """
+    console.print(Rule(title, style="cyan"))

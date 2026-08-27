@@ -9,8 +9,9 @@ import subprocess
 import typer
 
 from pathlib import Path
+from rich.table import Table
 
-from ad_kit.core.console import print_error, print_info, print_success
+from ad_kit.core.console import print_error, print_info, print_success, print_section, console
 from ad_kit.commands.rusthound import run_rusthound
 
 
@@ -212,7 +213,7 @@ def run_enumeration() -> None:
     #-----------------------------------------------------------------------
     # Domain enumeration
     #-----------------------------------------------------------------------
-    print_info("Discovering domain...")
+    print_section("Domain")
 
     try:
         domain = discover_domain()
@@ -222,27 +223,29 @@ def run_enumeration() -> None:
         #-----------------------------------------------------------------------
         # Domain Controller(s) enumeration
         #-----------------------------------------------------------------------
-        print_info("Enumerating domain controllers...")
-
+        print_section("Domain controllers")
         print("")
+
         dc_hostnames = enumerate_domain_controllers(domain)
 
         for hostname in dc_hostnames:
             print_success(hostname)
+
         print("")
-
-        #-----------------------------------------------------------------------
-        # Domain Controller(s) name resolution
-        #-----------------------------------------------------------------------
-        print_info("Resolving domain controllers...")
-
         dc_ips = resolve_domain_controllers(dc_hostnames)
-
-        print_info(f"Detected {len(dc_hostnames)} DC(s).")
-        print_info(f"Resolved {len(dc_ips)} DC IP(s).")
 
         for ip in dc_ips:
             print_success(ip)
+
+        table = Table(title="")
+
+        table.add_column("Hostname", style="green")
+        table.add_column("IP Address", style="cyan")
+
+        for hostname, ip in zip(dc_hostnames, dc_ips):
+            table.add_row(hostname, ip)
+
+        console.print(table)
 
         #-----------------------------------------------------------------------
         # Output files
@@ -255,6 +258,9 @@ def run_enumeration() -> None:
         #-----------------------------------------------------------------------
         # Domain account(s) validation
         #-----------------------------------------------------------------------
+        print_section("Credential Validation")
+        print("")
+
         dc_ip = dc_ips[0]
 
         # Standard user
@@ -319,6 +325,9 @@ def run_enumeration() -> None:
         #-----------------------------------------------------------------------
         # Domain data collection
         #-----------------------------------------------------------------------
+        print_section("BloodHound Collection")
+        print("")
+        
         collect = typer.confirm("Run RustHound collection?", default=True)
 
         if collect:
