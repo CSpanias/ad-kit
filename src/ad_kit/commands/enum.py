@@ -12,7 +12,7 @@ from pathlib import Path
 from rich.table import Table
 
 from ad_kit.core.console import print_error, print_info, print_success, print_section, console
-from ad_kit.core.util import get_artefacts_dir, get_session_file
+from ad_kit.core.util import get_artefacts_dir, get_session_file, save_session
 from ad_kit.commands.rusthound import run_rusthound
 
 
@@ -258,18 +258,6 @@ def validate_credentials(
     is_pwned = "Pwn3d!" in output
 
     return (is_valid, is_pwned)
-
-
-def save_session(
-    session_data: dict,
-) -> None:
-    get_session_file().write_text(
-        json.dumps(
-            session_data,
-            indent=4,
-        ),
-        encoding="utf-8",
-    )
 
 
 def export_domain_users(

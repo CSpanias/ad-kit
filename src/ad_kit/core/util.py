@@ -33,3 +33,15 @@ def load_session() -> dict:
         raise RuntimeError("Session metadata not found.")
 
     return json.loads(session_file.read_text(encoding="utf-8"))
+
+
+def save_session(
+    session_data: dict,
+) -> None:
+    get_session_file().write_text(
+        json.dumps(
+            session_data,
+            indent=4,
+        ),
+        encoding="utf-8",
+    )
