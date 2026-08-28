@@ -20,6 +20,20 @@ def get_evidence_dir() -> Path:
     return evidence_dir
 
 
+def load_dc_ips() -> list:
+    """
+    Load enumerated Domain Controller IP addresses.
+    """
+
+    dc_ips_file = (get_artefacts_dir() / "dc-ips.txt")
+
+    return [
+        line.strip()
+        for line in dc_ips_file.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
 def run_check(
     name: str,
     command: list[str],

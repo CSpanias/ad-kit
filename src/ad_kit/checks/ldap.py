@@ -15,11 +15,12 @@ def ldap_configuration_check(
         dc_ip: Domain Controller IP address.
 
     Returns:
-        Dictionary containing LDAP configuration results.
+        Dictionary containing LDAP configuration
+        results.
     """
 
     output = run_check(
-        "ldap-configuration",
+        f"ldap-{dc_ip}",
         ["nxc", "ldap", dc_ip],
     )
 
@@ -30,19 +31,27 @@ def ldap_configuration_check(
 
         line = line.lower()
 
-        if "signing:true" in line:
-            signing = "Enabled"
+        if "signing:" in line:
 
-        elif "signing:false" in line:
-            signing = "Disabled"
+            start = line.find("signing:")
+            end = line.find(")", start)
 
-        if "channel binding:true" in line:
-            channel_binding = "Enabled"
+            if start != -1 and end != -1:
+                signing = line[start + 8:end].strip()
 
-        elif "channel binding:false" in line:
-            channel_binding = "Disabled"
+        if "channel binding:" in line:
+
+            start = line.find("channel binding:")
+            end = line.find(")", start)
+
+            if start != -1 and end != -1:
+                channel_binding = (
+                    line[start + 16:end]
+                    .strip()
+                )
 
     return {
+        "dc_ip": dc_ip,
         "signing": signing,
         "channel_binding": channel_binding,
     }

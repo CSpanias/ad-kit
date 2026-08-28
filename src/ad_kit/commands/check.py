@@ -4,18 +4,9 @@ Assessment checks.
 
 from rich.table import Table
 
-from ad_kit.checks.ldap import (
-    ldap_configuration_check,
-)
-
-from ad_kit.core.console import (
-    console,
-    print_section,
-)
-
-from ad_kit.core.util import (
-    load_session,
-)
+from ad_kit.core.checks import load_dc_ips
+from ad_kit.checks.ldap import ldap_configuration_check
+from ad_kit.core.console import console, print_section
 
 #-------------------------------------------------------------------------------
 # Main function
@@ -25,23 +16,29 @@ def run_checks() -> None:
     Execute baseline assessment checks.
     """
 
-    session_data = load_session()
-
-    dc_ip = session_data["dc_ip"]
-
     #---------------------------------------------------------------------------
     # LDAP Signing and Channel Binding
     #---------------------------------------------------------------------------
     print_section("LDAP Checks")
 
-    ldap_results = ldap_configuration_check(dc_ip)
+    print_section("LDAP Checks")
+
+    results = []
+
+    for dc_ip in load_dc_ips():
+        results.append(ldap_configuration_check(dc_ip))
 
     table = Table()
 
-    table.add_column("Check", style="cyan")
-    table.add_column("Result", style="green")
+    table.add_column("DC", style="cyan")
+    table.add_column("LDAP Signing", style="green")
+    table.add_column("Channel Binding", style="green")
 
-    table.add_row("LDAP Signing", ldap_results["signing"])
-    table.add_row("Channel Binding", ldap_results["channel_binding"])
+    for result in results:
+        table.add_row(
+            result["dc_ip"],
+            result["signing"],
+            result["channel_binding"],
+        )
 
     console.print(table)
