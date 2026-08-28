@@ -3,7 +3,7 @@ import typer
 
 from pathlib import Path
 
-from adk_kit.core.console import console, print_section
+from ad_kit.core.console import console, print_section
 
 ARTEFACTS_DIR = Path("ad-kit")
 
