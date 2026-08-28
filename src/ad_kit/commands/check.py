@@ -7,7 +7,6 @@ from rich.table import Table
 from ad_kit.core.checks import load_dc_ips
 from ad_kit.checks.ldap import ldap_configuration_check
 from ad_kit.core.console import console, print_section
-from ad_kit.core.util import progress
 
 #-------------------------------------------------------------------------------
 # Main function
@@ -24,9 +23,8 @@ def run_checks() -> None:
 
     results = []
 
-    with progress("Checking LDAP configuration..."):
-        for dc_ip in load_dc_ips():
-            results.append(ldap_configuration_check(dc_ip))
+    for dc_ip in load_dc_ips():
+        results.append(ldap_configuration_check(dc_ip))
 
     table = Table()
 

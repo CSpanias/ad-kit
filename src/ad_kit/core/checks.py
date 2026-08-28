@@ -6,7 +6,7 @@ import subprocess
 
 from pathlib import Path
 
-from ad_kit.core.util import get_artefacts_dir
+from ad_kit.core.util import get_artefacts_dir, progress
 
 
 def get_evidence_dir() -> Path:
@@ -52,7 +52,9 @@ def run_check(
         RuntimeError: If the command fails.
     """
 
-    result = subprocess.run(command, capture_output=True, text=True)
+    with progress(f"Running {' '.join(command)}"):
+        result = subprocess.run(command, capture_output=True, text=True)
+        
     evidence_file = (get_evidence_dir() / f"{name}.txt")
     evidence = (f"$ {' '.join(command)}\n\n {result.stdout}")
     evidence_file.write_text(evidence, encoding="utf-8")
