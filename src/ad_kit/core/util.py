@@ -1,6 +1,7 @@
 import json
 import typer
 
+from contextlib import contextmanager
 from pathlib import Path
 
 from ad_kit.core.console import console, print_section
@@ -96,3 +97,15 @@ def generate_scp_command(
     console.print()
     console.print(command, style="cyan")
     console.print()
+
+
+@contextmanager
+def progress(
+    message: str,
+):
+    """
+    Display a spinner while a task is running.
+    """
+
+    with console.status(f"[cyan]{message}"):
+        yield

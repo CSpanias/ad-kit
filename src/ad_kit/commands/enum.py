@@ -20,7 +20,8 @@ from ad_kit.core.console import (
 from ad_kit.core.util import (
     get_artefacts_dir, 
     save_session, 
-    generate_scp_command
+    generate_scp_command,
+    progress
 )
 from ad_kit.commands.rusthound import run_rusthound
 
@@ -567,18 +568,22 @@ def run_enumeration() -> None:
         # Filter testing accounts
         excluded_users = {std_user.lower(), da_user.lower()}
 
-        user_count, filtered_count = export_domain_users(
-            dc_ip,
-            std_user,
-            std_pass,
-            excluded_users,
-        )
+        with progress("[cyan]Exporting domain users..."):
+            user_count, filtered_count = export_domain_users(
+                dc_ip,
+                std_user,
+                std_pass,
+                excluded_users,
+            )
+
 
         session_data["domain_users_exported"] = True
         session_data["domain_users_count"] = user_count
         print_success(f"Exported {user_count} domain users.")
 
-        computer_count = export_domain_computers(dc_ip, std_user, std_pass)
+        with progress("[cyan]Exporting computer accounts..."):
+            computer_count = export_domain_computers(dc_ip, std_user, std_pass)
+
         session_data["domain_computers_exported"] = True
         session_data["domain_computers_count"] = computer_count
         print_success(f"Exported {computer_count} computer accounts.")
@@ -597,13 +602,15 @@ def run_enumeration() -> None:
         collect = typer.confirm("Run RustHound collection?", default=True)
 
         if collect:
-            success = run_rusthound(domain, dc_ip, std_user, std_pass)
+            with console.status("[cyan]Collecting BloodHound data..."):
+                success = run_rusthound( domain, dc_ip, std_user, std_pass)
 
             if success:
                 session_data["rusthound_collected"] = True
                 save_session(session_data)
 
         # Create SCP command
+        print("")
         if typer.confirm("Generate SCP retrieval command?", default=True):
             generate_scp_command(session_data)
 

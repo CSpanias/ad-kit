@@ -4,7 +4,11 @@ RustHound collection command.
 
 import subprocess
 
-from ad_kit.core.console import print_error, print_info, print_success
+from ad_kit.core.console import (
+    print_error, 
+    print_info, 
+    print_success,
+)
 from ad_kit.core.util import get_artefacts_dir
 
 
