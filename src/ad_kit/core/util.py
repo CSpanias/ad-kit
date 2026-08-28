@@ -79,11 +79,19 @@ def generate_scp_command(
 
     artefacts_dir = get_artefacts_dir()
 
-    command = (
-        f'scp -i "{ssh_key}" '
-        f'"{user}@{host}:{artefacts_dir.resolve()}/*" '
-        f'./'
-    )
+    artefacts = []
+
+    artefacts.extend(artefacts_dir.glob("*.zip"))
+    artefacts.extend(artefacts_dir.glob("*.ntds*"))
+
+    scp_parts = [f'scp -i "{ssh_key}"']
+
+    for artefact in artefacts:
+        scp_parts.append(f'"{user}@{host}:{artefact.resolve()}"')
+
+    scp_parts.append("./")
+
+    command = " ".join(scp_parts)
 
     console.print()
     console.print(command, style="cyan")
