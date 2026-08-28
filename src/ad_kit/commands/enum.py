@@ -580,7 +580,14 @@ def run_enumeration() -> None:
         print("")
         session_data["domain_users_exported"] = True
         session_data["domain_users_count"] = user_count
-        print_success(f"Exported {user_count} domain users.")
+
+        # Print filtered accounts to stdout
+        excluded_count = (user_count - filtered_count)
+        print_success(f"Exported {filtered_count}/{user_count} domain users.")
+        print_info(
+            f"Filtered {excluded_count} testing account(s): "
+            + ", ".join(sorted(excluded_users))
+        )
 
         with progress("[cyan]Exporting computer accounts..."):
             computer_count = export_domain_computers(dc_ip, std_user, std_pass)
