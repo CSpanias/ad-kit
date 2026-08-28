@@ -162,9 +162,6 @@ def dump() -> None:
 def check() -> None:
     """
     Execute baseline security checks and collect assessment evidence.
-
-    Examples:
-        ad-kit check
     """
 
     run_checks()
