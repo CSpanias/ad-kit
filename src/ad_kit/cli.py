@@ -7,6 +7,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from ad_kit.commands.check import run_checks
 from ad_kit.commands.dump import run_dump
 from ad_kit.commands.enum import run_enumeration
 from ad_kit.commands.install import install_tool
@@ -153,6 +154,20 @@ def dump() -> None:
         ad-kit dump
     """
     run_dump()
+
+#-------------------------------------------------------------------------------
+# check module
+#-------------------------------------------------------------------------------
+@app.command(help="Perform common Active Directory assessment checks.")
+def check() -> None:
+    """
+    Execute baseline security checks and collect assessment evidence.
+
+    Examples:
+        ad-kit check
+    """
+
+    run_checks()
 
 
 if __name__ == "__main__":
