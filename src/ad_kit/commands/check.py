@@ -24,7 +24,7 @@ def run_checks() -> None:
 
     results = []
 
-    with progress("Checking LDAP configuration...")
+    with progress("Checking LDAP configuration..."):
         for dc_ip in load_dc_ips():
             results.append(ldap_configuration_check(dc_ip))
 
