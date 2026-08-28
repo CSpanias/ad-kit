@@ -2,7 +2,6 @@
 Initial engagement enumeration functionality.
 """
 
-import json
 import re
 import socket
 import subprocess
@@ -11,8 +10,18 @@ import typer
 from pathlib import Path
 from rich.table import Table
 
-from ad_kit.core.console import print_error, print_info, print_success, print_section, console
-from ad_kit.core.util import get_artefacts_dir, get_session_file, save_session
+from ad_kit.core.console import (
+    print_error, 
+    print_info, 
+    print_success, 
+    print_section, 
+    console
+)
+from ad_kit.core.util import (
+    get_artefacts_dir, 
+    save_session, 
+    generate_scp_command
+)
 from ad_kit.commands.rusthound import run_rusthound
 
 
@@ -593,6 +602,10 @@ def run_enumeration() -> None:
             if success:
                 session_data["rusthound_collected"] = True
                 save_session(session_data)
+
+        # Create SCP command
+        if typer.confirm("Generate SCP retrieval command?", default=True):
+            generate_scp_command(session_data)
 
         #-----------------------------------------------------------------------
         # Summary table
