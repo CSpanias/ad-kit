@@ -344,6 +344,7 @@ def export_domain_users(
 
 
 def export_domain_computers(
+    domain: str,
     dc_ip: str,
     username: str,
     password: str,
@@ -352,16 +353,20 @@ def export_domain_computers(
     Export domain computer accounts.
 
     Args:
+        domain: Active Directory domain name.
         dc_ip: Domain Controller IP address.
         username: LDAP username.
         password: LDAP password.
 
+    Returns:
+        Number of exported computer accounts.
+
     Raises:
         RuntimeError: If the export fails.
     """
+
     result = subprocess.run(
-        [
-            "nxc", "ldap", dc_ip,
+        ["nxc", "ldap", dc_ip,
             "-u", username,
             "-p", password,
             "--computers",
@@ -373,10 +378,13 @@ def export_domain_computers(
     computers = []
 
     for line in result.stdout.splitlines():
+
         candidate = line.strip().split()[-1]
 
         if candidate.endswith("$"):
-            computers.append(candidate)
+
+            fqdn = (candidate.rstrip("$").lower() + f".{domain.lower()}")
+            computers.append(fqdn)
 
     computers = sorted(set(computers))
 
@@ -590,7 +598,12 @@ def run_enumeration() -> None:
         )
 
         with progress("[cyan]Exporting computer accounts..."):
-            computer_count = export_domain_computers(dc_ip, std_user, std_pass)
+            computer_count = export_domain_computers(
+                domain, 
+                dc_ip, 
+                std_user, 
+                std_pass
+            )
 
         session_data["domain_computers_exported"] = True
         session_data["domain_computers_count"] = computer_count

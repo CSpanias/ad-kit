@@ -34,6 +34,34 @@ def load_dc_ips() -> list:
     ]
 
 
+def load_domain_computers() -> list:
+    """
+    Load enumerated domain computers.
+    """
+
+    computers_file = (get_artefacts_dir() / "domain-computers.txt")
+
+    return [
+        line.strip()
+        for line in computers_file.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def load_dc_hostnames() -> list:
+    """
+    Load Domain Controller hostnames.
+    """
+
+    dc_file = (get_artefacts_dir() / "dc-hostnames.txt")
+
+    return [
+        line.strip().lower()
+        for line in dc_file.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
 def run_check(
     name: str,
     command: list[str],
