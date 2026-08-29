@@ -114,7 +114,6 @@ def run_checks() -> None:
     #---------------------------------------------------------------------------
     print_section("Password Policy")
 
-    assessment = password_policy_assessment(password_policy)
     std_pass = typer.prompt("Standard User Password", hide_input=True)
 
     with progress("Retrieving password policy..."):
@@ -123,6 +122,8 @@ def run_checks() -> None:
             session_data["standard_user"],
             std_pass,
         )
+
+    assessment = password_policy_assessment(password_policy)
 
     table = Table()
 
