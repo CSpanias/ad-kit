@@ -95,49 +95,55 @@ from ad_kit.core.checks import (
 )
 
 
-def password_policy_findings(
+def password_policy_assessment(
     policy: dict,
-) -> list[str]:
+) -> dict[str, str]:
     """
-    Evaluate the password nst the AD-Kit baseline.
+    Assess the password policy against
+    the AD-Kit baseline.
     """
 
-    findings = []
+    assessment = {}
 
+    # Minimum Length
     if (
         policy["minimum_length"].isdigit()
         and int(policy["minimum_length"])
         < PASSWORD_POLICY_BASELINE["minimum_length"]
     ):
-        findings.append("Minimum password length below recommended baseline.")
+        assessment["minimum_length"] = "[yellow]⚠ Too Short[/yellow]"
+    else:
+        assessment["minimum_length"] = "[green]✓ OK[/green]"
 
+    # Password History
     if (
         policy["password_history"].isdigit()
         and int(policy["password_history"])
         < PASSWORD_POLICY_BASELINE["password_history"]
     ):
-        findings.append("Password history length below recommended baseline.")
+        assessment["password_history"] = "[yellow]⚠ Too Low[/yellow]"
+    else:
+        assessment["password_history"] = "[green]✓ OK[/green]"
 
-    if policy["complexity"] == "Disabled":
-        findings.append("Password complexity is disabled.")
-
+    # Minimum Age
     if (
         policy["minimum_age"] != "Unknown"
         and policy["minimum_age"].startswith("0")
     ):
-        findings.append("Minimum password age is not enforced.")
+        assessment["minimum_age"] = "[yellow]⚠ Not Set[/yellow]"
+    else:
+        assessment["minimum_age"] = "[green]✓ OK[/green]"
 
-    if (
-        policy["lockout_threshold"].isdigit()
-        and int(policy["lockout_threshold"])
-        > PASSWORD_POLICY_BASELINE[
-            "lockout_threshold"
-        ]
-    ):
-        findings.append("Account lockout threshold is too permissive.")
+    # Complexity
+    if policy["complexity"] == "Disabled":
+        assessment["complexity"] = "[yellow]⚠ Disabled[/yellow]"
+    else:
+        assessment["complexity"] = "[green]✓ OK[/green]"
 
-    observation_window = duration_to_minutes(policy["observation_window"])
-    lockout_duration = duration_to_minutes(policy["lockout_duration"])
+    # Observation Window
+    observation_window = duration_to_minutes(
+        policy["observation_window"]
+    )
 
     if (
         observation_window is not None
@@ -146,7 +152,18 @@ def password_policy_findings(
             "observation_window_minutes"
         ]
     ):
-        findings.append("Account lockout observation window is too short.")
+        assessment["observation_window"] = (
+            "[yellow]⚠ Too Short[/yellow]"
+        )
+    else:
+        assessment["observation_window"] = (
+            "[green]✓ OK[/green]"
+        )
+
+    # Lockout Duration
+    lockout_duration = duration_to_minutes(
+        policy["lockout_duration"]
+    )
 
     if (
         lockout_duration is not None
@@ -155,6 +172,28 @@ def password_policy_findings(
             "lockout_duration_minutes"
         ]
     ):
-        findings.append("Account lockout duration is too short.")
+        assessment["lockout_duration"] = (
+            "[yellow]⚠ Too Short[/yellow]"
+        )
+    else:
+        assessment["lockout_duration"] = (
+            "[green]✓ OK[/green]"
+        )
 
-    return findings
+    # Lockout Threshold
+    if (
+        policy["lockout_threshold"].isdigit()
+        and (
+            int(policy["lockout_threshold"]) == 0
+            or int(policy["lockout_threshold"]) > 10
+        )
+    ):
+        assessment["lockout_threshold"] = (
+            "[yellow]⚠ Too Permissive[/yellow]"
+        )
+    else:
+        assessment["lockout_threshold"] = (
+            "[green]✓ OK[/green]"
+        )
+
+    return assessment

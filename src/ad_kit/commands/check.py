@@ -12,7 +12,7 @@ from ad_kit.core.checks import (
     load_dc_hostnames
 )
 from ad_kit.checks.ldap import ldap_configuration_check
-from ad_kit.checks.passwords import password_policy_check
+from ad_kit.checks.passwords import password_policy_check, password_policy_assessment
 from ad_kit.checks.smb import smb_configuration_check
 from ad_kit.core.console import console, print_section
 from ad_kit.core.util import progress, load_session
@@ -114,6 +114,7 @@ def run_checks() -> None:
     #---------------------------------------------------------------------------
     print_section("Password Policy")
 
+    assessment = password_policy_assessment(password_policy)
     std_pass = typer.prompt("Standard User Password", hide_input=True)
 
     with progress("Retrieving password policy..."):
@@ -127,14 +128,54 @@ def run_checks() -> None:
 
     table.add_column("Setting", style="cyan")
     table.add_column("Value", style="green")
+    table.add_column("Assessment", style="yellow")
 
-    table.add_row("Minimum Length", password_policy["minimum_length"])
-    table.add_row("Password History", password_policy["password_history"])
-    table.add_row("Maximum Age", password_policy["maximum_age"])
-    table.add_row("Minimum Age", password_policy["minimum_age"])
-    table.add_row("Complexity", password_policy["complexity"])
-    table.add_row("Observation Window", password_policy["observation_window"])
-    table.add_row("Lockout Threshold", password_policy["lockout_threshold"])
-    table.add_row("Lockout Duration", password_policy["lockout_duration"])
+    table.add_row(
+        "Minimum Length", 
+        password_policy["minimum_length"],
+        assessment["minimum_length"]
+    )
+    
+    table.add_row(
+        "Password History", 
+        password_policy["password_history"],
+        assessment["password_history"]
+    )
+
+    table.add_row(
+        "Maximum Age", 
+        password_policy["maximum_age"],
+        assessment["maximum_age"]
+    )
+
+    table.add_row(
+        "Minimum Age", 
+        password_policy["minimum_age"],
+        assessment["minimum_age"]
+    )
+
+    table.add_row(
+        "Complexity", 
+        password_policy["complexity"],
+        assessment["complexity"]
+    )
+
+    table.add_row(
+        "Observation Window", 
+        password_policy["observation_window"],
+        assessment["observation_window"]
+    )
+
+    table.add_row(
+        "Lockout Threshold", 
+        password_policy["lockout_threshold"],
+        assessment["lockout_threshold"]
+    )
+
+    table.add_row(
+        "Lockout Duration", 
+        password_policy["lockout_duration"],
+        assessment["lockout_duration"]
+    )
 
     console.print(table)
