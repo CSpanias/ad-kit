@@ -47,6 +47,19 @@ def smb_configuration_check(
             if start != -1 and end != -1:
                 smbv1 = line[start + 6:end].strip()
 
+    if signing.lower() == "true":
+        signing = "Enabled"
+
+    elif signing.lower() == "false":
+        signing = "Disabled"
+
+    if smbv1.lower() == "none":
+        smbv1 = "Disabled"
+
+    elif smbv1.lower() == "true":
+        smbv1 = "Enabled"
+
+
     return {
         "host": host,
         "signing": signing,
