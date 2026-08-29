@@ -8,6 +8,22 @@ from pathlib import Path
 
 from ad_kit.core.util import get_artefacts_dir, progress
 
+#-------------------------------------------------------------------------------
+# Constants
+#-------------------------------------------------------------------------------
+
+PASSWORD_POLICY_BASELINE = {
+    "minimum_length": 12,
+    "password_history": 12,
+    "minimum_age_days": 1,
+    "lockout_threshold": 5,
+    "lockout_duration_minutes": 30,
+    "observation_window_minutes": 15,
+}
+
+#-------------------------------------------------------------------------------
+# Functions
+#-------------------------------------------------------------------------------
 
 def get_evidence_dir() -> Path:
     """
@@ -60,6 +76,34 @@ def load_dc_hostnames() -> list:
         for line in dc_file.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+
+
+def duration_to_minutes(
+    value: str,
+) -> int | None:
+    """
+    Convert NetExec duration strings to minutes.
+    """
+
+    if value == "Unknown":
+        return None
+
+    minutes = 0
+
+    tokens = value.lower().split()
+
+    for i, token in enumerate(tokens):
+
+        if token == "days":
+            minutes += int(tokens[i - 1]) * 1440
+
+        elif token == "hours":
+            minutes += int(tokens[i - 1]) * 60
+
+        elif token == "minutes":
+            minutes += int(tokens[i - 1])
+
+    return minutes
 
 
 def run_check(

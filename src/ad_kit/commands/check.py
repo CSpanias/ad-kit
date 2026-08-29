@@ -131,7 +131,10 @@ def run_checks() -> None:
     table.add_row("Minimum Length", password_policy["minimum_length"])
     table.add_row("Password History", password_policy["password_history"])
     table.add_row("Maximum Age", password_policy["maximum_age"])
+    table.add_row("Minimum Age", password_policy["minimum_age"])
     table.add_row("Complexity", password_policy["complexity"])
+    table.add_row("Observation Window", password_policy["observation_window"])
     table.add_row("Lockout Threshold", password_policy["lockout_threshold"])
+    table.add_row("Lockout Duration", password_policy["lockout_duration"])
 
     console.print(table)
