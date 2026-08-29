@@ -134,6 +134,18 @@ def password_policy_assessment(
     else:
         assessment["minimum_age"] = "[green]✓ OK[/green]"
 
+    # Maximum Age
+    if (
+        policy["maximum_age"] != "Unknown"
+        and (
+            policy["maximum_age"].startswith("0")
+            or "not set" in policy["maximum_age"].lower()
+        )
+    ):
+        assessment["maximum_age"] = "[yellow]⚠ Not Set[/yellow]"
+    else:
+        assessment["maximum_age"] = "[green]✓ OK[/green]"
+
     # Complexity
     if policy["complexity"] == "Disabled":
         assessment["complexity"] = "[yellow]⚠ Disabled[/yellow]"
