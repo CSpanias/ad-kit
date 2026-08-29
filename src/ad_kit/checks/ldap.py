@@ -50,6 +50,12 @@ def ldap_configuration_check(
                     .strip()
                 )
 
+    if signing == "none":
+        signing = "Not Required"
+        
+    if channel_binding == "no tls cert":
+        channel_binding = "Not Configured"
+
     return {
         "dc_ip": dc_ip,
         "signing": signing,
