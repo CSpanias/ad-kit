@@ -2,6 +2,8 @@
 Assessment checks.
 """
 
+import typer
+
 from rich.table import Table
 
 from ad_kit.core.checks import (
@@ -10,9 +12,10 @@ from ad_kit.core.checks import (
     load_dc_hostnames
 )
 from ad_kit.checks.ldap import ldap_configuration_check
+from ad_kit.checks.passwords import password_policy_check
 from ad_kit.checks.smb import smb_configuration_check
 from ad_kit.core.console import console, print_section
-from ad_kit.core.util import progress
+from ad_kit.core.util import progress, load_session
 
 #-------------------------------------------------------------------------------
 # Main function
@@ -21,6 +24,8 @@ def run_checks() -> None:
     """
     Execute baseline assessment checks.
     """
+
+    session_data = load_session()
 
     #---------------------------------------------------------------------------
     # LDAP Signing and Channel Binding
@@ -103,3 +108,30 @@ def run_checks() -> None:
         )
 
     console.print(host_table)
+
+    #---------------------------------------------------------------------------
+    # Domain Password Policy
+    #---------------------------------------------------------------------------
+    print_section("Password Policy")
+
+    std_pass = typer.prompt("Standard User Password", hide_input=True)
+
+    with progress("Retrieving password policy..."):
+        password_policy = password_policy_check(
+            session_data["dc_ip"],
+            session_data["standard_user"],
+            std_pass,
+        )
+
+    table = Table()
+
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row("Minimum Length", password_policy["minimum_length"])
+    table.add_row("Password History", password_policy["password_history"])
+    table.add_row("Maximum Age", password_policy["maximum_age"])
+    table.add_row("Complexity", password_policy["complexity"])
+    table.add_row("Lockout Threshold", password_policy["lockout_threshold"])
+
+    console.print(table)
