@@ -56,14 +56,16 @@ def run_checks() -> None:
         for host in load_domain_computers():
             smb_results.append(smb_configuration_check(host))
 
-    dcs = set(load_dc_hostnames())
+    dcs = {dc.lower() for dc in load_dc_hostnames()}
 
     dc_results = []
     host_results = []
 
     for result in smb_results:
 
-        if result["host"] in dcs:
+        host = result["host"].lower()
+
+        if host in dcs:
             dc_results.append(result)
         else:
             host_results.append(result)
