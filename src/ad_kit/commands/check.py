@@ -128,15 +128,17 @@ def run_checks() -> None:
 
     with progress("Validating credentials..."):
 
-        if not validate_credentials(
+        authenticated = validate_credentials(
             session_data["dc_ip"],
             session_data["standard_user"],
             std_pass,
-        ):
-            print_error("Authentication failed.")
-            return
-        elif validate_credentials:
-            print_success("Authentication Succeeded.")
+        )
+
+    if not authenticated:
+        print_error("Authentication failed.")
+        return
+
+    print_success("Authentication succeeded.")
 
     #---------------------------------------------------------------------------
     # Domain Password Policy
