@@ -11,11 +11,11 @@ def ldap_check() -> list[dict]:
     Execute LDAP checks for a Domain Controller.
     """
 
-    dc_hostnames_file = (get_artefacts_dir() / "dc-hostnames.txt")
+    dc_hostnames = load_dc_hostnames()
 
     output = run_check(
         "ldap",
-        ["nxc", "ldap", str(dc_hostnames_file),
+        ["nxc", "ldap", str(dc_hostnames),
             "-u", "",
             "-p", "",
         ],
@@ -23,7 +23,7 @@ def ldap_check() -> list[dict]:
 
     results = {}
 
-    for dc_hostname in load_dc_hostnames():
+    for dc_hostname in dc_hostnames:
 
         results[dc_hostname] = {
             "dc_hostname": dc_hostname,
@@ -31,6 +31,10 @@ def ldap_check() -> list[dict]:
             "channel_binding": "Unknown",
             "anonymous_bind": "Unknown",
         }
+
+    for hostname in dc_hostnames():
+        short_name = (hostname.split(".")[0].upper())
+        hostname_map[short_name] = hostname
 
     for line in output.splitlines():
 
@@ -45,10 +49,6 @@ def ldap_check() -> list[dict]:
         dc_name = parts[3]
 
         hostname_map = {}
-
-        for hostname in load_dc_hostnames():
-            short_name = (hostname.split(".")[0].upper())
-            hostname_map[short_name] = hostname
 
         dc_hostname = hostname_map.get(dc_name.upper(), dc_name)
 
