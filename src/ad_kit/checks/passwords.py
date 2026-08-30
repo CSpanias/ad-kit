@@ -41,14 +41,14 @@ def password_policy_check(
         ],
     )
 
-    minimum_length = "Unknown"
-    password_history = "Unknown"
-    maximum_age = "Unknown"
-    minimum_age = "Unknown"
-    complexity = "Unknown"
-    observation_window = "Unknown"
-    lockout_duration = "Unknown"
-    lockout_threshold = "Unknown"
+    minimum_length = "[yellow]⚠ Unknown[/yellow]"
+    password_history = "[yellow]⚠ Unknown[/yellow]"
+    maximum_age = "[yellow]⚠ Unknown[/yellow]"
+    minimum_age = "[yellow]⚠ Unknown[/yellow]"
+    complexity = "[yellow]⚠ Unknown[/yellow]"
+    observation_window = "[yellow]⚠ Unknown[/yellow]"
+    lockout_duration = "[yellow]⚠ Unknown[/yellow]"
+    lockout_threshold = "[yellow]⚠ Unknown[/yellow]"
 
     for line in output.splitlines():
 
@@ -107,7 +107,7 @@ def password_policy_assessment(
         and int(policy["minimum_length"])
         < PASSWORD_POLICY_BASELINE["minimum_length"]
     ):
-        assessment["minimum_length"] = "[yellow]⚠ Too Short[/yellow]"
+        assessment["minimum_length"] = "[red]✗ Too Short[/red]"
     else:
         assessment["minimum_length"] = "[green]✓ OK[/green]"
 
@@ -117,34 +117,34 @@ def password_policy_assessment(
         and int(policy["password_history"])
         < PASSWORD_POLICY_BASELINE["password_history"]
     ):
-        assessment["password_history"] = "[yellow]⚠ Too Low[/yellow]"
+        assessment["password_history"] = "[red]✗ Too Low[/red]"
     else:
         assessment["password_history"] = "[green]✓ OK[/green]"
 
     # Minimum Age
     if (
-        policy["minimum_age"] != "Unknown"
+        policy["minimum_age"] != "[yellow]⚠ Unknown[/yellow]"
         and policy["minimum_age"].startswith("0")
     ):
-        assessment["minimum_age"] = "[yellow]⚠ Not Set[/yellow]"
+        assessment["minimum_age"] = "[red]✗ Not Set[/red]"
     else:
         assessment["minimum_age"] = "[green]✓ OK[/green]"
 
     # Maximum Age
     if (
-        policy["maximum_age"] != "Unknown"
+        policy["maximum_age"] != "[yellow]⚠ Unknown[/yellow]"
         and (
             policy["maximum_age"].startswith("0")
             or "not set" in policy["maximum_age"].lower()
         )
     ):
-        assessment["maximum_age"] = "[yellow]⚠ Not Set[/yellow]"
+        assessment["maximum_age"] = "[red]✗ Not Set[/red]"
     else:
         assessment["maximum_age"] = "[green]✓ OK[/green]"
 
     # Complexity
     if policy["complexity"] == "Disabled":
-        assessment["complexity"] = "[yellow]⚠ Disabled[/yellow]"
+        assessment["complexity"] = "[red]✗ Disabled[/red]"
     else:
         assessment["complexity"] = "[green]✓ OK[/green]"
 
@@ -161,7 +161,7 @@ def password_policy_assessment(
         ]
     ):
         assessment["observation_window"] = (
-            "[yellow]⚠ Too Short[/yellow]"
+            "[red]✗ Too Short[/red]"
         )
     else:
         assessment["observation_window"] = (
@@ -181,7 +181,7 @@ def password_policy_assessment(
         ]
     ):
         assessment["lockout_duration"] = (
-            "[yellow]⚠ Too Short[/yellow]"
+            "[red]✗ Too Short[/red]"
         )
     else:
         assessment["lockout_duration"] = (
@@ -197,7 +197,7 @@ def password_policy_assessment(
         )
     ):
         assessment["lockout_threshold"] = (
-            "[yellow]⚠ Too Permissive[/yellow]"
+            "[red]✗ Too Permissive[/red]"
         )
     else:
         assessment["lockout_threshold"] = (
