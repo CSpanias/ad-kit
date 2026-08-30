@@ -90,10 +90,6 @@ def password_policy_check(
         "lockout_threshold": lockout_threshold,
     }
 
-from ad_kit.core.checks import (
-    PASSWORD_POLICY_BASELINE,
-)
-
 
 def password_policy_assessment(
     policy: dict,

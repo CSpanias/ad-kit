@@ -7,9 +7,9 @@ import typer
 from rich.table import Table
 
 from ad_kit.core.checks import (
-    load_dc_ips, 
     load_domain_computers,
-    load_dc_hostnames
+    load_dc_hostnames,
+    validate_credentials
 )
 from ad_kit.checks.ldap import ldap_check
 from ad_kit.checks.passwords import (
@@ -31,6 +31,10 @@ def run_checks() -> None:
     session_data = load_session()
 
     #---------------------------------------------------------------------------
+    # Unauthenticated Checks
+    #---------------------------------------------------------------------------
+
+    #---------------------------------------------------------------------------
     # LDAP Checks
     #---------------------------------------------------------------------------
     print_section("LDAP Checks")
@@ -40,9 +44,7 @@ def run_checks() -> None:
     with progress("Checking LDAP configuration..."):
             ldap_results = ldap_check()
 
-    #---------------------------------------------------------------------------
     # LDAP Results Table
-    #---------------------------------------------------------------------------
     table = Table()
 
     table.add_column("DC", style="cyan")
@@ -116,6 +118,23 @@ def run_checks() -> None:
         )
 
     console.print(host_table)
+
+    #---------------------------------------------------------------------------
+    # Authenticated Checks
+    #---------------------------------------------------------------------------
+    print_section("Authenticated Checks")
+
+    std_pass = typer.prompt("Standard User Password",hide_input=True)
+
+    with progress("Validating credentials..."):
+
+        if not validate_credentials(
+            session_data["dc_ip"],
+            session_data["standard_user"],
+            std_pass,
+        ):
+            print_error("Authentication failed.")
+            return
 
     #---------------------------------------------------------------------------
     # Domain Password Policy

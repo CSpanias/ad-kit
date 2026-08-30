@@ -106,6 +106,25 @@ def duration_to_minutes(
     return minutes
 
 
+def validate_credentials(
+    dc_ip: str,
+    username: str,
+    password: str,
+) -> bool:
+    """
+    Validate LDAP credentials.
+    """
+
+    output = run_check(
+        "credential-validation",
+        ["nxc", "ldap", dc_ip,
+            "-u", username,
+            "-p", password,
+        ],
+    )
+
+    return (f"\\{username.lower()}:" in output.lower())
+
 def run_check(
     name: str,
     command: list[str],

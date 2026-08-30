@@ -11,7 +11,7 @@ def ldap_check() -> list[dict]:
     Execute LDAP checks for a Domain Controller.
     """
 
-    dc_ips_file = (get_artefacts_dir() / "dc-ips.txt")
+    dc_ips_file = (get_artefacts_dir() / "dc-hostnames.txt")
 
     output = run_check(
         "ldap",
