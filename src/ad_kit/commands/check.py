@@ -124,21 +124,26 @@ def run_checks() -> None:
     #---------------------------------------------------------------------------
     print_section("Authenticated Checks")
 
-    std_pass = typer.prompt("Standard User Password",hide_input=True)
+    while True:
 
-    with progress("Validating credentials..."):
+        std_pass = typer.prompt("Standard User Password",hide_input=True)
 
-        authenticated = validate_credentials(
-            session_data["dc_ip"],
-            session_data["standard_user"],
-            std_pass,
-        )
+        with progress("Validating credentials..."):
 
-    if not authenticated:
+            authenticated = validate_credentials(
+                session_data["dc_ip"],
+                session_data["standard_user"],
+                std_pass,
+            )
+
+        if authenticated:
+            print_success("Authentication succeeded.")
+            break
+
         print_error("Authentication failed.")
-        return
 
-    print_success("Authentication succeeded.")
+        if not typer.confirm("Try again?", default=True):
+            return
 
     #---------------------------------------------------------------------------
     # Domain Password Policy
