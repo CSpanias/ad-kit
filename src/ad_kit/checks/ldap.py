@@ -3,61 +3,89 @@ LDAP-related assessment checks.
 """
 
 from ad_kit.core.checks import run_check
+from ad_kit.core.util import get_artefacts_dir
 
 
-def ldap_configuration_check(
-    dc_ip: str,
-) -> dict:
+def ldap_check() -> list[dict]:
     """
-    Check LDAP signing and channel binding.
-
-    Args:
-        dc_ip: Domain Controller IP address.
-
-    Returns:
-        Dictionary containing LDAP configuration
-        results.
+    Execute LDAP checks for a Domain Controller.
     """
+
+    dc_ips_file = (get_artefacts_dir() / "dc-ips.txt")
 
     output = run_check(
-        f"ldap-{dc_ip}",
-        ["nxc", "ldap", dc_ip],
+        "ldap",
+        ["nxc", "ldap", str(dc_ips_file),
+            "-u", "",
+            "-p", "",
+        ],
     )
 
-    signing = "Unknown"
-    channel_binding = "Unknown"
+    results = {}
 
     for line in output.splitlines():
 
-        line = line.lower()
+        if not line.startswith("LDAP"):
+            continue
 
-        if "signing:" in line:
+        parts = line.split()
 
-            start = line.find("signing:")
-            end = line.find(")", start)
+        if len(parts) < 2:
+            continue
+
+        dc_ip = parts[1]
+
+        if dc_ip not in results:
+
+            results[dc_ip] = {
+                "dc_ip": dc_ip,
+                "signing": "Unknown",
+                "channel_binding": "Unknown",
+                "anonymous_bind": "Unknown",
+            }
+
+        lower = line.lower()
+
+        # LDAP Signing
+        if "signing:" in lower:
+
+            start = lower.find("signing:")
+            end = lower.find(")", start)
 
             if start != -1 and end != -1:
-                signing = line[start + 8:end].strip()
 
-        if "channel binding:" in line:
+                signing = lower[start + 8:end].strip()
 
-            start = line.find("channel binding:")
-            end = line.find(")", start)
+                if signing == "none":
+                    signing = "Not Required"
+
+                results[dc_ip]["signing"] = signing
+
+        # Channel Binding
+        if "channel binding:" in lower:
+
+            start = lower.find("channel binding:")
+            end = lower.find(")", start)
 
             if start != -1 and end != -1:
-                channel_binding = (
-                    line[start + 16:end]
-                    .strip()
-                )
 
-    if signing == "none":
-        signing = "Not Required"
-        
-    if channel_binding == "no tls cert":
-        channel_binding = "Not Configured"
+                channel_binding = (lower[start + 16:end].strip())
 
-    return {
-        "dc_ip": dc_ip,
-        "signing": signing,
-        "channel_binding": channel_binding,
-    }
+                if channel_binding == "no tls cert":
+                    channel_binding = "Not Configured"
+
+                results[dc_ip]["channel_binding"] = channel_binding
+
+        # Anonymous Bind
+        if ("successful bind must be completed" in lower):
+            results[dc_ip]["anonymous_bind"] = ("Disabled")
+
+        elif (
+            "[+]" in lower
+            and "\\:" in lower
+            and results[dc_ip]["anonymous_bind"]
+                == "Unknown"
+        ):
+            results[dc_ip]["anonymous_bind"] = ("Enabled")
+
+    return sorted(results.values(), key=lambda result: result["dc_ip"])

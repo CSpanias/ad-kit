@@ -11,8 +11,11 @@ from ad_kit.core.checks import (
     load_domain_computers,
     load_dc_hostnames
 )
-from ad_kit.checks.ldap import ldap_configuration_check
-from ad_kit.checks.passwords import password_policy_check, password_policy_assessment
+from ad_kit.checks.ldap import ldap_check
+from ad_kit.checks.passwords import (
+    password_policy_check, 
+    password_policy_assessment
+)
 from ad_kit.checks.smb import smb_configuration_check
 from ad_kit.core.console import console, print_section
 from ad_kit.core.util import progress, load_session
@@ -28,26 +31,31 @@ def run_checks() -> None:
     session_data = load_session()
 
     #---------------------------------------------------------------------------
-    # LDAP Signing and Channel Binding
+    # LDAP Checks
     #---------------------------------------------------------------------------
     print_section("LDAP Checks")
 
-    results = []
+    ldap_results = []
 
-    for dc_ip in load_dc_ips():
-        results.append(ldap_configuration_check(dc_ip))
+    with progress("Checking LDAP configuration..."):
+            ldap_results = ldap_check()
 
+    #---------------------------------------------------------------------------
+    # LDAP Results Table
+    #---------------------------------------------------------------------------
     table = Table()
 
     table.add_column("DC", style="cyan")
     table.add_column("LDAP Signing", style="green")
     table.add_column("Channel Binding", style="green")
+    table.add_column("Anonymous Bind", style="green")
 
-    for result in results:
+    for result in ldap_results:
         table.add_row(
             result["dc_ip"],
             result["signing"],
             result["channel_binding"],
+            result["anonymous_bind"],
         )
 
     console.print(table)
