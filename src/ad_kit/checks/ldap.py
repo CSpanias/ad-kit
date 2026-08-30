@@ -90,3 +90,23 @@ def ldap_check() -> list[dict]:
             results[dc_hostname]["anonymous_bind"] = ("Disabled")
 
     return sorted(results.values(), key=lambda result: result["dc_hostname"])
+
+
+def ldap_assessment(
+    result: dict,
+) -> str:
+
+    if (
+        result["signing"] == "Unknown"
+        or result["channel_binding"] == "Unknown"
+    ):
+        return "[red]✗ Unknown[/red]"
+
+    if (
+        result["signing"] == "Not Required"
+        or result["channel_binding"] == "Not Configured"
+        or result["anonymous_bind"] == "Enabled"
+    ):
+        return "[yellow]⚠ Review[/yellow]"
+
+    return "[green]✓ OK[/green]"

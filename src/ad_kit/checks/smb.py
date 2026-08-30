@@ -65,3 +65,22 @@ def smb_configuration_check(
         "signing": signing,
         "smbv1": smbv1,
     }
+
+
+def smb_assessment(
+    result: dict,
+) -> str:
+
+    if (
+        result["signing"] == "Unknown"
+        or result["smbv1"] == "Unknown"
+    ):
+        return "[red]✗ Unknown[/red]"
+
+    if (
+        result["signing"] == "Disabled"
+        or result["smbv1"] == "Enabled"
+    ):
+        return "[yellow]⚠ Review[/yellow]"
+
+    return "[green]✓ OK[/green]"
