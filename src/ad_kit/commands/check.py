@@ -17,7 +17,7 @@ from ad_kit.checks.passwords import (
     password_policy_assessment
 )
 from ad_kit.checks.smb import smb_configuration_check
-from ad_kit.core.console import console, print_section, print_error
+from ad_kit.core.console import console, print_section, print_error, print_success
 from ad_kit.core.util import progress, load_session
 
 #-------------------------------------------------------------------------------
@@ -135,6 +135,8 @@ def run_checks() -> None:
         ):
             print_error("Authentication failed.")
             return
+        elif validate_credentials:
+            print("[green]✓ Authentication Succeeded.[/green]")
 
     #---------------------------------------------------------------------------
     # Domain Password Policy
