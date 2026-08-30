@@ -48,16 +48,16 @@ def smb_configuration_check(
                 smbv1 = line[start + 6:end].strip()
 
     if signing.lower() == "true":
-        signing = "Enabled"
+        signing = "[green]Enabled[/green]"
 
     elif signing.lower() == "false":
-        signing = "Disabled"
+        signing = "[yellow]⚠ Disabled[/yellow]"
 
     if smbv1.lower() == "none":
-        smbv1 = "Disabled"
+        smbv1 = "[green]Disabled[/green]"
 
     elif smbv1.lower() == "true":
-        smbv1 = "Enabled"
+        smbv1 = "[yellow]⚠ Enabled[/yellow]"
 
 
     return {
@@ -65,22 +65,3 @@ def smb_configuration_check(
         "signing": signing,
         "smbv1": smbv1,
     }
-
-
-def smb_assessment(
-    result: dict,
-) -> str:
-
-    if (
-        result["signing"] == "Unknown"
-        or result["smbv1"] == "Unknown"
-    ):
-        return "[red]✗ Unknown[/red]"
-
-    if (
-        result["signing"] == "Disabled"
-        or result["smbv1"] == "Enabled"
-    ):
-        return "[yellow]⚠ Review[/yellow]"
-
-    return "[green]✓ OK[/green]"

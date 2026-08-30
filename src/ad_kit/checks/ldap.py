@@ -66,7 +66,7 @@ def ldap_check() -> list[dict]:
                 signing = lower[start + 8:end].strip()
 
                 if signing == "none":
-                    signing = "Not Required"
+                    signing = "[yellow]⚠ Not Required[/yellow]"
 
                 results[dc_hostname]["signing"] = signing
 
@@ -81,7 +81,7 @@ def ldap_check() -> list[dict]:
                 channel_binding = (lower[start + 16:end].strip())
 
                 if channel_binding == "no tls cert":
-                    channel_binding = "Not Configured"
+                    channel_binding = "[yellow]⚠ Not Configured[/yellow]"
 
                 results[dc_hostname]["channel_binding"] = channel_binding
 
@@ -90,23 +90,3 @@ def ldap_check() -> list[dict]:
             results[dc_hostname]["anonymous_bind"] = ("Disabled")
 
     return sorted(results.values(), key=lambda result: result["dc_hostname"])
-
-
-def ldap_assessment(
-    result: dict,
-) -> str:
-
-    if (
-        result["signing"] == "Unknown"
-        or result["channel_binding"] == "Unknown"
-    ):
-        return "[red]✗ Unknown[/red]"
-
-    if (
-        result["signing"] == "Not Required"
-        or result["channel_binding"] == "Not Configured"
-        or result["anonymous_bind"] == "Enabled"
-    ):
-        return "[yellow]⚠ Review[/yellow]"
-
-    return "[green]✓ OK[/green]"
