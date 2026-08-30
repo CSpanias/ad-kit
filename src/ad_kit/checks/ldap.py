@@ -42,7 +42,15 @@ def ldap_check() -> list[dict]:
         if len(parts) < 2:
             continue
 
-        dc_hostname = parts[1]
+        dc_name = parts[3]
+
+        hostname_map = {}
+
+        for hostname in load_dc_hostnames():
+            short_name = (hostname.split(".")[0].upper())
+            hostname_map[short_name] = hostname
+
+        dc_hostname = hostname_map.get(dc_name.upper(), dc_name)
 
         lower = line.lower()
 
