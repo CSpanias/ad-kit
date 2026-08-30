@@ -13,13 +13,20 @@ def ldap_check() -> list[dict]:
 
     dc_hostnames = load_dc_hostnames()
 
+    dc_hostnames_file = (get_artefacts_dir() / "dc-hostnames.txt")
+
     output = run_check(
         "ldap",
-        ["nxc", "ldap", str(dc_hostnames),
+        ["nxc", "ldap", str(dc_hostnames_file),
             "-u", "",
             "-p", "",
         ],
     )
+
+    hostname_map = {}
+
+    for hostname in dc_hostnames:
+        hostname_map[hostname.split(".")[0]] = hostname
 
     results = {}
 
@@ -32,10 +39,6 @@ def ldap_check() -> list[dict]:
             "anonymous_bind": "Unknown",
         }
 
-    for hostname in dc_hostnames:
-        short_name = (hostname.split(".")[0].upper())
-        hostname_map[short_name] = hostname
-
     for line in output.splitlines():
 
         if not line.startswith("LDAP"):
@@ -47,8 +50,6 @@ def ldap_check() -> list[dict]:
             continue
 
         dc_name = parts[3]
-
-        hostname_map = {}
 
         dc_hostname = hostname_map.get(dc_name.upper(), dc_name)
 
