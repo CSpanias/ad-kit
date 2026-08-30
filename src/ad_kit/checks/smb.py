@@ -24,8 +24,8 @@ def smb_configuration_check(
         ["nxc", "smb", host],
     )
 
-    signing = "Unknown"
-    smbv1 = "Unknown"
+    signing = "[yellow]⚠ Unknown[/yellow]"
+    smbv1 = "[yellow]⚠ Unknown[/yellow]"
 
     for line in output.splitlines():
 
@@ -48,16 +48,16 @@ def smb_configuration_check(
                 smbv1 = line[start + 6:end].strip()
 
     if signing.lower() == "true":
-        signing = "[green]Enabled[/green]"
+        signing = "[green]✓ Enabled[/green]"
 
     elif signing.lower() == "false":
-        signing = "[yellow]⚠ Disabled[/yellow]"
+        signing = "[red]✗ Disabled[/red]"
 
     if smbv1.lower() == "none":
-        smbv1 = "[green]Disabled[/green]"
+        smbv1 = "[green]✓ Disabled[/green]"
 
     elif smbv1.lower() == "true":
-        smbv1 = "[yellow]⚠ Enabled[/yellow]"
+        smbv1 = "[red]✗ Enabled[/red]"
 
 
     return {

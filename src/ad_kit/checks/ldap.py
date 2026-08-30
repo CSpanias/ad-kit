@@ -34,9 +34,9 @@ def ldap_check() -> list[dict]:
 
         results[dc_hostname] = {
             "dc_hostname": dc_hostname,
-            "signing": "[red]✗ Unknown[/red]",
-            "channel_binding": "[red]✗ Unknown[/red]",
-            "anonymous_bind": "[red]✗ Unknown[/red]",
+            "signing": "[yellow]⚠ Unknown[/yellow]",
+            "channel_binding": "[yellow]⚠ Unknown[/yellow]",
+            "anonymous_bind": "[yellow]⚠ Unknown[/yellow]",
         }
 
     for line in output.splitlines():
@@ -66,7 +66,7 @@ def ldap_check() -> list[dict]:
                 signing = lower[start + 8:end].strip()
 
                 if signing == "none":
-                    signing = "[yellow]⚠ Not Required[/yellow]"
+                    signing = "[red]✗ Not Required[/red]"
 
                 results[dc_hostname]["signing"] = signing
 
@@ -81,12 +81,12 @@ def ldap_check() -> list[dict]:
                 channel_binding = (lower[start + 16:end].strip())
 
                 if channel_binding == "no tls cert":
-                    channel_binding = "[yellow]⚠ Not Configured[/yellow]"
+                    channel_binding = "[red]✗ Not Configured[/red]"
 
                 results[dc_hostname]["channel_binding"] = channel_binding
 
         # Anonymous Bind
         if ("successful bind must be completed" in lower):
-            results[dc_hostname]["anonymous_bind"] = ("Disabled")
+            results[dc_hostname]["anonymous_bind"] = ("[green]✓ Disabled[/green]")
 
     return sorted(results.values(), key=lambda result: result["dc_hostname"])
