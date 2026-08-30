@@ -2,7 +2,7 @@
 LDAP-related assessment checks.
 """
 
-from ad_kit.core.checks import run_check
+from ad_kit.core.checks import run_check, load_dc_ips
 from ad_kit.core.util import get_artefacts_dir
 
 
@@ -23,6 +23,15 @@ def ldap_check() -> list[dict]:
 
     results = {}
 
+    for dc_ip in load_dc_ips():
+
+        results[dc_ip] = {
+            "dc_ip": dc_ip,
+            "signing": "Unknown",
+            "channel_binding": "Unknown",
+            "anonymous_bind": "Unknown",
+        }
+
     for line in output.splitlines():
 
         if not line.startswith("LDAP"):
@@ -34,15 +43,6 @@ def ldap_check() -> list[dict]:
             continue
 
         dc_ip = parts[1]
-
-        if dc_ip not in results:
-
-            results[dc_ip] = {
-                "dc_ip": dc_ip,
-                "signing": "Unknown",
-                "channel_binding": "Unknown",
-                "anonymous_bind": "Unknown",
-            }
 
         lower = line.lower()
 
@@ -79,13 +79,5 @@ def ldap_check() -> list[dict]:
         # Anonymous Bind
         if ("successful bind must be completed" in lower):
             results[dc_ip]["anonymous_bind"] = ("Disabled")
-
-        elif (
-            "[+]" in lower
-            and "\\:" in lower
-            and results[dc_ip]["anonymous_bind"]
-                == "Unknown"
-        ):
-            results[dc_ip]["anonymous_bind"] = ("Enabled")
 
     return sorted(results.values(), key=lambda result: result["dc_ip"])
