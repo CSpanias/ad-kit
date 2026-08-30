@@ -32,7 +32,7 @@ def ldap_check() -> list[dict]:
             "anonymous_bind": "Unknown",
         }
 
-    for hostname in dc_hostnames():
+    for hostname in dc_hostnames:
         short_name = (hostname.split(".")[0].upper())
         hostname_map[short_name] = hostname
 
