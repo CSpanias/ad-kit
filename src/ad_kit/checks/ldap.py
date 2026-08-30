@@ -34,9 +34,9 @@ def ldap_check() -> list[dict]:
 
         results[dc_hostname] = {
             "dc_hostname": dc_hostname,
-            "signing": "Unknown",
-            "channel_binding": "Unknown",
-            "anonymous_bind": "Unknown",
+            "signing": "[red]✗ Unknown[/red]",
+            "channel_binding": "[red]✗ Unknown[/red]",
+            "anonymous_bind": "[red]✗ Unknown[/red]",
         }
 
     for line in output.splitlines():
