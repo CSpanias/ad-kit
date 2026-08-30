@@ -72,7 +72,7 @@ def load_dc_hostnames() -> list:
     dc_file = (get_artefacts_dir() / "dc-hostnames.txt")
 
     return [
-        line.strip().lower()
+        line.strip()
         for line in dc_file.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
