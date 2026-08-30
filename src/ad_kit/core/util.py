@@ -109,3 +109,19 @@ def progress(
 
     with console.status(f"[cyan]{message}"):
         yield
+
+
+def normalize_hostname(
+    hostname: str,
+) -> str:
+    """
+    Normalize a hostname/FQDN for display.
+
+    Args:
+        hostname: Hostname or FQDN.
+
+    Returns:
+        Normalized FQDN.
+    """
+
+    return hostname.upper()

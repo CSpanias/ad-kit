@@ -177,12 +177,15 @@ def write_results(
 
     artefacts_dir = get_artefacts_dir()
 
-    (artefacts_dir / "domain.txt").write_text(f"{domain}\n", encoding="utf-8")
+    (artefacts_dir / "domain.txt").write_text(
+        f"{domain}\n".upper(), 
+        encoding="utf-8"
+    )
 
     dc_hostnames = sorted(dc_hostnames)
 
     (artefacts_dir / "dc-hostnames.txt").write_text(
-        "\n".join(dc_hostnames) + "\n",
+        "\n".join(dc_hostnames).upper() + "\n",
         encoding="utf-8",
     )
 
@@ -383,7 +386,7 @@ def export_domain_computers(
 
         if candidate.endswith("$"):
 
-            fqdn = (candidate.rstrip("$").lower() + f".{domain.lower()}")
+            fqdn = (candidate.rstrip("$").upper() + f".{domain.upper()}")
             computers.append(fqdn)
 
     computers = sorted(set(computers))
