@@ -26,7 +26,7 @@ def ldap_check() -> list[dict]:
     hostname_map = {}
 
     for hostname in dc_hostnames:
-        hostname_map[hostname.split(".")[0]] = hostname
+        hostname_map[hostname.split(".")[0].upper()] = hostname
 
     results = {}
 
@@ -51,7 +51,7 @@ def ldap_check() -> list[dict]:
 
         dc_name = parts[3]
 
-        dc_hostname = hostname_map.get(dc_name.upper(), dc_name)
+        dc_hostname = hostname_map.get(dc_name)
 
         lower = line.lower()
 
