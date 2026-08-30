@@ -54,7 +54,7 @@ def run_checks() -> None:
 
     for result in ldap_results:
         table.add_row(
-            result["dc_ip"],
+            result["dc_hostname"],
             result["signing"],
             result["channel_binding"],
             result["anonymous_bind"],
