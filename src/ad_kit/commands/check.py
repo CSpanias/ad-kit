@@ -17,7 +17,7 @@ from ad_kit.checks.passwords import (
     password_policy_assessment
 )
 from ad_kit.checks.smb import smb_configuration_check
-from ad_kit.core.console import console, print_section
+from ad_kit.core.console import console, print_section, print_error
 from ad_kit.core.util import progress, load_session
 
 #-------------------------------------------------------------------------------
@@ -140,8 +140,6 @@ def run_checks() -> None:
     # Domain Password Policy
     #---------------------------------------------------------------------------
     print_section("Password Policy")
-
-    std_pass = typer.prompt("Standard User Password", hide_input=True)
 
     with progress("Retrieving password policy..."):
         password_policy = password_policy_check(
