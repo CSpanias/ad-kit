@@ -127,14 +127,13 @@ def validate_credentials(
 
         lower = line.lower()
 
-        if f"\\{username.lower()}:" not in lower:
-            continue
+        if f"\\{username.lower()}:" in lower:
 
-        if "[+]" in line:
-            return True
+            if "[+]" in line:
+                return True
 
-        if "[-]" in line:
-            return False
+            if "[-]" in line:
+                return False
 
     return False
 
