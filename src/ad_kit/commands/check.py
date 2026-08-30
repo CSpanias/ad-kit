@@ -136,7 +136,7 @@ def run_checks() -> None:
             print_error("Authentication failed.")
             return
         elif validate_credentials:
-            print("[green]✓ Authentication Succeeded.[/green]")
+            print_success("Authentication Succeeded.")
 
     #---------------------------------------------------------------------------
     # Domain Password Policy
