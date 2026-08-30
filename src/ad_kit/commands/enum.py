@@ -10,7 +10,6 @@ import typer
 from pathlib import Path
 from rich.table import Table
 
-from ad_kit.core.checks import run_check
 from ad_kit.core.console import (
     print_error, 
     print_info, 
@@ -246,33 +245,32 @@ def validate_credentials(
     dc_ip: str,
     username: str,
     password: str,
-) -> bool:
+) -> tuple[bool, bool]:
     """
-    Validate LDAP credentials.
-    """
+    Validate credentials using NetExec.
 
-    output = run_check(
-        "credential-validation",
-        ["nxc", "ldap", dc_ip,
+    Returns:
+        (
+            authentication_successful,
+            privileged_access,
+        )
+    """
+    result = subprocess.run(
+        [
+            "nxc", "smb", dc_ip,
             "-u", username,
             "-p", password,
         ],
+        capture_output=True,
+        text=True,
     )
 
-    for line in output.splitlines():
+    output = result.stdout
 
-        lower = line.lower()
+    is_valid = "[+]" in output
+    is_pwned = "Pwn3d!" in output
 
-        if f"\\{username.lower()}:" not in lower:
-            continue
-
-        if "[+]" in line:
-            return True
-
-        if "[-]" in line:
-            return False
-
-    return False
+    return (is_valid, is_pwned)
 
 
 def export_domain_users(
