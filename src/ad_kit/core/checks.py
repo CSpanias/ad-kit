@@ -123,7 +123,20 @@ def validate_credentials(
         ],
     )
 
-    return (f"\\{username.lower()}:" in output.lower())
+    for line in output.splitlines():
+
+        lower = line.lower()
+
+        if f"\\{username.lower()}:" not in lower:
+            continue
+
+        if "[+]" in line:
+            return True
+
+        if "[-]" in line:
+            return False
+
+    return False
 
 def run_check(
     name: str,
