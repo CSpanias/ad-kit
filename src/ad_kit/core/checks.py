@@ -110,7 +110,7 @@ def validate_credentials(
     dc_ip: str,
     username: str,
     password: str,
-) -> bool:
+) -> str:
     """
     Validate LDAP credentials.
     """
@@ -127,15 +127,19 @@ def validate_credentials(
 
         lower = line.lower()
 
-        if f"\\{username.lower()}:" in lower:
+        if f"\\{username.lower()}:" not in lower:
+            continue
 
-            if "[+]" in line:
-                return True
+        if "[+]" in line:
+            return "valid"
 
-            if "[-]" in line:
-                return False
+        if "user_account_locked" in lower:
+            return "locked"
 
-    return False
+        if "[-]" in line:
+            return "invalid"
+
+    return "unknown"
 
 def run_check(
     name: str,

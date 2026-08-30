@@ -126,21 +126,28 @@ def run_checks() -> None:
 
     while True:
 
-        std_pass = typer.prompt("Standard User Password",hide_input=True)
+        std_pass = typer.prompt("Standard User Password", hide_input=True)
 
         with progress("Validating credentials..."):
 
-            authenticated = validate_credentials(
+            status = validate_credentials(
                 session_data["dc_ip"],
                 session_data["standard_user"],
                 std_pass,
             )
 
-        if authenticated:
+        if status == "valid":
             print_success("Authentication succeeded.")
             break
 
-        print_error("Authentication failed.")
+        if status == "locked":
+            print_error("Account is locked out.")
+
+        elif status == "invalid":
+            print_error("Invalid credentials.")
+
+        else:
+            print_error("Unable to validate credentials.")
 
         if not typer.confirm("Try again?", default=True):
             return
