@@ -587,7 +587,7 @@ def run_enumeration() -> None:
                 excluded_users,
             )
 
-        print_info(f"Filtered accounts:\n{excluded_users}")
+        print_info("Filtered accounts:\n")
         print("")
         session_data["domain_users_exported"] = True
         session_data["domain_users_count"] = user_count
