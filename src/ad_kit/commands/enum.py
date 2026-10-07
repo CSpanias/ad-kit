@@ -509,6 +509,7 @@ def run_enumeration() -> None:
             print("")
 
             dc_ip = typer.prompt("Enter a Domain Controller IP")
+            print("")
             hostname, detected_domain = identify_domain_controller(dc_ip)
 
             dc_hostname = f"{hostname}.{detected_domain}"
