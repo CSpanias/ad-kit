@@ -476,8 +476,24 @@ def run_enumeration() -> None:
         #-----------------------------------------------------------------------
         print_section("Domain controllers")
 
-        dc_hostnames = enumerate_domain_controllers(domain)
-        dc_ips = resolve_domain_controllers(dc_hostnames)
+        try:
+            dc_hostnames = enumerate_domain_controllers(domain)
+            dc_ips = resolve_domain_controllers(dc_hostnames)
+
+        except RuntimeError as exc:
+            print_error(str(exc))
+            print("")
+
+            dc_hostname = typer.prompt(
+                "Enter a Domain Controller hostname (e.g. DC1.LOCAL.COM)"
+            ).upper()
+
+            dc_ip = typer.prompt("Enter a Domain Controller IP")
+
+            dc_hostnames = [dc_hostname]
+            dc_ips = [dc_ip]
+
+            print("")
 
         table = Table()
 
