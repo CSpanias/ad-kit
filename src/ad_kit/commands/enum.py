@@ -523,8 +523,7 @@ def run_enumeration() -> None:
 
         if not domain:
             domain = typer.prompt("Enter the Active Directory domain").upper()
-
-        print_success(f"Domain: {domain}")
+            print_success(f"Domain: {domain}")
 
         table = Table()
 
