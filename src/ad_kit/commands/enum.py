@@ -494,11 +494,6 @@ def run_enumeration() -> None:
             ):
                 domain = None
 
-        if not domain:
-            domain = typer.prompt("Enter the Active Directory domain").upper()
-
-        print_success(f"Domain: {domain}")
-
         #-----------------------------------------------------------------------
         # Domain Controller(s) enumeration
         #-----------------------------------------------------------------------
@@ -520,9 +515,16 @@ def run_enumeration() -> None:
             dc_hostnames = [dc_hostname]
             dc_ips = [dc_ip]
 
-            print_success(f"Identified Domain Controller: {dc_hostname}")
+            domain = detected_domain
 
+            print_success(f"Identified Domain Controller: {dc_hostname}")
+            print_success(f"Identified Domain: {domain}")
             print("")
+
+        if not domain:
+            domain = typer.prompt("Enter the Active Directory domain").upper()
+
+        print_success(f"Domain: {domain}")
 
         table = Table()
 
