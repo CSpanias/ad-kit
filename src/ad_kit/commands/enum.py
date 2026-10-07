@@ -38,10 +38,9 @@ def discover_domain() -> str:
 
     Returns:
         Domain name.
-
-    Raises:
-        RuntimeError: If the domain cannot be determined.
     """
+
+    candidate = None
 
     try:
         result = subprocess.run(
@@ -57,29 +56,40 @@ def discover_domain() -> str:
         )
 
         if domains:
-            return domains[0]
+            candidate = domains[0]
 
     except FileNotFoundError:
         pass
 
-    try:
-        with open("/etc/resolv.conf", encoding="utf-8") as handle:
-            for line in handle:
-                if line.startswith("search "):
-                    candidate = line.split()[1].strip()
+    if not candidate:
 
-                    if "." in candidate and candidate != ".":
-                        return candidate
-                    
-    except OSError:
-        pass
+        try:
+            with open("/etc/resolv.conf", encoding="utf-8") as handle:
 
-    domain = typer.prompt(
-        "Unable to determine domain automatically.\n"
-        "Enter domain"
-    )
+                for line in handle:
 
-    return domain
+                    if line.startswith("search "):
+
+                        value = line.split()[1].strip()
+
+                        if "." in value and value != ".":
+                            candidate = value
+                            break
+
+        except OSError:
+            pass
+
+    if candidate:
+
+        print_info(f"Detected domain: {candidate}")
+
+        if typer.confirm(
+            f"Use '{candidate}' as the Active Directory domain?",
+            default=True,
+        ):
+            return candidate
+
+    return typer.prompt("Enter the Active Directory domain").upper()
 
 
 def enumerate_domain_controllers(
@@ -523,6 +533,7 @@ def run_enumeration() -> None:
 
         da_user = typer.prompt("Username")
         da_pass = typer.prompt("Password", hide_input=True)
+        print("")
 
         valid, pwned = validate_credentials(dc_ip, da_user, da_pass)
 
