@@ -26,21 +26,14 @@ from ad_kit.core.util import (
 from ad_kit.commands.rusthound import run_rusthound
 
 
-# TODO:
-# Validate domain discovery logic on a real engagement.
-# Current implementation relies on resolvectl and
-# /etc/resolv.conf and may need additional discovery
-# methods or fallback prompting.
-
-def discover_domain() -> str:
+def discover_domain() -> str | None:
     """
-    Discover the Active Directory domain.
+    Attempt to discover the Active Directory domain.
 
     Returns:
-        Domain name.
+        Discovered domain name, or None if no
+        reliable candidate could be identified.
     """
-
-    candidate = None
 
     try:
         result = subprocess.run(
@@ -50,46 +43,27 @@ def discover_domain() -> str:
             check=False,
         )
 
-        domains = re.findall(
-            r"([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})",
-            result.stdout,
-        )
+        domains = re.findall(r"([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})", result.stdout)
 
         if domains:
-            candidate = domains[0]
+            return domains[0].upper()
 
     except FileNotFoundError:
         pass
 
-    if not candidate:
+    try:
+        with open("/etc/resolv.conf", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith("search "):
+                    candidate = line.split()[1].strip()
 
-        try:
-            with open("/etc/resolv.conf", encoding="utf-8") as handle:
+                    if "." in candidate and candidate != ".":
+                        return candidate.upper()
 
-                for line in handle:
+    except OSError:
+        pass
 
-                    if line.startswith("search "):
-
-                        value = line.split()[1].strip()
-
-                        if "." in value and value != ".":
-                            candidate = value
-                            break
-
-        except OSError:
-            pass
-
-    if candidate:
-
-        print_info(f"Detected domain: {candidate}")
-
-        if typer.confirm(
-            f"Use '{candidate}' as the Active Directory domain?",
-            default=True,
-        ):
-            return candidate
-
-    return typer.prompt("Enter the Active Directory domain").upper()
+    return None
 
 
 def enumerate_domain_controllers(
@@ -169,6 +143,46 @@ def resolve_domain_controllers(
             continue
 
     return dc_ips
+
+
+def identify_domain_controller(
+    dc_ip: str,
+) -> tuple[str, str]:
+    """
+    Identify a Domain Controller and its domain
+    from an IP address.
+
+    Args:
+        dc_ip: Domain Controller IP address.
+
+    Returns:
+        A tuple containing:
+        - Fully qualified Domain Controller hostname.
+        - Active Directory domain name.
+
+    Raises:
+        RuntimeError: If the Domain Controller
+            hostname or domain cannot be identified.
+    """
+
+    result = subprocess.run(
+        ["nxc", "ldap", dc_ip],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    output = result.stdout
+    name_match = re.search(r"\(name:([^)]+)\)", output)
+    domain_match = re.search(r"\(domain:([^)]+)\)", output)
+
+    if not name_match or not domain_match:
+        raise RuntimeError("Failed to identify the Domain Controller.")
+
+    hostname = name_match.group(1).upper()
+    domain = domain_match.group(1).upper()
+
+    return hostname, domain
 
 
 def write_results(
@@ -465,10 +479,24 @@ def run_enumeration() -> None:
     #---------------------------------------------------------------------------
     # Domain enumeration
     #---------------------------------------------------------------------------
-    print_section("Domain")
-
     try:
+        print_section("Domain")
+
         domain = discover_domain()
+
+        if domain:
+
+            print_info(f"Detected domain: {domain}")
+
+            if not typer.confirm(
+                f"Use '{domain}' as the Active Directory domain?",
+                default=True,
+            ):
+                domain = None
+
+        if not domain:
+            domain = typer.prompt("Enter the Active Directory domain").upper()
+
         print_success(f"Domain: {domain}")
 
         #-----------------------------------------------------------------------
@@ -481,17 +509,18 @@ def run_enumeration() -> None:
             dc_ips = resolve_domain_controllers(dc_hostnames)
 
         except RuntimeError as exc:
+
             print_error(str(exc))
             print("")
 
-            dc_hostname = typer.prompt(
-                "Enter a Domain Controller hostname (e.g. DC1.LOCAL.COM)"
-            ).upper()
-
             dc_ip = typer.prompt("Enter a Domain Controller IP")
+            hostname, detected_domain = identify_domain_controller(dc_ip)
 
+            dc_hostname = f"{hostname}.{detected_domain}"
             dc_hostnames = [dc_hostname]
             dc_ips = [dc_ip]
+
+            print_success(f"Identified Domain Controller: {dc_hostname}")
 
             print("")
 
