@@ -7,12 +7,21 @@ from ad_kit.core.checks import run_check
 
 def smb_configuration_check(
     host: str,
+    dc_ip: str,
 ) -> dict:
     """
-    Check SMB signing and SMBv1 support.
+    Check SMB signing and SMBv1 support on a target host.
+
+    Name resolution is performed using the specified
+    Domain Controller DNS service to ensure that
+    domain hosts can be resolved even when the local
+    system is not configured to use Active Directory
+    DNS.
 
     Args:
-        host: Hostname or FQDN.
+        host: Target hostname or FQDN.
+        dc_ip: Domain Controller IP address to use
+            for DNS resolution.
 
     Returns:
         Dictionary containing SMB configuration
@@ -21,7 +30,7 @@ def smb_configuration_check(
 
     output = run_check(
         f"smb-{host}",
-        ["nxc", "smb", host],
+        ["nxc", "smb", host, "--dns-server", dc_ip],
     )
 
     signing = "[yellow]⚠ Unknown[/yellow]"

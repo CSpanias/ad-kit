@@ -69,7 +69,10 @@ def run_checks() -> None:
 
     with progress("Checking SMB configuration..."):
         for host in load_domain_computers():
-            smb_results.append(smb_configuration_check(host))
+            smb_results.append(
+                smb_configuration_check(host),
+                session_data["dc_ip"]    
+            )
 
     dcs = {dc.lower() for dc in load_dc_hostnames()}
 
