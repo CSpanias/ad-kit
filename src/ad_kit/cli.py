@@ -9,8 +9,8 @@ from rich.table import Table
 
 from ad_kit.commands.check import run_checks
 from ad_kit.commands.enum import run_enumeration
-from ad_kit.commands.install import install_tool
-from ad_kit.commands.status import show_status
+from src.ad_kit.commands.tools.install import install_tool
+from src.ad_kit.commands.tools.status import show_status
 from ad_kit.registry import ToolRegistry
 
 app = typer.Typer(
@@ -19,13 +19,12 @@ app = typer.Typer(
     help=("Active Directory Assessment Toolkit."),
     epilog="""
 Examples:
-  ad-kit tools
-  ad-kit status
-
-  ad-kit install netexec
-  ad-kit install all
+  ad-kit tools install all
+  ad-kit tools status
 
   ad-kit enum
+
+  ad-kit check
 """,
     no_args_is_help=True,
     context_settings={
@@ -76,7 +75,7 @@ def tools() -> None:
 #-------------------------------------------------------------------------------
 # tools status submodule
 #-------------------------------------------------------------------------------
-@app.command(help=("Check which registered tools are currently installed."))
+@app.command(help="Check which registered tools are currently installed.")
 def status() -> None:
     """
     Show the installation status of all registered tools.
@@ -89,14 +88,14 @@ def status() -> None:
 #-------------------------------------------------------------------------------
 @app.command(
     help=(
-        "Install one or more tools from the AD-Kit registry. Use 'all' to "
-        "install every registered tool."
+        "Install one or more tools from the AD-Kit registry. "
+        "Use 'all' to install every registered tool."
     )
 )
 def install(
     tool: str = typer.Argument(
         ...,
-        help="Tool name or 'all'."
+        help="Tool name or 'all'.",
     ),
 ) -> None:
     """

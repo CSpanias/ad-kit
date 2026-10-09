@@ -129,6 +129,7 @@ def run_checks() -> None:
     while True:
 
         std_pass = typer.prompt("Standard User Password", hide_input=True)
+        console.print()
 
         with progress("Validating credentials..."):
 
