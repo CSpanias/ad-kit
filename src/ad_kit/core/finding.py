@@ -44,28 +44,21 @@ class Finding:
         references:
             External references and guidance.
     """
+    
+    id: str
+    title: str
+    severity: str
 
-    @dataclass
-    class Finding:
+    commentary: str
+    remediation: str
+
+    affected_assets: list[str] = field(default_factory=list)
+    evidence: list[str] = field(default_factory=list)
+    references: list[str] = field(default_factory=list)
+
+
+    def copy(self) -> "Finding":
         """
-        Represents a security finding identified during an
-        Active Directory assessment.
+        Create an independent copy of the finding.
         """
-
-        id: str
-        title: str
-        severity: str
-
-        commentary: str
-        remediation: str
-
-        affected_assets: list[str] = field(default_factory=list)
-        evidence: list[str] = field(default_factory=list)
-        references: list[str] = field(default_factory=list)
-
-
-        def copy(self) -> "Finding":
-            """
-            Create an independent copy of the finding.
-            """
-            return deepcopy(self)
+        return deepcopy(self)
