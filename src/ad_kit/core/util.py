@@ -45,58 +45,36 @@ def save_session(
     )
 
 
-def generate_scp_command(
-    session_data: dict,
-) -> None:
-    """
-    Generate an SCP retrieval command.
-    """
+host = typer.prompt(
+    "SSH Host",
+    default=session_data.get("jumpbox_host", ""),
+    show_default=False,
+)
 
-    print_section("Retrieval")
+user = typer.prompt(
+    "SSH Username",
+    default=session_data.get("jumpbox_user", ""),
+    show_default=False,
+)
 
-    host = typer.prompt(
-        "SSH Host",
-        default=session_data.get("jumpbox_host", ""),
-        show_default=False,
-    )
+remote_dir = typer.prompt(
+    "Remote AD-Kit Directory",
+    default=session_data.get("remote_dir", ""),
+    show_default=False,
+)
 
-    user = typer.prompt(
-        "SSH Username",
-        default=session_data.get("jumpbox_user", ""),
-        show_default=False,
-    )
+session_data["jumpbox_host"] = host
+session_data["jumpbox_user"] = user
+session_data["remote_dir"] = remote_dir
 
-    ssh_key = typer.prompt(
-        "SSH Key Path",
-        default=session_data.get("ssh_key", ""),
-        show_default=False,
-    )
+save_session(session_data)
 
-    session_data["jumpbox_host"] = host
-    session_data["jumpbox_user"] = user
-    session_data["ssh_key"] = ssh_key
-
-    save_session(session_data)
-
-    artefacts_dir = get_artefacts_dir()
-
-    artefacts = []
-
-    artefacts.extend(artefacts_dir.glob("*.zip"))
-    artefacts.extend(artefacts_dir.glob("*.ntds*"))
-
-    scp_parts = [f'scp -i "{ssh_key}"']
-
-    for artefact in artefacts:
-        scp_parts.append(f'"{user}@{host}:{artefact.resolve()}"')
-
-    scp_parts.append("./")
-
-    command = " ".join(scp_parts)
-
-    console.print()
-    console.print(command, style="cyan")
-    console.print()
+command = (
+    f'scp '
+    f'"{user}@{host}:{remote_dir}/*.zip" '
+    f'"{user}@{host}:{remote_dir}/*.ntds*" '
+    './'
+)
 
 
 @contextmanager
