@@ -18,7 +18,8 @@ from ad_kit.checks.passwords import (
 )
 from ad_kit.checks.smb import smb_configuration_check
 from ad_kit.core.console import console, print_section, print_error, print_success
-from ad_kit.core.util import progress, load_session
+from ad_kit.core.util import progress, load_session, get_artefacts_dir
+from ad_kit.reporting.markdown import write_markdown_report
 
 #-------------------------------------------------------------------------------
 # Main function
@@ -29,6 +30,9 @@ def run_checks() -> None:
     """
 
     session_data = load_session()
+    all_findings = []
+
+    output_dir = get_artefacts_dir()
 
     #---------------------------------------------------------------------------
     # Unauthenticated Checks
@@ -42,7 +46,8 @@ def run_checks() -> None:
     ldap_results = []
 
     with progress("Checking LDAP configuration..."):
-            ldap_results = ldap_check()
+            ldap_results, ldap_findings = ldap_check()
+            all_findings.extend(ldap_findings)
 
     # LDAP Results Table
     table = Table()
@@ -61,6 +66,8 @@ def run_checks() -> None:
         )
 
     console.print(table)
+
+    write_markdown_report(all_findings, output_dir / "findings.md")
 
     #---------------------------------------------------------------------------
     # SMB Signing and Version
