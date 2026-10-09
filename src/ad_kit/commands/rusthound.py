@@ -39,6 +39,8 @@ def run_rusthound(
             "-p",
             password,
             "-i",
+            "-c",
+            "LdapOnly",
             dc_ip,
             "-z",
         ],
