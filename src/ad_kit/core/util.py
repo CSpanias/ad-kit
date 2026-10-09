@@ -55,7 +55,7 @@ def generate_scp_command(
     print_section("Retrieval")
 
     host = typer.prompt(
-        "SSH Host",
+        "SSH Host's IP Address (typically the Tailscale IP)",
         default=session_data.get("jumpbox_host", ""),
         show_default=False,
     )
@@ -84,6 +84,10 @@ def generate_scp_command(
         f'"{user}@{host}:{remote_dir}/*.ntds*" '
         './'
     )
+
+    console.print()
+    console.print(command, style="cyan")
+    console.print()
 
 
 @contextmanager
