@@ -49,8 +49,6 @@ def run_rusthound(
         text=True,
     )
 
-    print(result)
-
     if result.returncode != 0:
 
         print_error(
