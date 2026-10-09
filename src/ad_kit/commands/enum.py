@@ -26,125 +26,6 @@ from ad_kit.core.util import (
 from ad_kit.commands.rusthound import run_rusthound
 
 # TODO: Automate domain and DC resolution
-# def discover_domain() -> str | None:
-#     """
-#     Attempt to discover the Active Directory domain.
-
-#     Returns:
-#         Discovered domain name, or None if no
-#         reliable candidate could be identified.
-#     """
-
-#     try:
-#         result = subprocess.run(
-#             ["resolvectl", "domain"],
-#             capture_output=True,
-#             text=True,
-#             check=False,
-#         )
-
-#         domains = re.findall(r"([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})", result.stdout)
-
-#         if domains:
-#             return domains[0].upper()
-
-#     except FileNotFoundError:
-#         pass
-
-#     try:
-#         with open("/etc/resolv.conf", encoding="utf-8") as handle:
-#             for line in handle:
-#                 if line.startswith("search "):
-#                     candidate = line.split()[1].strip()
-
-#                     if "." in candidate and candidate != ".":
-#                         return candidate.upper()
-
-#     except OSError:
-#         pass
-
-#     return None
-
-
-# def enumerate_domain_controllers(
-#     domain: str,
-# ) -> list[str]:
-#     """
-#     Enumerate domain controllers via DNS.
-
-#     Args:
-#         domain: AD domain name.
-
-#     Returns:
-#         List of DC hostnames.
-
-#     Raises:
-#         RuntimeError: If enumeration fails.
-#     """
-
-#     print_info("Querying Active Directory DNS...")
-#     console.print()
-
-#     result = subprocess.run(
-#         [
-#             "nslookup",
-#             "-type=SRV",
-#             f"_ldap._tcp.dc._msdcs.{domain}",
-#         ],
-#         capture_output=True,
-#         text=True,
-#         check=False,
-#     )
-
-#     if (
-#         result.returncode != 0
-#         or "REFUSED" in result.stdout
-#         or "can't find" in result.stdout
-#     ):
-#         raise RuntimeError("Failed to query DNS SRV records.")
-
-#     dc_hostnames: set[str] = set()
-
-#     for line in result.stdout.splitlines():
-#         if "service =" in line:
-#             hostname = line.split()[-1].rstrip(".")
-#             dc_hostnames.add(hostname)
-
-#     if not dc_hostnames:
-#         raise RuntimeError("" \
-#         "No domain controllers were found in DNS. Ensure your DNS server is "
-#         "pointing at a domain controller."
-#     )
-
-#     return sorted(dc_hostnames)
-
-
-# def resolve_domain_controllers(
-#     dc_hostnames: list[str],
-# ) -> list[str]:
-#     """
-#     Resolve DC hostnames to IP addresses.
-
-#     Args:
-#         dc_hostnames: List of DC hostnames.
-
-#     Returns:
-#         List of IP addresses.
-#     """
-
-#     dc_ips: list[str] = []
-
-#     for hostname in dc_hostnames:
-#         try:
-#             ip = socket.gethostbyname(hostname)
-#             dc_ips.append(ip)
-
-#         except socket.gaierror:
-#             continue
-
-#     return dc_ips
-
-
 def identify_domain_controller(
     dc_ip: str,
 ) -> tuple[str, str]:
@@ -487,37 +368,33 @@ def run_enumeration() -> None:
         print_section("Assessment Configuration")
 
         dc_ip = typer.prompt("Domain Controller IP Address")
-
         console.print()
     
         std_user = typer.prompt("Standard User Username")
         std_pass = typer.prompt("Standard User Password", hide_input=True)
-    
+
         console.print()
     
         da_user = typer.prompt("Domain Admin Username")
         da_pass = typer.prompt("Domain Admin Password", hide_input=True)
-    
+
         console.print()
     
         collect = typer.confirm("Run RustHound collection?", default=True)
+        console.print()
 
+        dump_ntds = typer.confirm("Dump NTDS hashes?", default=True)
         console.print()
 
         generate_scp_retrieval = typer.confirm(
             "Generate SCP retrieval command?",
-            default=True,
+            default=False,
         )
+        console.print()
 
         if generate_scp_retrieval:
                     generate_scp_command(session_data)
-    
-        console.print()
-
-
         
-
-
         #-----------------------------------------------------------------------
         # Domain Controller(s) enumeration
         #-----------------------------------------------------------------------
@@ -554,8 +431,6 @@ def run_enumeration() -> None:
 
         configure_nxc()
 
-        console.print()
-
         #-----------------------------------------------------------------------
         # Domain account(s) validation
         #-----------------------------------------------------------------------
@@ -577,8 +452,6 @@ def run_enumeration() -> None:
             print_error("Standard user appears privileged.")
         else:
             print_success("Standard user validated.")
-
-        console.print()
 
         # Domain Admin
         valid, pwned = validate_credentials(dc_ip, da_user, da_pass)
@@ -627,6 +500,7 @@ def run_enumeration() -> None:
         session_data["generate_scp_retrieval"] = (generate_scp_retrieval)
 
         save_session(session_data)
+
         #-----------------------------------------------------------------------
         # Domain data collection
         #-----------------------------------------------------------------------
@@ -687,6 +561,41 @@ def run_enumeration() -> None:
                 session_data["rusthound_collected"] = True
                 save_session(session_data)
 
+        #-----------------------------------------------------------------------
+        # NTDS Dump
+        #-----------------------------------------------------------------------
+        if dump_ntds:
+
+            print_section("NTDS Dump")
+
+            output_dir = get_artefacts_dir()
+
+            with progress("[cyan]Running secretsdump..."):
+
+                result = subprocess.run(
+                    [
+                        "secretsdump.py",
+                        (
+                            f"{domain}/"
+                            f"{da_user}:"
+                            f"{da_pass}@"
+                            f"{dc_ip}"
+                        ),
+                        "-user-status",
+                        "-just-dc-ntlm",
+                        "-outputfile",
+                        domain,
+                    ],
+                    cwd=output_dir,
+                    capture_output=True,
+                    text=True,
+                )
+
+            if result.returncode == 0:
+                session_data["ntds_dumped"] = True
+                print_success("NTDS dump completed.")
+            else:
+                print_error("NTDS dump failed.")
         #-----------------------------------------------------------------------
         # Summary table
         #-----------------------------------------------------------------------
