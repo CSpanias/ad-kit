@@ -45,17 +45,24 @@ class Finding:
             External references and guidance.
     """
 
-    id: str
-    title: str
-    severity: str
+    @dataclass
+    class Finding:
+        """
+        Represents a security finding identified during an
+        Active Directory assessment.
+        """
 
-    description: str
-    impact: str
-    recommendation: str
+        id: str
+        title: str
+        severity: str
 
-    affected_assets: list[str] = field(default_factory=list)
-    evidence: list[str] = field(default_factory=list)
-    references: list[str] = field(default_factory=list)
+        commentary: str
+        remediation: str
+
+        affected_assets: list[str] = field(default_factory=list)
+        evidence: list[str] = field(default_factory=list)
+        references: list[str] = field(default_factory=list)
+
 
     def copy(self) -> "Finding":
         """

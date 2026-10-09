@@ -67,7 +67,7 @@ def run_checks() -> None:
 
     console.print(table)
 
-    write_markdown_report(all_findings, output_dir / "findings.md")
+    write_markdown_report(all_findings, output_dir / "ldap_config.md")
 
     #---------------------------------------------------------------------------
     # SMB Signing and Version
