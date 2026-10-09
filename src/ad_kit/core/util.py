@@ -90,6 +90,7 @@ def generate_scp_command(
         "From your local Kali VM, execute the following command to retrieve "
         "the assessment artefacts:"
     )
+    console.print()
     console.print(command, style="cyan")
     console.print()
 
