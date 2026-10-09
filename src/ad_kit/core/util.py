@@ -45,36 +45,36 @@ def save_session(
     )
 
 
-host = typer.prompt(
-    "SSH Host",
-    default=session_data.get("jumpbox_host", ""),
-    show_default=False,
-)
+    host = typer.prompt(
+        "SSH Host",
+        default=session_data.get("jumpbox_host", ""),
+        show_default=False,
+    )
 
-user = typer.prompt(
-    "SSH Username",
-    default=session_data.get("jumpbox_user", ""),
-    show_default=False,
-)
+    user = typer.prompt(
+        "SSH Username",
+        default=session_data.get("jumpbox_user", ""),
+        show_default=False,
+    )
 
-remote_dir = typer.prompt(
-    "Remote AD-Kit Directory",
-    default=session_data.get("remote_dir", ""),
-    show_default=False,
-)
+    remote_dir = typer.prompt(
+        "Remote AD-Kit Directory",
+        default=session_data.get("remote_dir", ""),
+        show_default=False,
+    )
 
-session_data["jumpbox_host"] = host
-session_data["jumpbox_user"] = user
-session_data["remote_dir"] = remote_dir
+    session_data["jumpbox_host"] = host
+    session_data["jumpbox_user"] = user
+    session_data["remote_dir"] = remote_dir
 
-save_session(session_data)
+    save_session(session_data)
 
-command = (
-    f'scp '
-    f'"{user}@{host}:{remote_dir}/*.zip" '
-    f'"{user}@{host}:{remote_dir}/*.ntds*" '
-    './'
-)
+    command = (
+        f'scp '
+        f'"{user}@{host}:{remote_dir}/*.zip" '
+        f'"{user}@{host}:{remote_dir}/*.ntds*" '
+        './'
+    )
 
 
 @contextmanager
