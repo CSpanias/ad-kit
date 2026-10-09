@@ -44,16 +44,14 @@ class Finding:
         references:
             External references and guidance.
     """
-    
+
     id: str
     title: str
-    severity: str
 
     commentary: str
     remediation: str
 
     affected_assets: list[str] = field(default_factory=list)
-    evidence: list[str] = field(default_factory=list)
     references: list[str] = field(default_factory=list)
 
 

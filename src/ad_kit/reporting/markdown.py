@@ -43,11 +43,6 @@ def write_markdown_report(
             )
             lines.append("")
 
-            lines.append(
-                f"**Severity:** {finding.severity}"
-            )
-            lines.append("")
-
             lines.append("### Commentary")
             lines.append("")
             lines.append(finding.commentary)
@@ -65,16 +60,6 @@ def write_markdown_report(
 
                 for asset in finding.affected_assets:
                     lines.append(f"- {asset}")
-
-                lines.append("")
-
-            if finding.evidence:
-
-                lines.append("### Evidence")
-                lines.append("")
-
-                for item in finding.evidence:
-                    lines.append(f"- {item}")
 
                 lines.append("")
 
