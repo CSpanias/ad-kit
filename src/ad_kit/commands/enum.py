@@ -83,7 +83,7 @@ def enumerate_domain_controllers(
     """
 
     print_info("Querying Active Directory DNS...")
-    print("")
+    console.print()
 
     result = subprocess.run(
         [
@@ -480,6 +480,32 @@ def run_enumeration() -> None:
     # Domain enumeration
     #---------------------------------------------------------------------------
     try:
+
+        #-----------------------------------------------------------------------
+        # Assessment Configuration
+        #-----------------------------------------------------------------------
+        print_section("Assessment Configuration")
+    
+        std_user = typer.prompt("Standard User Username")
+        std_pass = typer.prompt("Standard User Password", hide_input=True)
+    
+        console.print()
+    
+        da_user = typer.prompt("Domain Admin Username")
+        da_pass = typer.prompt("Domain Admin Password", hide_input=True)
+    
+        console.print()
+    
+        collect = typer.confirm("Run RustHound collection?", default=True)
+    
+        generate_scp_retrieval = typer.confirm(
+            "Generate SCP retrieval command?",
+            default=True,
+        )
+    
+        console.print()
+
+
         print_section("Domain")
 
         domain = discover_domain()
@@ -506,10 +532,10 @@ def run_enumeration() -> None:
         except RuntimeError as exc:
 
             print_error(str(exc))
-            print("")
+            console.print()
 
             dc_ip = typer.prompt("Enter a Domain Controller IP")
-            print("")
+            console.print()
             hostname, detected_domain = identify_domain_controller(dc_ip)
 
             dc_hostname = f"{hostname}.{detected_domain}"
@@ -520,11 +546,7 @@ def run_enumeration() -> None:
 
             print_success(f"Identified Domain Controller: {dc_hostname}")
             print_success(f"Identified Domain: {domain}")
-            print("")
-
-        if not domain:
-            domain = typer.prompt("Enter the Active Directory domain").upper()
-            print_success(f"Domain: {domain}")
+            console.print()
 
         table = Table()
 
@@ -543,8 +565,10 @@ def run_enumeration() -> None:
         # NetExec Configuration (audit mode)
         #-----------------------------------------------------------------------
         print_section("NXC Configuration")
+
         configure_nxc()
-        print("")
+
+        console.print()
 
         #-----------------------------------------------------------------------
         # Domain account(s) validation
@@ -557,11 +581,6 @@ def run_enumeration() -> None:
         dc_ip = dc_ips[0]
 
         # Standard user
-        print_info("Enter standard user credentials.")
-        std_user = typer.prompt("Username")
-        std_pass = typer.prompt("Password", hide_input=True)
-        print("")
-
         valid, pwned = validate_credentials(dc_ip, std_user, std_pass)
 
         if not valid:
@@ -573,15 +592,9 @@ def run_enumeration() -> None:
         else:
             print_success("Standard user validated.")
 
-        print("")
+        console.print()
 
         # Domain Admin
-        print_info("Enter Domain Admin credentials.")
-
-        da_user = typer.prompt("Username")
-        da_pass = typer.prompt("Password", hide_input=True)
-        print("")
-
         valid, pwned = validate_credentials(dc_ip, da_user, da_pass)
 
         if not valid:
@@ -614,8 +627,6 @@ def run_enumeration() -> None:
             "domain_users_exported": False,
             "domain_users_count": 0,
             "domain_users_filtered_count": 0,
-            "domain_users_exported": False,
-
 
             "domain_computers_exported": False,
             "domain_computers_count": 0,
@@ -624,11 +635,12 @@ def run_enumeration() -> None:
             "ntds_dumped": False,
             "jumpbox_host": "",
             "jumpbox_user": "",
-            "ssh_key": "",
+            "remote_dir": "",
         }
 
-        save_session(session_data)
+        session_data["generate_scp_retrieval"] = (generate_scp_retrieval)
 
+        save_session(session_data)
         #-----------------------------------------------------------------------
         # Domain data collection
         #-----------------------------------------------------------------------
@@ -646,7 +658,7 @@ def run_enumeration() -> None:
             )
 
         print_info("Filtered accounts:\n")
-        print("")
+        console.print()
         session_data["domain_users_exported"] = True
         session_data["domain_users_count"] = user_count
 
@@ -680,8 +692,6 @@ def run_enumeration() -> None:
         #-----------------------------------------------------------------------
         
         print_section("BloodHound Collection")
-        
-        collect = typer.confirm("Run RustHound collection?", default=True)
 
         if collect:
             with console.status("[cyan]Collecting BloodHound data..."):
@@ -691,14 +701,12 @@ def run_enumeration() -> None:
                 session_data["rusthound_collected"] = True
                 save_session(session_data)
 
-        # Create SCP command
-        print("")
-        if typer.confirm("Generate SCP retrieval command?", default=True):
-            generate_scp_command(session_data)
-
         #-----------------------------------------------------------------------
         # Summary table
         #-----------------------------------------------------------------------
+        if generate_scp_retrieval:
+            generate_scp_command(session_data)
+
         print_summary(session_data)
 
 

@@ -61,13 +61,13 @@ def generate_scp_command(
     )
 
     user = typer.prompt(
-        "SSH Username",
+        "SSH Username (typically x-user)",
         default=session_data.get("jumpbox_user", ""),
         show_default=False,
     )
 
     remote_dir = typer.prompt(
-        "Remote AD-Kit Directory",
+        "Remote AD-Kit Directory (typically /home/x-user/ad-kit)",
         default=session_data.get("remote_dir", ""),
         show_default=False,
     )
