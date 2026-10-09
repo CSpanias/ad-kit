@@ -4,12 +4,24 @@ LDAP-related assessment checks.
 
 from ad_kit.core.checks import run_check, load_dc_hostnames
 from ad_kit.core.util import get_artefacts_dir
+from ad_kit.core.finding import Finding
+from ad_kit.findings.ldap_config import (
+    LDAP_SIGNING_NOT_ENFORCED,
+    LDAP_CHANNEL_BINDING_NOT_ENFORCED,
+)
 
 
-def ldap_check() -> list[dict]:
+def ldap_check() -> tuple[list[dict], list[Finding]]:
     """
-    Execute LDAP checks for a Domain Controller.
+    Execute LDAP configuration checks.
+
+    Returns:
+        A tuple containing:
+
+        - Parsed LDAP configuration results for display.
+        - Generated findings.
     """
+    findings: list[Finding] = []
 
     dc_hostnames = load_dc_hostnames()
 
@@ -53,6 +65,9 @@ def ldap_check() -> list[dict]:
 
         dc_hostname = hostname_map.get(dc_name)
 
+        if dc_hostname is None:
+            continue
+
         lower = line.lower()
 
         # LDAP Signing
@@ -66,7 +81,14 @@ def ldap_check() -> list[dict]:
                 signing = lower[start + 8:end].strip()
 
                 if signing == "none":
+
                     signing = "[red]✗ Not Required[/red]"
+                    finding = LDAP_SIGNING_NOT_ENFORCED.copy()
+                    finding.affected_assets.append(dc_hostname)
+                    finding.evidence.append(
+                        f"LDAP signing is not enforced on {dc_hostname}."
+                    )
+                    findings.append(finding)
 
                 results[dc_hostname]["signing"] = signing
 
@@ -81,7 +103,15 @@ def ldap_check() -> list[dict]:
                 channel_binding = (lower[start + 16:end].strip())
 
                 if channel_binding == "no tls cert":
+
                     channel_binding = "[red]✗ Not Configured[/red]"
+
+                    finding = LDAP_CHANNEL_BINDING_NOT_ENFORCED.copy()
+                    finding.affected_assets.append(dc_hostname)
+                    finding.evidence.append(
+                        f"LDAP channel binding is not enforced on {dc_hostname}."
+                    )
+                    findings.append(finding)
 
                 results[dc_hostname]["channel_binding"] = channel_binding
 
@@ -89,4 +119,10 @@ def ldap_check() -> list[dict]:
         if ("successful bind must be completed" in lower):
             results[dc_hostname]["anonymous_bind"] = ("[green]✓ Disabled[/green]")
 
-    return sorted(results.values(), key=lambda result: result["dc_hostname"])
+    return (
+        sorted(
+            results.values(),
+            key=lambda result: result["dc_hostname"],
+        ),
+        findings,
+    )

@@ -42,10 +42,10 @@ console = Console()
 @app.callback()
 def main() -> None:
     """
-    Active Directory Pentest Toolkit Manager.
+    Active Directory Assessment Toolkit.
 
-    Use one of the available commands below to manage
-    assessment tooling.
+    Use the available commands to manage tooling, perform enumeration, and 
+    analyse assessment data.
     """
 
 #-------------------------------------------------------------------------------
