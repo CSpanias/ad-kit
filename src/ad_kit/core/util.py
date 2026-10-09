@@ -4,7 +4,7 @@ import typer
 from contextlib import contextmanager
 from pathlib import Path
 
-from ad_kit.core.console import console, print_section
+from ad_kit.core.console import console, print_section, print_info
 
 ARTEFACTS_DIR = Path("ad-kit")
 
@@ -86,6 +86,10 @@ def generate_scp_command(
     )
 
     console.print()
+    print_info(
+        "From your local Kali VM, execute the following command to retrieve "
+        "the assessment artefacts:"
+    )
     console.print(command, style="cyan")
     console.print()
 
