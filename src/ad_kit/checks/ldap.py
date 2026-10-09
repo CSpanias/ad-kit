@@ -85,9 +85,6 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
                     signing = "[red]✗ Not Required[/red]"
                     finding = LDAP_SIGNING_NOT_ENFORCED.copy()
                     finding.affected_assets.append(dc_hostname)
-                    finding.evidence.append(
-                        f"LDAP signing is not enforced on {dc_hostname}."
-                    )
                     findings.append(finding)
 
                 results[dc_hostname]["signing"] = signing
@@ -108,9 +105,6 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
 
                     finding = LDAP_CHANNEL_BINDING_NOT_ENFORCED.copy()
                     finding.affected_assets.append(dc_hostname)
-                    finding.evidence.append(
-                        f"LDAP channel binding is not enforced on {dc_hostname}."
-                    )
                     findings.append(finding)
 
                 results[dc_hostname]["channel_binding"] = channel_binding
