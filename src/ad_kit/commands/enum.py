@@ -344,6 +344,11 @@ def print_summary(
         ("Completed" if session_data["rusthound_collected"] else "Skipped")
     )
 
+    table.add_row(
+        "NTDS Dump",
+        ("Completed" if session_data["ntds_dumped"] else "Skipped"),
+    )
+
     console.print(table)
 
 #-------------------------------------------------------------------------------
