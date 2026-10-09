@@ -8,10 +8,8 @@ from rich.console import Console
 from rich.table import Table
 
 from ad_kit.commands.check import run_checks
-from ad_kit.commands.dump import run_dump
 from ad_kit.commands.enum import run_enumeration
 from ad_kit.commands.install import install_tool
-from ad_kit.commands.rusthound import run_rusthound
 from ad_kit.commands.status import show_status
 from ad_kit.registry import ToolRegistry
 
@@ -28,7 +26,6 @@ Examples:
   ad-kit install all
 
   ad-kit enum
-  ad-kit dump
 """,
     no_args_is_help=True,
     context_settings={
@@ -130,7 +127,8 @@ def install(
         "  • Validate a standard user account\n"
         "  • Validate a Domain Admin account\n"
         "  • Create user and machine account lists\n"
-        "  • Collect BloodHound data using RustHound-CE"
+        "  • Collect BloodHound data using RustHound-CE\n"
+        "  • Dump NTDS using secretsdump"
     )
 )
 def enum() -> None:
@@ -141,19 +139,6 @@ def enum() -> None:
         ad-kit enum
     """
     run_enumeration()
-
-#-------------------------------------------------------------------------------
-# dump module
-#-------------------------------------------------------------------------------
-@app.command(help=("Perform an NTDS extraction using Impacket secretsdump."))
-def dump() -> None:
-    """
-    Dump NTDS hashes using a validated Domain Admin account.
-
-    Examples:
-        ad-kit dump
-    """
-    run_dump()
 
 #-------------------------------------------------------------------------------
 # check module
