@@ -37,7 +37,7 @@ def run_rusthound(
             "-u",
             username,
             "-p",
-            f"{password}",
+            password,
             "-i",
             dc_ip,
             "-z",
@@ -46,6 +46,8 @@ def run_rusthound(
         capture_output=True,
         text=True,
     )
+
+    print(result)
 
     if result.returncode != 0:
 
