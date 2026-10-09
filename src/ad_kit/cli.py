@@ -19,6 +19,7 @@ app = typer.Typer(
     help=("Active Directory Assessment Toolkit."),
     epilog="""
 Examples:
+
   ad-kit tools install all
   ad-kit tools status
 
@@ -31,6 +32,10 @@ Examples:
         "help_option_names": ["-h", "--help"],
     },
 )
+
+# Tools module
+tools_app = typer.Typer(help="Manage assessment tools.")
+app.add_typer(tools_app, name="tools")
 
 console = Console()
 
@@ -46,7 +51,8 @@ def main() -> None:
 #-------------------------------------------------------------------------------
 # tools module
 #-------------------------------------------------------------------------------
-@app.command(
+@tools_app.command(
+    name='status',
     help=(
         "Display all tools registered in AD-Kit and their installation source."
     )
@@ -75,7 +81,7 @@ def tools() -> None:
 #-------------------------------------------------------------------------------
 # tools status submodule
 #-------------------------------------------------------------------------------
-@app.command(help="Check which registered tools are currently installed.")
+@tools_app.command(help="Check which registered tools are currently installed.")
 def status() -> None:
     """
     Show the installation status of all registered tools.
@@ -86,7 +92,7 @@ def status() -> None:
 #-------------------------------------------------------------------------------
 # tools install submodule
 #-------------------------------------------------------------------------------
-@app.command(
+@tools_app.command(
     help=(
         "Install one or more tools from the AD-Kit registry. "
         "Use 'all' to install every registered tool."
