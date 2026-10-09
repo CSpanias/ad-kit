@@ -48,7 +48,11 @@ def run_rusthound(
     )
 
     if result.returncode != 0:
-        print_error("RustHound collection failed.")
+
+        print_error(
+            f"RustHound collection failed "
+            f"(exit code {result.returncode})."
+        )
 
         if result.stderr:
             print_error(result.stderr.strip())
