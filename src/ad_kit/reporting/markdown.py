@@ -48,19 +48,14 @@ def write_markdown_report(
             )
             lines.append("")
 
-            lines.append("### Description")
+            lines.append("### Commentary")
             lines.append("")
-            lines.append(finding.description)
-            lines.append("")
-
-            lines.append("### Impact")
-            lines.append("")
-            lines.append(finding.impact)
+            lines.append(finding.commentary)
             lines.append("")
 
-            lines.append("### Recommendation")
+            lines.append("### Remediation")
             lines.append("")
-            lines.append(finding.recommendation)
+            lines.append(finding.remediation)
             lines.append("")
 
             if finding.affected_assets:
