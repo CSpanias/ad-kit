@@ -37,7 +37,7 @@ def run_rusthound(
             "-u",
             username,
             "-p",
-            password,
+            f"{password}",
             "-i",
             dc_ip,
             "-z",
