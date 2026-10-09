@@ -25,124 +25,124 @@ from ad_kit.core.util import (
 )
 from ad_kit.commands.rusthound import run_rusthound
 
+# TODO: Automate domain and DC resolution
+# def discover_domain() -> str | None:
+#     """
+#     Attempt to discover the Active Directory domain.
 
-def discover_domain() -> str | None:
-    """
-    Attempt to discover the Active Directory domain.
+#     Returns:
+#         Discovered domain name, or None if no
+#         reliable candidate could be identified.
+#     """
 
-    Returns:
-        Discovered domain name, or None if no
-        reliable candidate could be identified.
-    """
+#     try:
+#         result = subprocess.run(
+#             ["resolvectl", "domain"],
+#             capture_output=True,
+#             text=True,
+#             check=False,
+#         )
 
-    try:
-        result = subprocess.run(
-            ["resolvectl", "domain"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+#         domains = re.findall(r"([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})", result.stdout)
 
-        domains = re.findall(r"([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})", result.stdout)
+#         if domains:
+#             return domains[0].upper()
 
-        if domains:
-            return domains[0].upper()
+#     except FileNotFoundError:
+#         pass
 
-    except FileNotFoundError:
-        pass
+#     try:
+#         with open("/etc/resolv.conf", encoding="utf-8") as handle:
+#             for line in handle:
+#                 if line.startswith("search "):
+#                     candidate = line.split()[1].strip()
 
-    try:
-        with open("/etc/resolv.conf", encoding="utf-8") as handle:
-            for line in handle:
-                if line.startswith("search "):
-                    candidate = line.split()[1].strip()
+#                     if "." in candidate and candidate != ".":
+#                         return candidate.upper()
 
-                    if "." in candidate and candidate != ".":
-                        return candidate.upper()
+#     except OSError:
+#         pass
 
-    except OSError:
-        pass
-
-    return None
-
-
-def enumerate_domain_controllers(
-    domain: str,
-) -> list[str]:
-    """
-    Enumerate domain controllers via DNS.
-
-    Args:
-        domain: AD domain name.
-
-    Returns:
-        List of DC hostnames.
-
-    Raises:
-        RuntimeError: If enumeration fails.
-    """
-
-    print_info("Querying Active Directory DNS...")
-    console.print()
-
-    result = subprocess.run(
-        [
-            "nslookup",
-            "-type=SRV",
-            f"_ldap._tcp.dc._msdcs.{domain}",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    if (
-        result.returncode != 0
-        or "REFUSED" in result.stdout
-        or "can't find" in result.stdout
-    ):
-        raise RuntimeError("Failed to query DNS SRV records.")
-
-    dc_hostnames: set[str] = set()
-
-    for line in result.stdout.splitlines():
-        if "service =" in line:
-            hostname = line.split()[-1].rstrip(".")
-            dc_hostnames.add(hostname)
-
-    if not dc_hostnames:
-        raise RuntimeError("" \
-        "No domain controllers were found in DNS. Ensure your DNS server is "
-        "pointing at a domain controller."
-    )
-
-    return sorted(dc_hostnames)
+#     return None
 
 
-def resolve_domain_controllers(
-    dc_hostnames: list[str],
-) -> list[str]:
-    """
-    Resolve DC hostnames to IP addresses.
+# def enumerate_domain_controllers(
+#     domain: str,
+# ) -> list[str]:
+#     """
+#     Enumerate domain controllers via DNS.
 
-    Args:
-        dc_hostnames: List of DC hostnames.
+#     Args:
+#         domain: AD domain name.
 
-    Returns:
-        List of IP addresses.
-    """
+#     Returns:
+#         List of DC hostnames.
 
-    dc_ips: list[str] = []
+#     Raises:
+#         RuntimeError: If enumeration fails.
+#     """
 
-    for hostname in dc_hostnames:
-        try:
-            ip = socket.gethostbyname(hostname)
-            dc_ips.append(ip)
+#     print_info("Querying Active Directory DNS...")
+#     console.print()
 
-        except socket.gaierror:
-            continue
+#     result = subprocess.run(
+#         [
+#             "nslookup",
+#             "-type=SRV",
+#             f"_ldap._tcp.dc._msdcs.{domain}",
+#         ],
+#         capture_output=True,
+#         text=True,
+#         check=False,
+#     )
 
-    return dc_ips
+#     if (
+#         result.returncode != 0
+#         or "REFUSED" in result.stdout
+#         or "can't find" in result.stdout
+#     ):
+#         raise RuntimeError("Failed to query DNS SRV records.")
+
+#     dc_hostnames: set[str] = set()
+
+#     for line in result.stdout.splitlines():
+#         if "service =" in line:
+#             hostname = line.split()[-1].rstrip(".")
+#             dc_hostnames.add(hostname)
+
+#     if not dc_hostnames:
+#         raise RuntimeError("" \
+#         "No domain controllers were found in DNS. Ensure your DNS server is "
+#         "pointing at a domain controller."
+#     )
+
+#     return sorted(dc_hostnames)
+
+
+# def resolve_domain_controllers(
+#     dc_hostnames: list[str],
+# ) -> list[str]:
+#     """
+#     Resolve DC hostnames to IP addresses.
+
+#     Args:
+#         dc_hostnames: List of DC hostnames.
+
+#     Returns:
+#         List of IP addresses.
+#     """
+
+#     dc_ips: list[str] = []
+
+#     for hostname in dc_hostnames:
+#         try:
+#             ip = socket.gethostbyname(hostname)
+#             dc_ips.append(ip)
+
+#         except socket.gaierror:
+#             continue
+
+#     return dc_ips
 
 
 def identify_domain_controller(
@@ -485,6 +485,10 @@ def run_enumeration() -> None:
         # Assessment Configuration
         #-----------------------------------------------------------------------
         print_section("Assessment Configuration")
+
+        dc_ip = typer.prompt("Domain Controller IP Address")
+
+        console.print()
     
         std_user = typer.prompt("Standard User Username")
         std_pass = typer.prompt("Standard User Password", hide_input=True)
@@ -497,57 +501,39 @@ def run_enumeration() -> None:
         console.print()
     
         collect = typer.confirm("Run RustHound collection?", default=True)
-    
+
+        console.print()
+
         generate_scp_retrieval = typer.confirm(
             "Generate SCP retrieval command?",
             default=True,
         )
+
+        if generate_scp_retrieval:
+                    generate_scp_command(session_data)
     
         console.print()
 
 
-        print_section("Domain")
+        
 
-        domain = discover_domain()
-
-        if domain:
-
-            print_info(f"Detected domain: {domain}")
-
-            if not typer.confirm(
-                f"Use '{domain}' as the Active Directory domain?",
-                default=True,
-            ):
-                domain = None
 
         #-----------------------------------------------------------------------
         # Domain Controller(s) enumeration
         #-----------------------------------------------------------------------
-        print_section("Domain controllers")
+        print_section("Domain")
 
-        try:
-            dc_hostnames = enumerate_domain_controllers(domain)
-            dc_ips = resolve_domain_controllers(dc_hostnames)
+        hostname, domain = identify_domain_controller(dc_ip)
 
-        except RuntimeError as exc:
+        dc_hostname = f"{hostname}.{domain}"
+        dc_hostnames = [dc_hostname]
+        dc_ips = [dc_ip]
 
-            print_error(str(exc))
-            console.print()
+        print_success(f"Identified Domain Controller: {dc_hostname}")
+        print_success(f"Identified Domain: {domain}")
 
-            dc_ip = typer.prompt("Enter a Domain Controller IP")
-            console.print()
-            hostname, detected_domain = identify_domain_controller(dc_ip)
-
-            dc_hostname = f"{hostname}.{detected_domain}"
-            dc_hostnames = [dc_hostname]
-            dc_ips = [dc_ip]
-
-            domain = detected_domain
-
-            print_success(f"Identified Domain Controller: {dc_hostname}")
-            print_success(f"Identified Domain: {domain}")
-            console.print()
-
+        console.print()
+        
         table = Table()
 
         table.add_column("Hostname", style="green")
@@ -704,9 +690,6 @@ def run_enumeration() -> None:
         #-----------------------------------------------------------------------
         # Summary table
         #-----------------------------------------------------------------------
-        if generate_scp_retrieval:
-            generate_scp_command(session_data)
-
         print_summary(session_data)
 
 
