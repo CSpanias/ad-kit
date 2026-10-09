@@ -64,8 +64,8 @@ class Finding:
         references: list[str] = field(default_factory=list)
 
 
-    def copy(self) -> "Finding":
-        """
-        Create an independent copy of the finding.
-        """
-        return deepcopy(self)
+        def copy(self) -> "Finding":
+            """
+            Create an independent copy of the finding.
+            """
+            return deepcopy(self)
