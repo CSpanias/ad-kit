@@ -25,7 +25,7 @@ ssh-audit:
 asrepcatcher:
   installer: uv
   source: git+https://github.com/Yaxxine7/ASRepCatcher
-  check_command: asrepcatcher
+  check_command: ASRepCatcher
   description: AS-REP roasting via ARP Spoofing
 
 netexec:
