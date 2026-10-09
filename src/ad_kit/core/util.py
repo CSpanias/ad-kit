@@ -45,6 +45,15 @@ def save_session(
     )
 
 
+def generate_scp_command(
+    session_data: dict,
+) -> None:
+    """
+    Generate an SCP retrieval command.
+    """
+
+    print_section("Retrieval")
+
     host = typer.prompt(
         "SSH Host",
         default=session_data.get("jumpbox_host", ""),
