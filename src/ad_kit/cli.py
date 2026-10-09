@@ -9,8 +9,8 @@ from rich.table import Table
 
 from ad_kit.commands.check import run_checks
 from ad_kit.commands.enum import run_enumeration
-from src.ad_kit.commands.tools.install import install_tool
-from src.ad_kit.commands.tools.status import show_status
+from ad_kit.commands.tools.install import install_tool
+from ad_kit.commands.tools.status import show_status
 from ad_kit.registry import ToolRegistry
 
 app = typer.Typer(
