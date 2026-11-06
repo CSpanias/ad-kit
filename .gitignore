@@ -9,7 +9,7 @@ __pycache__/
 venv/
 env/
 
-# Distribution / packaging
+# Ppackaging
 build/
 dist/
 *.egg-info/

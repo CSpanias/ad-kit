@@ -8,6 +8,7 @@ the uv tool management system.
 import subprocess
 
 from rich.console import Console
+from pathlib import Path
 from shutil import which
 
 from ad_kit.core.console import print_info, print_success
@@ -60,10 +61,22 @@ class UVInstaller(Installer):
             tool: Tool definition.
         """
 
-        # Check if the tool is already installed
-        if tool.check_command and which(tool.check_command):
-            print_info(f"{tool.name} is already installed.")
-            return
+        existing = (
+            which(tool.check_command)
+            if tool.check_command
+            else None
+        )
+
+        uv_bin = str(Path.home() / ".local" / "bin")
+
+        if existing and not existing.startswith(uv_bin):
+            raise InstallationError(
+                tool.name,
+                (
+                    f"Conflicting installation detected at '{existing}'. "
+                    "Remove the existing installation and rerun AD-Kit."
+                ),
+            )
 
         print_info(f"Installing {tool.name}...")
 
@@ -72,6 +85,7 @@ class UVInstaller(Installer):
                 "uv",
                 "tool",
                 "install",
+                "--reinstall",
                 tool.source,
             ],
             capture_output=True,
@@ -83,3 +97,10 @@ class UVInstaller(Installer):
             raise InstallationError(tool.name, reason)
 
         print_success(f"Successfully installed {tool.name}")
+
+        if tool.check_command:
+
+            installed = which(tool.check_command)
+
+            if installed:
+                print_info(f"Installed path: {installed}")

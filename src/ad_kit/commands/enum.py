@@ -396,9 +396,6 @@ def run_enumeration() -> None:
             default=False,
         )
         console.print()
-
-        if generate_scp_retrieval:
-                    generate_scp_command(session_data)
         
         #-----------------------------------------------------------------------
         # Domain Controller(s) enumeration
@@ -600,8 +597,11 @@ def run_enumeration() -> None:
             else:
                 print_error("NTDS dump failed.")
         #-----------------------------------------------------------------------
-        # Summary table
+        # SCP command and summary table
         #-----------------------------------------------------------------------
+        if generate_scp_retrieval:
+                            generate_scp_command(session_data)
+        
         print_summary(session_data)
 
 
