@@ -2,13 +2,13 @@ impacket:
   installer: uv
   source: git+https://github.com/fortra/impacket
   check_command: secretsdump.py
-  descirption: Collection of scripts for everything AD-related
+  description: Collection of scripts for everything AD-related
 
 bloodyad:
   installer: uv
   source: git+https://github.com/CravateRouge/bloodyAD
   check_command: bloodyad
-  descirption: Active Directory privilege escalation toolkit
+  description: Active Directory privilege escalation toolkit
 
 certipy:
   installer: uv
@@ -32,19 +32,19 @@ netexec:
   installer: uv
   source: git+https://github.com/Pennyw0rth/NetExec
   check_command: netexec
-  descirption: Network service exploitation tool
+  description: Network service exploitation tool
 
 wsuks:
   installer: uv
   source: git+https://github.com/NeffIsBack/wsuks
   check_command: wsuks
-  descirption: Windows Server Update Service (WSUS) attack automation
+  description: Windows Server Update Service (WSUS) attack automation
 
 conpass:
   installer: uv
   source: git+https://github.com/login-securite/conpass
   check_command: conpass
-  descirption: Domain policy-based password-spray tool
+  description: Domain policy-based password-spray tool
 
 rusthound:
   installer: github_release
