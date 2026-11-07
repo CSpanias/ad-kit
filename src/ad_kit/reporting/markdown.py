@@ -11,6 +11,29 @@ from pathlib import Path
 from ad_kit.core.finding import Finding
 
 
+def format_paragraphs(
+    text: str,
+) -> str:
+    """
+    Convert wrapped YAML text into readable report paragraphs.
+
+    Wrapped lines within a paragraph are joined into a single line while 
+    preserving paragraph breaks.
+    """
+
+    paragraphs = []
+
+    for paragraph in text.split("\n\n"):
+
+        paragraphs.append(
+            " ".join(
+                line.strip()
+                for line in paragraph.splitlines()
+            )
+        )
+
+    return "\n\n".join(paragraphs)
+
 def write_markdown_report(
     findings: list[Finding],
     output_file: Path,
@@ -45,12 +68,12 @@ def write_markdown_report(
 
             lines.append("### Commentary")
             lines.append("")
-            lines.append(finding.commentary)
+            lines.append(format_paragraphs(finding.commentary))
             lines.append("")
 
             lines.append("### Remediation")
             lines.append("")
-            lines.append(finding.remediation)
+            lines.append(format_paragraphs(finding.remediation))
             lines.append("")
 
             if finding.affected_assets:
@@ -59,7 +82,7 @@ def write_markdown_report(
                 lines.append("")
 
                 for asset in finding.affected_assets:
-                    
+
                     lines.append(f"- {asset}")
 
                 lines.append("")

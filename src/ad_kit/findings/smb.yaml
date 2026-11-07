@@ -1,0 +1,68 @@
+#
+# SMB Configuration Findings
+#
+# This file contains finding definitions relating to SMB security controls 
+# within Active Directory environments, including SMB signing and SMBv1 support.
+#
+# Findings defined in this file are intended to identify weaknesses that may 
+# expose systems to relay attacks, authentication tampering, or vulnerabilities
+# associated with legacy SMB protocols.
+
+SMB-001:
+  id: SMB-001
+  title: SMB Signing Not Enforced
+
+  commentary: |
+    The assessment identified one or more systems that did not enforce SMB 
+    signing.
+
+    SMB signing provides integrity protection for Server Message Block (SMB) 
+    communications and helps prevent tampering and relay attacks.
+
+    Without SMB signing, an attacker positioned on the network may be able to 
+    intercept and relay SMB authentication requests in order to authenticate as 
+    legitimate users and access network resources.
+
+    Successful exploitation may result in unauthorised access to systems, data, 
+    or services through SMB relay attacks.
+
+  remediation: |
+    Enforce SMB signing on affected systems to reduce the risk of 
+    authentication relay and network-based tampering attacks.
+
+    Prior to implementation, testing should be performed to identify and 
+    address any compatibility issues affecting legacy systems, applications, or 
+    devices.
+
+  references:
+    - https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-signing
+    - https://techcommunity.microsoft.com/blog/filecab/configure-smb-signing-with-confidence/2418102
+
+
+SMB-002:
+  id: SMB-002
+  title: SMBv1 Enabled
+
+  commentary: |
+    The assessment identified one or more systems with SMBv1 enabled.
+
+    SMBv1 is a legacy protocol that lacks many of the security protections 
+    present in SMBv2 and SMBv3 and has been associated with multiple 
+    high-profile vulnerabilities and malware outbreaks.
+
+    Continued use of SMBv1 increases the attack surface of the environment and 
+    may expose systems to unnecessary risk.
+
+    Modern Windows operating systems support newer SMB protocol versions that 
+    provide improved security, performance, and resilience.
+
+  remediation: |
+    Disable SMBv1 on affected systems and migrate any dependent services or 
+    applications to SMBv2 or SMBv3.
+
+    Prior to implementation, identify any legacy systems, applications, or 
+    devices that require SMBv1 and develop an appropriate migration plan.
+
+  references:
+    - https://learn.microsoft.com/en-us/windows-server/storage/file-server/troubleshoot/detect-enable-and-disable-smbv1-v2-v3
+    - https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-security

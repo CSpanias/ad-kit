@@ -17,8 +17,19 @@ from ad_kit.checks.passwords import (
     password_policy_assessment
 )
 from ad_kit.checks.smb import smb_configuration_check
-from ad_kit.core.console import console, print_section, print_error, print_success
-from ad_kit.core.util import progress, load_session, get_artefacts_dir
+from ad_kit.core.console import (
+    console, 
+    print_section, 
+    print_error, 
+    print_success
+)
+from ad_kit.core.findings import load_finding
+from ad_kit.core.util import (
+    progress, 
+    load_session, 
+    get_artefacts_dir, 
+    print_info
+)
 from ad_kit.reporting.markdown import write_markdown_report
 
 
@@ -72,7 +83,7 @@ def run_ldap_checks() -> None:
 
     write_markdown_report(
         ldap_findings,
-        get_artefacts_dir() / "ldap_config.md",
+        get_artefacts_dir() / "findings-ldap.md",
     )
 
 #-------------------------------------------------------------------------------
@@ -83,30 +94,41 @@ def run_smb_checks() -> None:
     """
     Execute SMB security checks against discovered hosts.
 
-    This check evaluates SMB signing requirements and
-    SMBv1 support across Domain Controllers and domain
-    joined systems. Results are grouped by asset type
-    and displayed in tabular format.
+    This check evaluates SMB signing requirements and SMBv1 support across 
+    Domain Controllers and domain joined systems. Results are grouped by asset 
+    type and displayed in tabular format.
 
-    Findings are intended to identify legacy SMB
-    configurations and systems vulnerable to common
-    relay or downgrade attacks.
+    Findings are intended to identify legacy SMB configurations and systems 
+    vulnerable to common relay or downgrade attacks.
     """
 
     session_data = load_session()
 
     smb_results = []
+    findings = []
+
+    smb_signing_disabled = []
+    smbv1_enabled = []
+
+    unknown_hosts = []
 
     with progress("Checking SMB configuration..."):
 
         for host in load_domain_computers():
 
-            smb_results.append(
-                smb_configuration_check(
-                    host,
-                    session_data["dc_ip"],
-                )
+            result = smb_configuration_check(
+                host,
+                session_data["dc_ip"],
             )
+
+            if (
+                result["signing"] == "[yellow]⚠ Unknown[/yellow]"
+                and result["smbv1"] == "[yellow]⚠ Unknown[/yellow]"
+            ):
+                unknown_hosts.append(result["host"])
+                continue
+
+            smb_results.append(result)
 
     dcs = {
         dc.lower()
@@ -117,6 +139,14 @@ def run_smb_checks() -> None:
     host_results = []
 
     for result in smb_results:
+
+        if result["signing"] == "[red]✗ Disabled[/red]":
+
+            smb_signing_disabled.append(result["host"])
+
+        if result["smbv1"] == "[red]✗ Enabled[/red]":
+
+            smbv1_enabled.append(result["host"])
 
         host = result["host"].lower()
 
@@ -160,6 +190,40 @@ def run_smb_checks() -> None:
         )
 
     console.print(host_table)
+
+    if unknown_hosts:
+
+        print_info(
+            f"Unable to determine SMB configuration for {len(unknown_hosts)} "
+            "host(s)."
+        )
+
+        (
+            get_artefacts_dir()
+            / "smb-unknown-hosts.txt"
+        ).write_text(
+            "\n".join(
+                sorted(unknown_hosts)
+            ) + "\n",
+            encoding="utf-8",
+        )
+
+    if smb_signing_disabled:
+
+        finding = load_finding("smb", "SMB-001")
+        finding.affected_assets.extend(sorted(set(smb_signing_disabled)))
+        findings.append(finding)
+
+    if smbv1_enabled:
+
+        finding = load_finding("smb", "SMB-002")
+        finding.affected_assets.extend(sorted(set(smbv1_enabled)))
+        findings.append(finding)
+
+    write_markdown_report(
+        findings,
+        get_artefacts_dir() / "findings-smb.md",
+    )
 
 #-------------------------------------------------------------------------------
 # AUTHENTICATED CHECKS
