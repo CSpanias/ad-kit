@@ -5,14 +5,13 @@ Machine Account Quota assessment checks.
 import secrets
 
 from ad_kit.core.checks import run_check
-from ad_kit.core.finding import Finding
 
 
 def maq_check(
     dc_ip: str,
     username: str,
     password: str,
-) -> tuple[dict, list[Finding]]:
+) -> dict:
     """
     Retrieve and assess the domain Machine Account
     Quota configuration.
@@ -34,12 +33,8 @@ def maq_check(
             Domain password.
 
     Returns:
-        A tuple containing:
-
-        - Parsed Machine Account Quota results for
-          display.
-
-        - Generated findings.
+        Dictionary containing Machine Account Quota configuration and 
+        machine-account creation test results.
     """
 
     output = run_check(
@@ -57,13 +52,8 @@ def maq_check(
         ],
     )
 
-    machine_name = (
-        f"ADKIT-{secrets.token_hex(4).upper()}"
-    )
-
-    machine_password = (
-        secrets.token_hex(8)
-    )
+    machine_name = f"ADKIT-{secrets.token_hex(4).upper()}"
+    machine_password = secrets.token_hex(8)
 
     results = {
         "machine_account_quota": "Unknown",
@@ -78,8 +68,6 @@ def maq_check(
 
         "cleanup_method": "None",
     }
-
-    findings: list[Finding] = []
 
     for line in output.splitlines():
 
@@ -173,4 +161,4 @@ def maq_check(
 
                 results["cleanup_method"] = "Domain Admin Required"
 
-    return results, findings
+    return results

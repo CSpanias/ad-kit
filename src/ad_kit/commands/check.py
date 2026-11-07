@@ -583,7 +583,15 @@ def run_password_policy_checks() -> None:
 
 def run_maq_checks() -> None:
     """
-    Execute Machine Account Quota checks.
+    Execute Machine Account Quota assessment checks.
+
+    This check evaluates the Active Directory Machine
+    Account Quota (MAQ) configuration and determines
+    whether authenticated users can create machine
+    accounts within the domain.
+
+    Findings are generated when machine account
+    creation is permitted for unprivileged users.
     """
 
     session_data = load_session()
@@ -602,36 +610,165 @@ def run_maq_checks() -> None:
 
     table = Table()
 
-    table.add_column("Setting", style="cyan")
-    table.add_column("Value", style="green")
-    
-    table.add_row("Machine Account Quota", maq_results["machine_account_quota"])
-    table.add_row("Delegated Group", maq_results["machine_join_group"])
+    table.add_column(
+        "Setting",
+        style="cyan",
+    )
+
+    table.add_column(
+        "Value",
+        style="green",
+    )
+
+    table.add_row(
+        "Machine Account Quota",
+        maq_results["machine_account_quota"],
+    )
+
+    table.add_row(
+        "Delegated Group",
+        maq_results["machine_join_group"],
+    )
+
+    table.add_row(
+        "Machine Creation",
+        (
+            "[red]✗ Allowed[/red]"
+            if maq_results["machine_created"]
+            else "[green]✓ Denied[/green]"
+        ),
+    )
+
+    table.add_row(
+        "Machine Cleanup",
+        maq_results["cleanup_method"],
+    )
 
     console.print(table)
 
-    maq = int(maq_results["machine_account_quota"])
+    if maq_results["cleanup_method"] == "Domain Admin Required":
+
+        da_user, da_pass = authenticate_domain_admin()
+
+        maq_results["machine_deleted"] = (
+            cleanup_test_artifact(
+                "maq-delete-machine-da",
+                [
+                    "nxc",
+                    "smb",
+                    session_data["dc_ip"],
+                    "-u",
+                    da_user,
+                    "-p",
+                    da_pass,
+                    "-M",
+                    "add-computer",
+                    "-o",
+                    f"NAME={maq_results['machine_name']}",
+                    "-o",
+                    f"PASSWORD={maq_results['machine_password']}",
+                    "-o",
+                    "DELETE=True",
+                ],
+            )
+        )
+
+        if maq_results["machine_deleted"]:
+
+            maq_results["cleanup_method"] = (
+                "Domain Administrator"
+            )
+
+        else:
+
+            maq_results["cleanup_method"] = (
+                "Manual Intervention Required"
+            )
+
+    generated_findings = []
+
+    maq = int(
+        maq_results["machine_account_quota"]
+    )
 
     if maq > 0:
 
-        finding = load_finding("maq", "MAQ-001")
+        finding = load_finding(
+            "maq",
+            "MAQ-001",
+        )
 
         finding.evidence.append(
             f"Machine Account Quota was configured as {maq}."
         )
 
-        if maq_results["machine_join_group"] == "Authenticated Users":
+        if maq_results["machine_created"]:
 
             finding.evidence.append(
-                    "Authenticated Users were permitted to create machine "
-                    "accounts within the domain."
+                f"Authenticated user "
+                f"'{session_data['standard_user']}' "
+                f"successfully created machine account "
+                f"'{maq_results['machine_name']}$'."
             )
 
-        write_markdown_report(
-            [finding],
-            get_artefacts_dir()
-            / "findings-maq.md",
+        if maq_results["machine_authenticated"]:
+
+            finding.evidence.append(
+                f"The created machine account "
+                f"'{maq_results['machine_name']}$' "
+                "authenticated successfully."
+            )
+
+        if maq_results["machine_deleted"]:
+
+            if (
+                maq_results["cleanup_method"]
+                == "Domain Administrator"
+            ):
+
+                finding.evidence.append(
+                    "The machine account was removed "
+                    "using a Domain Administrator "
+                    "account."
+                )
+
+            else:
+
+                finding.evidence.append(
+                    "The machine account was "
+                    "successfully removed using the "
+                    "creating account."
+                )
+
+        elif (
+            maq_results["cleanup_method"]
+            == "Domain Admin Required"
+        ):
+
+            finding.evidence.append(
+                "The machine account could not be "
+                "removed using the creating account."
+            )
+
+        elif (
+            maq_results["cleanup_method"]
+            == "Manual Intervention Required"
+        ):
+
+            finding.evidence.append(
+                "The machine account could not be "
+                "removed following testing and "
+                "requires manual remediation."
+            )
+
+        generated_findings.append(
+            finding
         )
+
+    write_markdown_report(
+        generated_findings,
+        get_artefacts_dir() / "findings-maq.md",
+    )
 
 #-------------------------------------------------------------------------------
 # DNS RECORD CREATION

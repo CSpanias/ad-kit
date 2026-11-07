@@ -122,7 +122,7 @@ def dns_record_creation_check(
         if results["dns_record_creation"] and not results["record_deleted"]:
 
             finding.evidence.append(
-                "The temporary DNS record could not be removed using the " \
+                "The temporary DNS record could not be removed using the "
                 "standard user account."
             )
 
