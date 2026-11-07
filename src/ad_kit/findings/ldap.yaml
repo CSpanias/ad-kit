@@ -14,7 +14,7 @@ LDAP-001:
   id: LDAP-001
   title: LDAP Signing Not Enforced
 
-  commentary: |
+  commentary: >
     The assessment identified that one or more Domain Controllers did not 
     enforce Lightweight Directory Access Protocol (LDAP) signing. As a result, 
     LDAP communications may occur without integrity protection and are 
@@ -32,7 +32,7 @@ LDAP-001:
     forge directory responses, and gain unauthorised access to systems or 
     resources based on falsified Active Directory information.
 
-  remediation: |
+  remediation: >
     Enforce LDAP signing across all Domain Controllers to prevent 
     authentication tampering and credential relay attacks.
 
@@ -49,7 +49,7 @@ LDAP-002:
   id: LDAP-002
   title: LDAP Channel Binding Not Required
 
-  commentary: |
+  commentary: >
     The assessment identified that one or more Domain Controllers (DCs) did not 
     require LDAP channel binding.
 
@@ -68,7 +68,7 @@ LDAP-002:
     Enforcing LDAP channel binding significantly reduces the risk of credential 
     relay attacks against Active Directory services.
 
-  remediation: |
+  remediation: >
     Configure LDAP channel binding to be enforced across all Domain Controllers 
     to reduce the risk of credential relay attacks.
 
@@ -90,7 +90,7 @@ LDAP-003:
   id: LDAP-003
   title: Anonymous LDAP Bind Permitted
 
-  commentary: |
+  commentary: >
     The assessment identified that one or more Domain Controllers permitted 
     anonymous LDAP bind operations.
 
@@ -104,7 +104,7 @@ LDAP-003:
     Directory services should require authentication for LDAP queries wherever 
     possible to limit unauthorised access to Active Directory information.
 
-  remediation: |
+  remediation: >
     Disable anonymous LDAP bind operations and require authentication for 
     directory queries.
 

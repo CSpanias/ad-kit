@@ -59,6 +59,7 @@ def write_markdown_report(
                 lines.append("")
 
                 for asset in finding.affected_assets:
+                    
                     lines.append(f"- {asset}")
 
                 lines.append("")
@@ -69,7 +70,8 @@ def write_markdown_report(
                 lines.append("")
 
                 for reference in finding.references:
-                    lines.append(f"- {reference}")
+
+                    lines.append(f"- [{reference}]({reference})")
 
                 lines.append("")
 
