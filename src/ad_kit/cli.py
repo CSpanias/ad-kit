@@ -273,6 +273,20 @@ def run_maq_checks() -> None:
 
     check.run_maq_checks()
 
+#-------------------------------------------------------------------------------
+# CHECK DNS
+#-------------------------------------------------------------------------------
+@check_app.command(
+    name="dns",
+    help="Execute DNS permission check.",
+)
+def dns() -> None:
+    """
+    Execute DNS permission assessment checks.
+    """
+
+    check.run_dns_checks()
+
 
 if __name__ == "__main__":
     app()

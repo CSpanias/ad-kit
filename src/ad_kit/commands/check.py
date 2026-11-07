@@ -1,5 +1,16 @@
 """
-Assessment checks.
+Assessment workflow orchestration.
+
+This module coordinates the execution of Active Directory assessment checks, 
+credential validation, result presentation, finding generation, and Markdown 
+report creation.
+
+Checks are grouped into authenticated and unauthenticated categories and are 
+executed through a consistent workflow that includes result collection,
+assessment logic, finding generation, and evidence preservation.
+
+Generated findings are exported to Markdown reports and supported by raw 
+command output captured within the assessment evidence directory.
 """
 
 import typer
@@ -9,7 +20,9 @@ from rich.table import Table
 from ad_kit.core.checks import (
     load_domain_computers,
     load_dc_hostnames,
-    validate_credentials
+    validate_credentials,
+    run_check,
+    cleanup_test_artifact
 )
 from ad_kit.checks.ldap import ldap_check
 from ad_kit.checks.maq import maq_check
@@ -18,6 +31,8 @@ from ad_kit.checks.passwords import (
     password_policy_assessment
 )
 from ad_kit.checks.smb import smb_configuration_check
+from ad_kit.checks.dns import dns_record_creation_check
+
 from ad_kit.core.console import (
     console, 
     print_section, 
@@ -286,6 +301,65 @@ def authenticate_standard_user() -> str:
         ):
             raise RuntimeError("Authentication cancelled.")
 
+
+def authenticate_domain_admin() -> tuple[str, str]:
+    """
+    Prompt for and validate Domain Administrator (DA) credentials.
+
+    The user is prompted to provide credentials for a DA account. 
+    Authentication is validated against the target domain before the 
+    credentials are returned to the caller.
+
+    Returns:
+        Tuple containing:
+
+        - Domain Administrator username
+        - Domain Administrator password
+
+    Raises:
+        RuntimeError:
+            If authentication cannot be completed.
+    """
+
+    session_data = load_session()
+
+    while True:
+
+        da_user = typer.prompt("Domain Administrator Username")
+
+        da_pass = typer.prompt("Domain Administrator Password", hide_input=True)
+
+        console.print()
+
+        with progress("Validating credentials..."):
+
+            status = validate_credentials(
+                session_data["dc_ip"],
+                da_user,
+                da_pass,
+            )
+
+        if status == "valid":
+
+            print_success("Authentication succeeded.")
+
+            return da_user, da_pass
+
+        if status == "locked":
+
+            print_error("Account is locked out.")
+
+        elif status == "invalid":
+
+            print_error("Invalid credentials.")
+
+        else:
+
+            print_error("Unable to validate credentials.")
+
+        if not typer.confirm("Try again?", default=True):
+            raise RuntimeError("Authentication cancelled.")
+
 #-------------------------------------------------------------------------------
 # PASSWORD POLICY
 #-------------------------------------------------------------------------------
@@ -294,15 +368,13 @@ def run_password_policy_checks() -> None:
     """
     Execute password policy assessment checks.
 
-    This check authenticates using a valid domain
-    account and retrieves the effective domain password
-    policy. Configuration settings are assessed against
-    common Active Directory security practices and the
-    results are displayed in tabular format.
+    This check authenticates using a valid domain account and retrieves the 
+    effective domain password policy. Configuration settings are assessed 
+    against common Active Directory security practices and the results are 
+    displayed in tabular format.
 
-    Assessed settings include password length, password
-    history, complexity requirements, account lockout
-    configuration, and password age settings.
+    Assessed settings include password length, password history, complexity 
+    requirements, account lockout configuration, and password age settings.
     """
 
     session_data = load_session()
@@ -562,6 +634,106 @@ def run_maq_checks() -> None:
         )
 
 #-------------------------------------------------------------------------------
+# DNS RECORD CREATION
+#-------------------------------------------------------------------------------
+
+def run_dns_checks() -> None:
+    """
+    Execute Active Directory-integrated DNS assessment checks.
+
+    This check determines whether authenticated domain users can create DNS 
+    records within Active Directory-integrated DNS zones.
+
+    A temporary DNS record is created and removed to verify whether excessive 
+    DNS permissions have been granted to standard users.
+
+    Findings are generated when unauthorised DNS record creation is permitted.
+    """
+
+    session_data = load_session()
+
+    print_section("DNS Record Creation")
+
+    std_pass = authenticate_standard_user()
+
+    with progress("Checking DNS permissions..."):
+
+        dns_results, findings = (
+            dns_record_creation_check(
+                session_data["dc_ip"],
+                session_data["domain"],
+                session_data["standard_user"],
+                std_pass,
+            )
+        )
+
+    if dns_results["cleanup_method"] == "Domain Admin Required":
+
+        da_user, da_pass = authenticate_domain_admin()
+
+        dns_results["record_deleted"] = (
+            cleanup_test_artifact(
+                "dns-record-remove-da",
+                [
+                    "bloodyAD",
+                    "-u", da_user,
+                    "-p", da_pass,
+                    "-d", session_data["domain"],
+                    "--dc-ip", session_data["dc_ip"],
+                    "remove",
+                    "dnsRecord",
+                    dns_results["record_name"].split(".")[0],
+                    dns_results["record_ip"],
+                ],
+            )
+        )
+
+        if dns_results["record_deleted"]:
+
+            dns_results["cleanup_method"] = "Domain Administrator"
+
+            if findings:
+
+                findings[0].evidence.append(
+                    "The temporary DNS record was removed using a Domain "
+                    "Administrator account."
+                )
+
+        else:
+
+            dns_results["cleanup_method"] = "Manual Intervention Required"
+
+            if findings:
+
+                findings[0].evidence.append(
+                    "The temporary DNS record could not be removed following "
+                    "testing and requires manual remediation."
+                )
+
+    table = Table()
+
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row(
+        "DNS Record Creation",
+        (
+            "[red]✗ Allowed[/red]"
+            if dns_results["dns_record_creation"]
+            else "[green]✓ Denied[/green]"
+        ),
+    )
+
+    table.add_row("Record Cleanup", dns_results["cleanup_method"])
+
+    console.print(table)
+
+    write_markdown_report(
+        findings,
+        get_artefacts_dir() / "findings-dns.md",
+    )
+
+#-------------------------------------------------------------------------------
 # MAIN FUNCTION
 #-------------------------------------------------------------------------------
 
@@ -584,3 +756,11 @@ def run_checks() -> None:
 
     # Authenticated checks
     run_password_policy_checks()
+
+    console.print()
+
+    run_maq_checks()
+
+    console.print()
+
+    run_dns_checks()

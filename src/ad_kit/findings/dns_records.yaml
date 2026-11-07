@@ -1,0 +1,63 @@
+#
+# DNS Record Creation Findings
+#
+# This file contains finding definitions relating to Active 
+# Directory-integrated DNS permissions.
+#
+# Findings defined in this file are intended to identify situations where
+# authenticated users are permitted to create arbitrary DNS records within
+# Active Directory integrated DNS zones.
+#
+
+DNS-001:
+  id: DNS-001
+  title: Authenticated Users Can Create DNS Records
+
+  commentary: |
+    Active Directory (AD)-integrated Domain Name System (DNS) is a core 
+    component of domain operations, providing name resolution for Domain 
+    Controllers (DCs), services, and applications. These DNS zones are stored 
+    within the AD database and replicated between DCs, ensuring consistency and 
+    availability throughout the environment.
+
+    In secure configurations, DNS zones are configured to permit only 
+    authorised users, computer accounts, and administrative groups to create or 
+    modify DNS records. This helps ensure that only trusted systems are able to 
+    register or update entries within the namespace.
+
+    The assessment identified that an authenticated domain user was able to 
+    create DNS records within an AD-integrated DNS zone. This indicates that 
+    permissions applied to the DNS zone are overly permissive and allow 
+    unauthorised modification of DNS data.
+
+    An attacker with valid domain credentials may be able to leverage this 
+    access to register malicious DNS records, modify existing entries, redirect
+    network traffic, impersonate legitimate services, disrupt availability, or 
+    facilitate additional attack techniques.
+
+    As DNS is widely trusted by domain-joined systems and used extensively for 
+    service discovery and authentication, unauthorised control over DNS records 
+    represents a significant security weakness that may impact the 
+    confidentiality, integrity, and availability of AD services.
+
+  remediation: |
+    Review permissions applied to all Active Directory-integrated DNS zones and 
+    records and ensure that modification rights are restricted to authorised
+    administrative groups.
+
+    Computer accounts should be permitted to securely register and update their 
+    own DNS records where operationally required, while all other record 
+    creation and modification activities should be limited to appropriately 
+    privileged users.
+
+    DNS zones should be configured to use secure dynamic updates wherever 
+    possible to ensure that only authenticated and authorised systems can
+    register or modify DNS records.
+
+    DNS auditing and logging should be enabled to support the detection and 
+    investigation of unauthorised or suspicious DNS activity.
+
+  references:
+    - https://learn.microsoft.com/en-us/troubleshoot/windows-server/networking/configure-dns-dynamic-updates-windows-server-2003
+    - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/dns-and-ad-ds
+    - https://blog.netwrix.com/2017/02/17/dns-in-active-directory/

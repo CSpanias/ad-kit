@@ -204,6 +204,31 @@ def validate_credentials(
     return "unknown"
 
 
+def cleanup_test_artifact(
+    name: str,
+    command: list[str],
+) -> bool:
+    """
+    Attempt to remove a test artefact created during an assessment.
+
+    The supplied cleanup command is executed and the result is evaluated to 
+    determine whether the artefact was successfully removed.
+
+    Args:
+        name:
+            Descriptive cleanup operation name.
+
+        command:
+            Command and arguments required to remove the artefact.
+
+    Returns:
+        True if the artefact was removed successfully, otherwise False.
+    """
+
+    output = run_check(name, command)
+    return "successfully removed" in output.lower()
+
+
 def run_check(
     name: str,
     command: list[str],
