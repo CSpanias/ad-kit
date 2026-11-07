@@ -7,7 +7,12 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from ad_kit.commands.check import run_checks
+from ad_kit.commands.check import (
+    run_checks,
+    run_ldap_checks,
+    run_smb_checks,
+    run_password_policy_checks
+)
 from ad_kit.commands.enum import run_enumeration
 from ad_kit.commands.tools.install import install_tool
 from ad_kit.commands.tools.status import show_status
@@ -18,15 +23,18 @@ app = typer.Typer(
     name="ad-kit",
     help=("Active Directory Assessment Toolkit."),
     epilog="""
-Examples:
+    Examples:
 
-  ad-kit tools install all
-  ad-kit tools status
+    ad-kit tools install all
+    ad-kit tools status
 
-  ad-kit enum
+    ad-kit enum
 
-  ad-kit check
-""",
+    ad-kit check
+    ad-kit check ldap
+    ad-kit check smb
+    ad-kit check pass-pol
+    """,
     no_args_is_help=True,
     context_settings={
         "help_option_names": ["-h", "--help"],
@@ -36,6 +44,17 @@ Examples:
 # Tools module
 tools_app = typer.Typer(help="Manage assessment tools.")
 app.add_typer(tools_app, name="tools")
+
+
+# Check module
+check_app = typer.Typer(
+    help="Execute assessment checks."
+)
+
+app.add_typer(
+    check_app,
+    name="check",
+)
 
 console = Console()
 
@@ -49,7 +68,7 @@ def main() -> None:
     """
 
 #-------------------------------------------------------------------------------
-# tools module
+# TOOLS MODULE
 #-------------------------------------------------------------------------------
 @tools_app.command(
     name='status',
@@ -79,7 +98,7 @@ def tools() -> None:
     console.print(table)
 
 #-------------------------------------------------------------------------------
-# tools status submodule
+# TOOLS STATUS SUBMODULE
 #-------------------------------------------------------------------------------
 @tools_app.command(help="Check which registered tools are currently installed.")
 def status() -> None:
@@ -88,9 +107,8 @@ def status() -> None:
     """
     show_status()
 
-
 #-------------------------------------------------------------------------------
-# tools install submodule
+# TOOLS INSTALL SUBMODULE
 #-------------------------------------------------------------------------------
 @tools_app.command(
     help=(
@@ -121,7 +139,7 @@ def install(
     install_tool(tool)
 
 #-------------------------------------------------------------------------------
-# enum module
+# ENUM MODULE
 #-------------------------------------------------------------------------------
 @app.command(
     help=(
@@ -136,6 +154,7 @@ def install(
         "  • Dump NTDS using secretsdump"
     )
 )
+
 def enum() -> None:
     """
     Perform initial domain and domain controller discovery.
@@ -146,15 +165,79 @@ def enum() -> None:
     run_enumeration()
 
 #-------------------------------------------------------------------------------
-# check module
+# CHECK MODULE
 #-------------------------------------------------------------------------------
-@app.command(help="Perform common Active Directory assessment checks.")
-def check() -> None:
+@check_app.callback(
+    invoke_without_command=True,
+)
+def check_callback(
+    ctx: typer.Context,
+) -> None:
     """
-    Execute baseline security checks and collect assessment evidence.
+    Execute assessment checks.
+
+    If no specific check module is supplied, all assessment checks are executed.
+    """
+
+    if ctx.invoked_subcommand is None:
+        run_checks()
+
+#-------------------------------------------------------------------------------
+# CHECK ALL MODULE
+#-------------------------------------------------------------------------------
+@check_app.command(
+    name="all",
+    help="Execute all assessment checks."
+)
+def check_all() -> None:
+    """
+    Execute all assessment checks.
     """
 
     run_checks()
+
+#-------------------------------------------------------------------------------
+# CHECK LDAP MODULE
+#-------------------------------------------------------------------------------
+@check_app.command(
+    name="ldap",
+    help="Execute LDAP security checks."
+)
+def ldap() -> None:
+    """
+    Execute LDAP signing, channel binding, and
+    anonymous bind checks.
+    """
+
+    run_ldap_checks()
+
+#-------------------------------------------------------------------------------
+# CHECK SMB MODULE
+#-------------------------------------------------------------------------------
+@check_app.command(
+    name="smb",
+    help="Execute SMB security checks."
+)
+def smb() -> None:
+    """
+    Execute SMB signing and SMBv1 checks.
+    """
+
+    run_smb_checks()
+
+#-------------------------------------------------------------------------------
+# CHECK PASSWORD POLICY MODULE
+#-------------------------------------------------------------------------------
+@check_app.command(
+    name="pass-pol",
+    help="Execute password policy checks."
+)
+def pass_pol() -> None:
+    """
+    Execute password policy assessment checks.
+    """
+
+    run_password_policy_checks()
 
 
 if __name__ == "__main__":

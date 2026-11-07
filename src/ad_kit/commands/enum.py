@@ -516,7 +516,6 @@ def run_enumeration() -> None:
             "Generate SCP retrieval command?",
             default=False,
         )
-        console.print()
         
         #-----------------------------------------------------------------------
         # DOMAIN ENUMERATION
@@ -531,8 +530,6 @@ def run_enumeration() -> None:
 
         print_success(f"Identified Domain Controller: {dc_hostname}")
         print_success(f"Identified Domain: {domain}")
-
-        console.print()
 
         #-----------------------------------------------------------------------
         # NXC CONFIGURATION (AUDIT MODE)
@@ -634,6 +631,7 @@ def run_enumeration() -> None:
         print_success(
             f"Identified {len(domain_controllers)} Domain Controller(s)."
         )
+        console.print()
 
         table = Table()
 
@@ -644,7 +642,6 @@ def run_enumeration() -> None:
             table.add_row(hostname, ip)
 
         console.print(table)
-        console.print()
 
         #-----------------------------------------------------------------------
         # SESSION METADATA
