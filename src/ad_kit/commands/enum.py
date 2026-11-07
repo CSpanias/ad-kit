@@ -251,6 +251,94 @@ def export_domain_users(
     return user_count, len(filtered_users)
 
 
+def enumerate_domain_controllers(
+    dc_ip: str,
+    username: str,
+    password: str,
+) -> list[tuple[str, str]]:
+    """
+    Enumerate all Domain Controllers in the domain.
+
+    Args:
+        dc_ip:
+            Domain Controller IP address.
+
+        username:
+            LDAP username.
+
+        password:
+            LDAP password.
+
+    Returns:
+        List of Domain Controllers as (hostname, ip_address) tuples.
+
+    Raises:
+        RuntimeError:
+            If Domain Controllers cannot be identified.
+    """
+
+    result = subprocess.run(
+        [
+            "nxc",
+            "ldap",
+            dc_ip,
+            "-u",
+            username,
+            "-p",
+            password,
+            "--query",
+            "(primaryGroupID=516)",
+            "dNSHostName",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            "Failed to enumerate Domain Controllers."
+        )
+
+    dc_hostnames: list[str] = []
+
+    for line in result.stdout.splitlines():
+
+        if "dNSHostName" not in line:
+            continue
+
+        hostname = (
+            line.split()[-1]
+            .strip()
+            .upper()
+        )
+
+        dc_hostnames.append(hostname)
+
+    dc_hostnames = sorted(set(dc_hostnames))
+
+    if not dc_hostnames:
+        raise RuntimeError(
+            "No Domain Controllers were identified."
+        )
+
+    domain_controllers: list[tuple[str, str]] = []
+
+    for hostname in dc_hostnames:
+
+        try:
+            ip = socket.gethostbyname(hostname)
+            domain_controllers.append((hostname, ip))
+
+        except socket.gaierror:
+            continue
+
+    if not domain_controllers:
+        raise RuntimeError("Failed to resolve any Domain Controllers.")
+
+    return sorted(domain_controllers, key=lambda dc: dc[0])
+
+
 def export_domain_computers(
     domain: str,
     dc_ip: str,
@@ -398,7 +486,7 @@ def run_enumeration() -> None:
         console.print()
         
         #-----------------------------------------------------------------------
-        # Domain Controller(s) enumeration
+        # DOMAIN ENUMERATION
         #-----------------------------------------------------------------------
         print_section("Domain")
 
@@ -412,30 +500,19 @@ def run_enumeration() -> None:
         print_success(f"Identified Domain: {domain}")
 
         console.print()
+
+        #-----------------------------------------------------------------------
+        # NXC CONFIGURATION (AUDIT MODE)
+        #-----------------------------------------------------------------------
         
-        table = Table()
-
-        table.add_column("Hostname", style="green")
-        table.add_column("IP Address", style="cyan")
-
-        for hostname, ip in zip(dc_hostnames, dc_ips):
-            table.add_row(hostname, ip)
-
-        console.print(table)
-
-        # Write results into disk
-        write_results(domain, dc_hostnames, dc_ips)
-
-        #-----------------------------------------------------------------------
-        # NetExec Configuration (audit mode)
-        #-----------------------------------------------------------------------
         print_section("NXC Configuration")
 
         configure_nxc()
 
         #-----------------------------------------------------------------------
-        # Domain account(s) validation
+        # DOMAIN ACCOUNTS VALIDATION
         #-----------------------------------------------------------------------
+        
         print_section("Credential Validation")
 
         if not dc_ips:
@@ -471,12 +548,55 @@ def run_enumeration() -> None:
         print_success("Domain Admin validated.")
 
         #-----------------------------------------------------------------------
-        # Session metadata
+        # DOMAIN CONTROLLER ENUMERATION
+        #-----------------------------------------------------------------------
+
+        print_section("Domain Controllers")
+
+        domain_controllers = enumerate_domain_controllers(
+            dc_ip,
+            std_user,
+            std_pass,
+        )
+
+        dc_hostnames = [
+            hostname
+            for hostname, _
+            in domain_controllers
+        ]
+
+        dc_ips = [
+            ip
+            for _, ip
+            in domain_controllers
+        ]
+
+        # Write results into disk
+        write_results(domain, dc_hostnames, dc_ips,)
+
+        print_success(f"Identified {len(domain_controllers)} Domain Controller(s).")
+
+        table = Table()
+
+        table.add_column("Hostname", style="green")
+        table.add_column("IP Address", style="cyan")
+
+        for hostname, ip in domain_controllers:
+            table.add_row(hostname, ip)
+
+        console.print(table)
+        console.print()
+
+        #-----------------------------------------------------------------------
+        # SESSION METADATA
         #-----------------------------------------------------------------------
         session_data = {
             "domain": domain,
+
             "dc_ip": dc_ip,
             "dc_hostname": dc_hostnames[0],
+            "dc_ips": dc_ips,
+            "dc_hostnames": dc_hostnames,
             "dc_count": len(dc_hostnames),
 
             "standard_user": std_user,
@@ -493,7 +613,9 @@ def run_enumeration() -> None:
             "domain_computers_count": 0,
 
             "rusthound_collected": False,
+
             "ntds_dumped": False,
+
             "jumpbox_host": "",
             "jumpbox_user": "",
             "remote_dir": "",
@@ -504,8 +626,9 @@ def run_enumeration() -> None:
         save_session(session_data)
 
         #-----------------------------------------------------------------------
-        # Domain data collection
+        # DOMAIN DATA COLLECTION
         #-----------------------------------------------------------------------
+        
         print_section("Domain Data Collection")
 
         # Filter testing accounts
@@ -548,7 +671,7 @@ def run_enumeration() -> None:
         save_session(session_data)
 
         #-----------------------------------------------------------------------
-        # BloodHound collection
+        # BLOODHOUND DATA COLLECTION
         #-----------------------------------------------------------------------
         
         print_section("BloodHound Collection")
@@ -562,7 +685,7 @@ def run_enumeration() -> None:
                 save_session(session_data)
 
         #-----------------------------------------------------------------------
-        # NTDS Dump
+        # NTDS DUMP
         #-----------------------------------------------------------------------
         if dump_ntds:
 
@@ -597,7 +720,7 @@ def run_enumeration() -> None:
             else:
                 print_error("NTDS dump failed.")
         #-----------------------------------------------------------------------
-        # SCP command and summary table
+        # SCP COMMAND & SUMMARY TABLE
         #-----------------------------------------------------------------------
         if generate_scp_retrieval:
                             generate_scp_command(session_data)
