@@ -1,9 +1,9 @@
 """
 Finding model.
 
-This module defines the canonical finding structure used
-throughout AD-Kit. Findings are produced by assessment
-checks and consumed by reporting modules.
+This module defines the canonical finding structure used throughout AD-Kit. 
+Finding definitions are loaded from YAML files, populated during assessment
+checks, and consumed by reporting modules.
 """
 
 from dataclasses import dataclass, field
@@ -23,26 +23,19 @@ class Finding:
         title:
             Human-readable finding title.
 
-        severity:
-            Assigned risk rating.
+        commentary:
+            Description of the identified security
+            issue and its potential impact.
 
-        description:
-            High-level overview of the issue.
-
-        impact:
-            Potential security implications.
-
-        recommendation:
+        remediation:
             Recommended remediation guidance.
 
         affected_assets:
             Assets affected by the finding.
 
-        evidence:
-            Evidence supporting the finding.
-
         references:
-            External references and guidance.
+            External references and supporting
+            documentation.
     """
 
     id: str
@@ -57,6 +50,10 @@ class Finding:
 
     def copy(self) -> "Finding":
         """
-        Create an independent copy of the finding.
+        Create a deep copy of the finding.
+
+        This allows a finding definition to be loaded
+        from a template and then modified independently
+        without affecting the original definition.
         """
         return deepcopy(self)

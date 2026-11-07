@@ -7,16 +7,12 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from ad_kit.commands.check import (
-    run_checks,
-    run_ldap_checks,
-    run_smb_checks,
-    run_password_policy_checks
-)
+from ad_kit.commands import check
 from ad_kit.commands.enum import run_enumeration
 from ad_kit.commands.tools.install import install_tool
 from ad_kit.commands.tools.status import show_status
 from ad_kit.registry import ToolRegistry
+
 
 app = typer.Typer(
     add_completion=False,
@@ -42,8 +38,14 @@ app = typer.Typer(
 )
 
 # Tools module
-tools_app = typer.Typer(help="Manage assessment tools.")
-app.add_typer(tools_app, name="tools")
+tools_app = typer.Typer(
+    help="Manage assessment tools."
+)
+
+app.add_typer(
+    tools_app,
+    name="tools"
+)
 
 
 # Check module
@@ -61,17 +63,17 @@ console = Console()
 @app.callback()
 def main() -> None:
     """
-    Active Directory Assessment Toolkit.
+    AD-Kit command-line interface entrypoint.
 
-    Use the available commands to manage tooling, perform enumeration, and 
-    analyse assessment data.
+    Use the available commands to manage assessment tooling, perform Active
+    Directory enumeration, and execute assessment checks.
     """
 
 #-------------------------------------------------------------------------------
-# TOOLS MODULE
+# TOOLS COMMANDS
 #-------------------------------------------------------------------------------
 @tools_app.command(
-    name='status',
+    name="status",
     help=(
         "Display all tools registered in AD-Kit and their installation source."
     )
@@ -139,7 +141,7 @@ def install(
     install_tool(tool)
 
 #-------------------------------------------------------------------------------
-# ENUM MODULE
+# ENUM COMMANDS
 #-------------------------------------------------------------------------------
 @app.command(
     help=(
@@ -157,7 +159,12 @@ def install(
 
 def enum() -> None:
     """
-    Perform initial domain and domain controller discovery.
+
+    Bootstrap an Active Directory assessment.
+
+    This command identifies the target domain, enumerates Domain Controllers,
+    validates credentials, exports user and computer information, performs
+    BloodHound collection, and optionally dumps NTDS secrets.
 
     Examples:
         ad-kit enum
@@ -165,7 +172,7 @@ def enum() -> None:
     run_enumeration()
 
 #-------------------------------------------------------------------------------
-# CHECK MODULE
+# CHECK COMMANDS
 #-------------------------------------------------------------------------------
 @check_app.callback(
     invoke_without_command=True,
@@ -180,7 +187,7 @@ def check_callback(
     """
 
     if ctx.invoked_subcommand is None:
-        run_checks()
+        check.run_checks()
 
 #-------------------------------------------------------------------------------
 # CHECK ALL MODULE
@@ -194,7 +201,7 @@ def check_all() -> None:
     Execute all assessment checks.
     """
 
-    run_checks()
+    check.run_checks()
 
 #-------------------------------------------------------------------------------
 # CHECK LDAP MODULE
@@ -205,11 +212,13 @@ def check_all() -> None:
 )
 def ldap() -> None:
     """
-    Execute LDAP signing, channel binding, and
-    anonymous bind checks.
+    Execute LDAP security checks.
+
+    This command evaluates LDAP signing, channel binding enforcement, and
+    anonymous LDAP bind configuration across all discovered Domain Controllers.
     """
 
-    run_ldap_checks()
+    check.run_ldap_checks()
 
 #-------------------------------------------------------------------------------
 # CHECK SMB MODULE
@@ -220,10 +229,13 @@ def ldap() -> None:
 )
 def smb() -> None:
     """
-    Execute SMB signing and SMBv1 checks.
+    Execute SMB security checks.
+
+    This command evaluates SMB signing requirements and SMBv1 support across 
+    discovered hosts and Domain Controllers.
     """
 
-    run_smb_checks()
+    check.run_smb_checks()
 
 #-------------------------------------------------------------------------------
 # CHECK PASSWORD POLICY MODULE
@@ -234,10 +246,13 @@ def smb() -> None:
 )
 def pass_pol() -> None:
     """
-    Execute password policy assessment checks.
+    Execute domain password policy checks.
+
+    This command retrieves and assesses the effective Active Directory password 
+    policy against common security best practices.
     """
 
-    run_password_policy_checks()
+    check.run_password_policy_checks()
 
 
 if __name__ == "__main__":

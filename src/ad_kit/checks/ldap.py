@@ -3,12 +3,9 @@ LDAP-related assessment checks.
 """
 
 from ad_kit.core.checks import run_check, load_dc_hostnames
-from ad_kit.core.util import get_artefacts_dir
 from ad_kit.core.finding import Finding
-from ad_kit.findings.ldap_config import (
-    LDAP_SIGNING_NOT_ENFORCED,
-    LDAP_CHANNEL_BINDING_NOT_ENFORCED,
-)
+from ad_kit.core.findings import load_finding
+from ad_kit.core.util import get_artefacts_dir
 
 
 def ldap_check() -> tuple[list[dict], list[Finding]]:
@@ -83,7 +80,7 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
                 if signing == "none":
 
                     signing = "[red]✗ Not Required[/red]"
-                    finding = LDAP_SIGNING_NOT_ENFORCED.copy()
+                    finding = load_finding("ldap", "LDAP-001")
                     finding.affected_assets.append(dc_hostname)
                     findings.append(finding)
 
@@ -102,8 +99,7 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
                 if channel_binding == "no tls cert":
 
                     channel_binding = "[red]✗ Not Configured[/red]"
-
-                    finding = LDAP_CHANNEL_BINDING_NOT_ENFORCED.copy()
+                    finding = load_finding("ldap", "LDAP-002")
                     finding.affected_assets.append(dc_hostname)
                     findings.append(finding)
 
