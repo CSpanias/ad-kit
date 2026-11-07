@@ -1,5 +1,9 @@
 """
 Assessment check helpers.
+
+This module provides shared functionality used by AD-Kit assessment checks, 
+including evidence management, credential validation, command execution, and 
+helper functions for loading enumerated Active Directory assets.
 """
 
 import subprocess
@@ -9,7 +13,7 @@ from pathlib import Path
 from ad_kit.core.util import get_artefacts_dir, progress
 
 #-------------------------------------------------------------------------------
-# Constants
+# CONSTANTS
 #-------------------------------------------------------------------------------
 
 PASSWORD_POLICY_BASELINE = {
@@ -22,12 +26,19 @@ PASSWORD_POLICY_BASELINE = {
 }
 
 #-------------------------------------------------------------------------------
-# Functions
+# FUNCTIONS
 #-------------------------------------------------------------------------------
 
 def get_evidence_dir() -> Path:
     """
     Return the AD-Kit evidence directory.
+
+    The evidence directory is used to store raw command output collected during 
+    assessment checks. The directory is created automatically if it does not
+    already exist.
+
+    Returns:
+        Path to the evidence directory.
     """
 
     evidence_dir = (get_artefacts_dir() / "evidence")
@@ -39,6 +50,12 @@ def get_evidence_dir() -> Path:
 def load_dc_ips() -> list:
     """
     Load enumerated Domain Controller IP addresses.
+
+    Reads the Domain Controller IP address list generated during the 
+    enumeration phase and returns the values as a list.
+
+    Returns:
+        List of Domain Controller IP addresses.
     """
 
     dc_ips_file = (get_artefacts_dir() / "dc-ips.txt")
@@ -53,6 +70,12 @@ def load_dc_ips() -> list:
 def load_domain_computers() -> list:
     """
     Load enumerated domain computers.
+
+    Reads the domain computer list generated during enumeration and returns the 
+    values as a list.
+
+    Returns:
+        List of domain computer hostnames.
     """
 
     computers_file = (get_artefacts_dir() / "domain-computers.txt")
@@ -66,7 +89,13 @@ def load_domain_computers() -> list:
 
 def load_dc_hostnames() -> list:
     """
-    Load Domain Controller hostnames.
+    Load enumerated Domain Controller hostnames.
+
+    Reads the Domain Controller hostname list generated during enumeration and 
+    returns the values as a list.
+
+    Returns:
+        List of Domain Controller hostnames.
     """
 
     dc_file = (get_artefacts_dir() / "dc-hostnames.txt")
@@ -83,6 +112,18 @@ def duration_to_minutes(
 ) -> int | None:
     """
     Convert NetExec duration strings to minutes.
+
+    This helper converts NetExec duration values such as '30 minutes', '2 hours 
+    30 minutes', or '1 day 12 hours' into their equivalent number of minutes to 
+    simplify password policy assessment logic.
+
+    Args:
+        value:
+            NetExec duration string.
+
+    Returns:
+        Duration expressed in minutes, or None if the value cannot be 
+        determined.
     """
 
     if value == "Unknown":
@@ -112,7 +153,28 @@ def validate_credentials(
     password: str,
 ) -> str:
     """
-    Validate LDAP credentials.
+    Validate Active Directory credentials.
+
+    Authentication is performed against the target Domain Controller using 
+    NetExec LDAP authentication.
+
+    Args:
+        dc_ip:
+            Domain Controller IP address.
+
+        username:
+            Domain username.
+
+        password:
+            Account password.
+
+    Returns:
+        One of the following status values:
+
+        - 'valid'
+        - 'invalid'
+        - 'locked'
+        - 'unknown'
     """
 
     output = run_check(
@@ -141,22 +203,31 @@ def validate_credentials(
 
     return "unknown"
 
+
 def run_check(
     name: str,
     command: list[str],
 ) -> str:
     """
-    Execute a check and save the output.
+    Execute an assessment check and preserve evidence.
+
+    The supplied command is executed, its output is written to the assessment 
+    evidence directory, and the command stdout is returned to the caller for
+    parsing.
 
     Args:
-        name: Evidence filename prefix.
-        command: Command to execute.
+        name:
+            Evidence filename prefix.
+
+        command:
+            Command and arguments to execute.
 
     Returns:
-        Command stdout.
+        Command standard output.
 
     Raises:
-        RuntimeError: If the command fails.
+        RuntimeError:
+            If the command exits with a non-zero return code.
     """
 
     with progress(f"Running {' '.join(command)}"):

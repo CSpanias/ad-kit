@@ -22,14 +22,13 @@ app = typer.Typer(
     Examples:
 
     ad-kit tools install all
+    ad-kit tools install certipy
     ad-kit tools status
 
     ad-kit enum
 
-    ad-kit check
+    ad-kit check all
     ad-kit check ldap
-    ad-kit check smb
-    ad-kit check pass-pol
     """,
     no_args_is_help=True,
     context_settings={
@@ -253,6 +252,26 @@ def pass_pol() -> None:
     """
 
     check.run_password_policy_checks()
+
+#-------------------------------------------------------------------------------
+# CHECK MAQ
+#-------------------------------------------------------------------------------
+@check_app.command(
+    name="maq",
+    help="Execute Machine Account Quota check."
+)
+def run_maq_checks() -> None:
+    """
+    Execute Machine Account Quota assessment checks.
+
+    This check retrieves the Active Directory Machine Account Quota 
+    configuration and determines whether authenticated users are permitted to 
+    create machine accounts within the domain.
+
+    Findings are generated when a non-zero Machine Account Quota is identified.
+    """
+
+    check.run_maq_checks()
 
 
 if __name__ == "__main__":

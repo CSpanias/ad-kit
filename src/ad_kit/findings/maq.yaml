@@ -1,0 +1,56 @@
+#
+# Machine Account Quota Findings
+#
+# This file contains finding definitions relating to the Active Directory 
+# Machine Account Quota (MAQ) configuration.
+# 
+# Findings defined in this file are intended to identify situations where
+# unprivileged users are permitted to create computer accounts within the 
+# domain, potentially enabling attack paths involving Resource-Based
+# Constrained Delegation (RBCD), machine account abuse, and privilege 
+# escalation.
+
+MAQ-001:
+  id: MAQ-001
+  title: Machine Account Quota Permits Machine Creation
+
+  commentary: |
+    The assessment identified that the Active Directory Machine Account Quota 
+    (MAQ) was configured to allow standard domain users to create computer 
+    accounts.
+
+    By default, Active Directory permits authenticated users to create up to 
+    ten computer accounts within the domain. While this behaviour is intended 
+    to simplify workstation provisioning, it is frequently unnecessary within 
+    mature enterprise environments.
+
+    For example, a threat actor may combine machine account creation with 
+    authentication coercion, NTLM relay, or Kerberos delegation attacks to 
+    establish a foothold within the environment, facilitate further 
+    enumeration, or escalate privileges.
+
+    Machine accounts may also be abused in Resource-Based Constrained 
+    Delegation (RBCD) attacks and other Kerberos-based techniques when combined
+    with additional weaknesses or misconfigurations.
+
+    The presence of a non-zero Machine Account Quota represents a deviation 
+    from the Principle of Least Privilege (PoLP), as it grants domain-wide 
+    machine account creation capabilities to all authenticated users without 
+    explicit delegation.
+
+  remediation: |
+    Configure the domain Machine Account Quota to zero unless there is a 
+    documented operational requirement for non-administrative users to join 
+    devices to the domain.
+
+    Where delegated workstation provisioning is required, the ability to create 
+    computer accounts should be restricted to specific administrative groups 
+    rather than granted broadly to authenticated users.
+
+    Prior to implementation, review existing device provisioning processes to 
+    ensure they do not rely on Machine Account Quota functionality.
+
+  references:
+    - https://www.netspi.com/blog/technical-blog/network-pentesting/machineaccountquota-is-useful-sometimes/
+    - https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/default-workstation-numbers-join-domain
+    - https://www.packetlabs.net/posts/the-overlooked-danger-how-ms-ds-machine-account-quota-fuels-ad-attacks/

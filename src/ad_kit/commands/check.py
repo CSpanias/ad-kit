@@ -12,6 +12,7 @@ from ad_kit.core.checks import (
     validate_credentials
 )
 from ad_kit.checks.ldap import ldap_check
+from ad_kit.checks.maq import maq_check
 from ad_kit.checks.passwords import (
     password_policy_check, 
     password_policy_assessment
@@ -505,6 +506,62 @@ def run_password_policy_checks() -> None:
     )  
 
 #-------------------------------------------------------------------------------
+# MACHINE ACCOUNT QUOTA
+#-------------------------------------------------------------------------------
+
+def run_maq_checks() -> None:
+    """
+    Execute Machine Account Quota checks.
+    """
+
+    session_data = load_session()
+
+    print_section("Machine Account Quota")
+
+    std_pass = authenticate_standard_user()
+
+    with progress("Checking Machine Account Quota..."):
+
+        maq_results, findings = maq_check(
+            session_data["dc_ip"],
+            session_data["standard_user"],
+            std_pass,
+        )
+
+    table = Table()
+
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="green")
+    
+    table.add_row("Machine Account Quota", maq_results["machine_account_quota"])
+    table.add_row("Delegated Group", maq_results["machine_join_group"])
+
+    console.print(table)
+
+    maq = int(maq_results["machine_account_quota"])
+
+    if maq > 0:
+
+        finding = load_finding("maq", "MAQ-001")
+
+        finding.evidence.append(
+            f"Machine Account Quota was configured as {maq}."
+        )
+
+        if maq_results["machine_join_group"] == "Authenticated Users":
+
+            finding.evidence.append(
+                    "Authenticated Users were permitted to create machine "
+                    "accounts within the domain."
+            )
+
+        write_markdown_report(
+            [finding],
+            get_artefacts_dir()
+            / "findings-maq.md",
+        )
+
+#-------------------------------------------------------------------------------
 # MAIN FUNCTION
 #-------------------------------------------------------------------------------
 
@@ -512,9 +569,8 @@ def run_checks() -> None:
     """
     Execute all assessment checks.
 
-    This command performs both unauthenticated and
-    authenticated security checks against the target
-    Active Directory environment.
+    This command performs both unauthenticated and authenticated security 
+    checks against the target Active Directory environment.
     """
 
     # Unauthenticated checks
