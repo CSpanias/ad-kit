@@ -47,14 +47,3 @@ class Finding:
     affected_assets: list[str] = field(default_factory=list)
     evidence: list[str] = field(default_factory=list)
     references: list[str] = field(default_factory=list)
-
-
-    def copy(self) -> "Finding":
-        """
-        Create a deep copy of the finding.
-
-        This allows a finding definition to be loaded
-        from a template and then modified independently
-        without affecting the original definition.
-        """
-        return deepcopy(self)

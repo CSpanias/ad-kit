@@ -69,6 +69,5 @@ def load_finding(
         title=finding["title"],
         commentary=finding["commentary"],
         remediation=finding["remediation"],
-        evidence=finding["evidence"] or [],
         references=finding.get("references") or [],
     )
