@@ -71,6 +71,16 @@ def write_markdown_report(
             lines.append(format_paragraphs(finding.commentary))
             lines.append("")
 
+            if finding.evidence:
+
+                lines.append("### Evidence")
+                lines.append("")
+
+                for evidence in finding.evidence:
+                    lines.append(f"- {evidence}")
+
+                lines.append("")
+
             lines.append("### Remediation")
             lines.append("")
             lines.append(format_paragraphs(finding.remediation))

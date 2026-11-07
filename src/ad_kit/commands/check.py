@@ -200,7 +200,7 @@ def run_smb_checks() -> None:
 
         (
             get_artefacts_dir()
-            / "smb-unknown-hosts.txt"
+            / "findings-smb-unknown-hosts.txt"
         ).write_text(
             "\n".join(
                 sorted(unknown_hosts)
@@ -375,6 +375,134 @@ def run_password_policy_checks() -> None:
     )
 
     console.print(table)
+
+    findings = []
+
+    password_policy_issues = []
+    lockout_policy_issues = []
+
+    password_policy_evidence = []
+    lockout_policy_evidence = []
+
+    # Determine failed password policy settings
+    for setting in (
+        "minimum_length",
+        "password_history",
+        "minimum_age",
+        "maximum_age",
+        "complexity",
+    ):
+
+        if assessment[setting] != "[green]✓ OK[/green]":
+            password_policy_issues.append(setting)
+
+    # Determine failed lockout settings
+    for setting in (
+        "observation_window",
+        "lockout_duration",
+        "lockout_threshold",
+    ):
+
+        if assessment[setting] != "[green]✓ OK[/green]":
+            lockout_policy_issues.append(setting)
+
+    # Build password policy evidence
+    if assessment["minimum_length"] != "[green]✓ OK[/green]":
+
+        password_policy_evidence.append(
+            (
+                "Minimum password length was configured as "
+                f"{password_policy['minimum_length']} characters, which is "
+                "below the recommended best practice."
+            )
+        )
+
+    if assessment["password_history"] != "[green]✓ OK[/green]":
+
+        password_policy_evidence.append(
+            (
+                "Password history retained only "
+                f"{password_policy['password_history']} previous "
+                "password(s), increasing the likelihood of password reuse."
+            )
+        )
+
+    if assessment["minimum_age"] != "[green]✓ OK[/green]":
+
+        password_policy_evidence.append(
+            (
+                "Minimum password age was not configured, allowing users to "
+                "rapidly change passwords and potentially circumvent "
+                "password history controls."
+            )
+        )
+
+    if assessment["maximum_age"] != "[green]✓ OK[/green]":
+
+        password_policy_evidence.append(
+            (
+                "Maximum password age was not configured, resulting in "
+                "passwords that may remain unchanged indefinitely."
+            )
+        )
+
+    if assessment["complexity"] != "[green]✓ OK[/green]":
+
+        password_policy_evidence.append(
+            (
+                "Password complexity requirements were disabled, allowing "
+                "weak or easily guessable passwords to be configured."
+            )
+        )
+
+    # Build lockout policy evidence
+    if assessment["observation_window"] != "[green]✓ OK[/green]":
+
+        lockout_policy_evidence.append(
+            (
+                "The account lockout observation window was configured "
+                f"as {password_policy['observation_window']}."
+            )
+        )
+
+    if assessment["lockout_duration"] != "[green]✓ OK[/green]":
+
+        lockout_policy_evidence.append(
+            (
+                "The account lockout duration was configured as "
+                f"{password_policy['lockout_duration']}."
+            )
+        )
+
+    if assessment["lockout_threshold"] != "[green]✓ OK[/green]":
+
+        lockout_policy_evidence.append(
+            (
+                "The account lockout threshold was configured as "
+                f"{password_policy['lockout_threshold']} failed "
+                "authentication attempts, providing insufficient "
+                "protection against password guessing attacks."
+            )
+        )
+
+    # Policy controls
+    if password_policy_issues:
+
+        finding = load_finding("passwords", "PASS-001")
+        finding.evidence.extend(password_policy_evidence)
+        findings.append(finding)
+
+    # Lockout controls
+    if lockout_policy_issues:
+
+        finding = load_finding("passwords", "PASS-002")
+        finding.evidence.extend(lockout_policy_evidence)
+        findings.append(finding)  
+
+    write_markdown_report(
+        findings,
+        get_artefacts_dir() / "findings-passwords.md",
+    )  
 
 #-------------------------------------------------------------------------------
 # MAIN FUNCTION
