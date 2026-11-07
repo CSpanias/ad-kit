@@ -25,6 +25,7 @@ from ad_kit.core.util import (
 )
 from ad_kit.commands.rusthound import run_rusthound
 
+
 # TODO: Automate domain and DC resolution
 def identify_domain_controller(
     dc_ip: str,
@@ -451,33 +452,65 @@ def run_enumeration() -> None:
     """
 
     #---------------------------------------------------------------------------
-    # Domain enumeration
+    # DOMAIN ENUMERATION
     #---------------------------------------------------------------------------
+    
     try:
 
         #-----------------------------------------------------------------------
-        # Assessment Configuration
+        # ASSESSMENT CONFIGURATION
         #-----------------------------------------------------------------------
+        
         print_section("Assessment Configuration")
 
         dc_ip = typer.prompt("Domain Controller IP Address")
         console.print()
-    
-        std_user = typer.prompt("Standard User Username")
-        std_pass = typer.prompt("Standard User Password", hide_input=True)
+
+        # Initialise variables
+        std_user = ""
+        std_pass = ""
+
+        da_user = ""
+        da_pass = ""
+
+        std_validated = False
+        da_validated = False
+
+        # Validate Standard User
+        validate_std = typer.confirm(
+            "Validate Standard User account?",
+            default=True,
+        )
+
+        if validate_std:
+
+            std_user = typer.prompt("Standard User Username")
+            std_pass = typer.prompt("Standard User Password", hide_input=True)
 
         console.print()
+
+        # Validate Domain Admin
+        validate_da = typer.confirm(
+            "Validate Domain Admin account?",
+            default=True,
+        )
+
+        if validate_da:
     
-        da_user = typer.prompt("Domain Admin Username")
-        da_pass = typer.prompt("Domain Admin Password", hide_input=True)
+            da_user = typer.prompt("Domain Admin Username")
+            da_pass = typer.prompt("Domain Admin Password", hide_input=True)
 
         console.print()
-    
+
         collect = typer.confirm("Run RustHound collection?", default=True)
         console.print()
 
-        dump_ntds = typer.confirm("Dump NTDS hashes?", default=True)
-        console.print()
+        dump_ntds = False
+
+        if validate_da:
+
+            dump_ntds = typer.confirm("Dump NTDS hashes?", default=True)
+            console.print()
 
         generate_scp_retrieval = typer.confirm(
             "Generate SCP retrieval command?",
@@ -521,31 +554,43 @@ def run_enumeration() -> None:
         dc_ip = dc_ips[0]
 
         # Standard user
-        valid, pwned = validate_credentials(dc_ip, std_user, std_pass)
+        if validate_std:
 
-        if not valid:
-            print_error("Standard user validation failed.")
-            return
+            valid, pwned = validate_credentials(dc_ip, std_user, std_pass)
 
-        if pwned:
-            print_error("Standard user appears privileged.")
-        else:
+            if not valid:
+                print_error("Standard user validation failed.")
+                return
+
+            if pwned:
+                print_error("Standard user appears privileged.")
+                return
+
+            std_validated = True
             print_success("Standard user validated.")
 
         # Domain Admin
-        valid, pwned = validate_credentials(dc_ip, da_user, da_pass)
+        if validate_da:
 
-        if not valid:
-            print_error("Domain Admin validation failed.")
-            return
+            valid, pwned = validate_credentials(dc_ip, da_user, da_pass)
 
-        if not pwned:
-            print_error(
-                "Account authenticated but does not appear to be privileged."
+            if not valid:
+                print_error("Domain Admin validation failed.")
+                return
+
+            if not pwned:
+                print_error(
+                    "Account authenticated but does not appear to be privileged."
+                )
+                return
+
+            da_validated = True
+            print_success("Domain Admin validated.")
+
+        if not validate_std and not validate_da:
+            raise RuntimeError(
+                "At least one authenticated account must be provided."
             )
-            return
-
-        print_success("Domain Admin validated.")
 
         #-----------------------------------------------------------------------
         # DOMAIN CONTROLLER ENUMERATION
@@ -553,10 +598,22 @@ def run_enumeration() -> None:
 
         print_section("Domain Controllers")
 
+        # Use whichever account was validated
+        ldap_user = ""
+        ldap_pass = ""
+
+        if std_validated:
+            ldap_user = std_user
+            ldap_pass = std_pass
+
+        elif da_validated:
+            ldap_user = da_user
+            ldap_pass = da_pass
+
         domain_controllers = enumerate_domain_controllers(
             dc_ip,
-            std_user,
-            std_pass,
+            ldap_user,
+            ldap_pass,
         )
 
         dc_hostnames = [
@@ -574,7 +631,9 @@ def run_enumeration() -> None:
         # Write results into disk
         write_results(domain, dc_hostnames, dc_ips,)
 
-        print_success(f"Identified {len(domain_controllers)} Domain Controller(s).")
+        print_success(
+            f"Identified {len(domain_controllers)} Domain Controller(s)."
+        )
 
         table = Table()
 
@@ -600,10 +659,10 @@ def run_enumeration() -> None:
             "dc_count": len(dc_hostnames),
 
             "standard_user": std_user,
-            "standard_user_validated": True,
+            "standard_user_validated": std_validated,
 
             "domain_admin": da_user,
-            "da_validated": True,
+            "da_validated": da_validated,
 
             "domain_users_exported": False,
             "domain_users_count": 0,
@@ -632,13 +691,17 @@ def run_enumeration() -> None:
         print_section("Domain Data Collection")
 
         # Filter testing accounts
-        excluded_users = {std_user.lower(), da_user.lower()}
+        excluded_users = {
+            account.lower()
+            for account in [std_user, da_user]
+            if account
+        }
 
         with progress("[cyan]Exporting domain users..."):
             user_count, filtered_count = export_domain_users(
                 dc_ip,
-                std_user,
-                std_pass,
+                ldap_user,
+                ldap_pass,
                 excluded_users,
             )
 
@@ -657,8 +720,8 @@ def run_enumeration() -> None:
             computer_count = export_domain_computers(
                 domain, 
                 dc_ip, 
-                std_user, 
-                std_pass
+                ldap_user, 
+                ldap_pass,
             )
 
         session_data["domain_computers_exported"] = True
@@ -673,12 +736,13 @@ def run_enumeration() -> None:
         #-----------------------------------------------------------------------
         # BLOODHOUND DATA COLLECTION
         #-----------------------------------------------------------------------
-        
-        print_section("BloodHound Collection")
 
         if collect:
+
+            print_section("BloodHound Collection")
+
             with console.status("[cyan]Collecting BloodHound data..."):
-                success = run_rusthound( domain, dc_ip, std_user, std_pass)
+                success = run_rusthound( domain, dc_ip, ldap_user, ldap_pass)
 
             if success:
                 session_data["rusthound_collected"] = True
@@ -687,41 +751,48 @@ def run_enumeration() -> None:
         #-----------------------------------------------------------------------
         # NTDS DUMP
         #-----------------------------------------------------------------------
+        
         if dump_ntds:
 
             print_section("NTDS Dump")
+            
+            if not session_data["da_validated"]:
+                print_error("A validated Domain Admin account is required.")
 
-            output_dir = get_artefacts_dir()
-
-            with progress("[cyan]Running secretsdump..."):
-
-                result = subprocess.run(
-                    [
-                        "secretsdump.py",
-                        (
-                            f"{domain}/"
-                            f"{da_user}:"
-                            f"{da_pass}@"
-                            f"{dc_ip}"
-                        ),
-                        "-user-status",
-                        "-just-dc-ntlm",
-                        "-outputfile",
-                        domain,
-                    ],
-                    cwd=output_dir,
-                    capture_output=True,
-                    text=True,
-                )
-
-            if result.returncode == 0:
-                session_data["ntds_dumped"] = True
-                print_success("NTDS dump completed.")
             else:
-                print_error("NTDS dump failed.")
+                output_dir = get_artefacts_dir()
+
+                with progress("[cyan]Running secretsdump..."):
+
+                    result = subprocess.run(
+                        [
+                            "secretsdump.py",
+                            (
+                                f"{domain}/"
+                                f"{da_user}:"
+                                f"{da_pass}@"
+                                f"{dc_ip}"
+                            ),
+                            "-user-status",
+                            "-just-dc-ntlm",
+                            "-outputfile",
+                            domain,
+                        ],
+                        cwd=output_dir,
+                        capture_output=True,
+                        text=True,
+                    )
+
+                if result.returncode == 0:
+                    session_data["ntds_dumped"] = True
+                    print_success("NTDS dump completed.")
+                else:
+                    print_error("NTDS dump failed.")
+
         #-----------------------------------------------------------------------
         # SCP COMMAND & SUMMARY TABLE
         #-----------------------------------------------------------------------
+        
         if generate_scp_retrieval:
                             generate_scp_command(session_data)
         
