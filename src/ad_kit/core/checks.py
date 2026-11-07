@@ -14,7 +14,7 @@ from ad_kit.core.util import get_artefacts_dir, progress
 
 PASSWORD_POLICY_BASELINE = {
     "minimum_length": 12,
-    "password_history": 12,
+    "password_history": 2,
     "minimum_age_days": 1,
     "lockout_threshold": 5,
     "lockout_duration_minutes": 30,
