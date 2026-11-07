@@ -118,7 +118,6 @@ def maq_check(
                 "add-computer",
                 "-o",
                 f"NAME={machine_name}",
-                "-o",
                 f"PASSWORD={machine_password}",
             ],
         )
@@ -160,9 +159,7 @@ def maq_check(
                     "add-computer",
                     "-o",
                     f"NAME={machine_name}",
-                    "-o",
                     f"PASSWORD={machine_password}",
-                    "-o",
                     "DELETE=True",
                 ],
             )

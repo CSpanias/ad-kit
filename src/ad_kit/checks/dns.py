@@ -81,7 +81,7 @@ def dns_record_creation_check(
 
         results["dns_record_creation"] = True
 
-        finding = load_finding("dns", "DNS-001")
+        finding = load_finding("dns_records", "DNS-001")
 
         finding.evidence.append(
             f"Authenticated user '{username}' successfully created DNS record "
