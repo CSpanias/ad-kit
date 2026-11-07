@@ -21,7 +21,6 @@ from ad_kit.core.checks import (
     load_domain_computers,
     load_dc_hostnames,
     validate_credentials,
-    run_check,
     cleanup_test_artifact
 )
 from ad_kit.checks.ldap import ldap_check
@@ -602,7 +601,7 @@ def run_maq_checks() -> None:
 
     with progress("Checking Machine Account Quota..."):
 
-        maq_results, findings = maq_check(
+        maq_results = maq_check(
             session_data["dc_ip"],
             session_data["standard_user"],
             std_pass,
@@ -639,13 +638,6 @@ def run_maq_checks() -> None:
         ),
     )
 
-    table.add_row(
-        "Machine Cleanup",
-        maq_results["cleanup_method"],
-    )
-
-    console.print(table)
-
     if maq_results["cleanup_method"] == "Domain Admin Required":
 
         da_user, da_pass = authenticate_domain_admin()
@@ -665,9 +657,7 @@ def run_maq_checks() -> None:
                     "add-computer",
                     "-o",
                     f"NAME={maq_results['machine_name']}",
-                    "-o",
                     f"PASSWORD={maq_results['machine_password']}",
-                    "-o",
                     "DELETE=True",
                 ],
             )
@@ -684,6 +674,13 @@ def run_maq_checks() -> None:
             maq_results["cleanup_method"] = (
                 "Manual Intervention Required"
             )
+
+    table.add_row(
+        "Machine Cleanup",
+        maq_results["cleanup_method"],
+    )
+
+    console.print(table)
 
     generated_findings = []
 
