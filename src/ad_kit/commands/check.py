@@ -488,14 +488,14 @@ def run_password_policy_checks() -> None:
     # Policy controls
     if password_policy_issues:
 
-        finding = load_finding("passwords", "PASS-001")
+        finding = load_finding("password-policy", "PASS-001")
         finding.evidence.extend(password_policy_evidence)
         findings.append(finding)
 
     # Lockout controls
     if lockout_policy_issues:
 
-        finding = load_finding("passwords", "PASS-002")
+        finding = load_finding("password-policy", "PASS-002")
         finding.evidence.extend(lockout_policy_evidence)
         findings.append(finding)  
 
