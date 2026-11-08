@@ -66,7 +66,13 @@ def privileged_groups_check(
 
     findings: list[Finding] = []
 
-    session_data = load_session()
+    try:
+
+        session_data = load_session()
+
+    except RuntimeError:
+
+        session_data = {}
 
     excluded_users = {
         user.lower()
@@ -75,12 +81,20 @@ def privileged_groups_check(
 
     enabled_users = 0
 
-    users_file = (
-        get_artefacts_dir()
-        / "domain-users-filtered.txt"
-    )
+    users_file = None
 
-    if users_file.exists():
+    try:
+
+        users_file = (
+            get_artefacts_dir()
+            / "domain-users-filtered.txt"
+        )
+
+    except RuntimeError:
+
+        pass
+
+    if users_file is not None and users_file.exists():
 
         enabled_users = sum(
             1
@@ -195,7 +209,9 @@ def privileged_groups_check(
             finding = load_finding("privileged_groups", "PRIV-001")
 
             finding.evidence.append(
-                f"The domain contained {enabled_users} enabled user accounts."
+                f"The domain contained {enabled_users} enabled user accounts "
+                "following exclusion of testing accounts used during the "
+                "assessment."
             )
 
             finding.evidence.append(
