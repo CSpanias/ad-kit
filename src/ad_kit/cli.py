@@ -21,14 +21,15 @@ app = typer.Typer(
     epilog="""
     Examples:
 
-    ad-kit tools install all
-    ad-kit tools install certipy
-    ad-kit tools status
+        ad-kit tools install all
+        ad-kit tools install certipy
+        ad-kit tools status
 
-    ad-kit enum
+        ad-kit enum
 
-    ad-kit check all
-    ad-kit check ldap
+        ad-kit check all
+        ad-kit check ldap
+        ad-kit check ldap pass-pol
     """,
     no_args_is_help=True,
     context_settings={
@@ -37,25 +38,12 @@ app = typer.Typer(
 )
 
 # Tools module
-tools_app = typer.Typer(
-    help="Manage assessment tools."
-)
-
-app.add_typer(
-    tools_app,
-    name="tools"
-)
-
+tools_app = typer.Typer(help="Manage assessment tools.")
+app.add_typer(tools_app, name="tools")
 
 # Check module
-check_app = typer.Typer(
-    help="Execute assessment checks."
-)
-
-app.add_typer(
-    check_app,
-    name="check",
-)
+check_app = typer.Typer(help="Execute assessment checks.")
+app.add_typer(check_app, name="check")
 
 console = Console()
 
