@@ -276,6 +276,23 @@ def dns() -> None:
     check.run_dns_checks()
 
 #-------------------------------------------------------------------------------
+# CHECK PRE-WINDOWS 2000 COMPUTER ACCOUNTS
+#-------------------------------------------------------------------------------
+@check_app.command(
+    name="pre2k",
+    help=(
+        "Identify pre-created computer accounts susceptible to the pre-Windows "
+        "2000 password convention."
+    ),
+)
+def pre2k() -> None:
+    """
+    Execute pre-Windows 2000 computer account assessment checks.
+    """
+
+    check.run_pre2k_checks()
+
+#-------------------------------------------------------------------------------
 # CHECK SELECTED
 #-------------------------------------------------------------------------------
 @check_app.command(
