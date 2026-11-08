@@ -44,7 +44,8 @@ from ad_kit.core.util import (
     progress, 
     load_session, 
     get_artefacts_dir, 
-    print_info
+    print_info,
+    require_session,
 )
 from ad_kit.reporting.markdown import write_markdown_report
 
@@ -118,7 +119,7 @@ def run_smb_checks() -> None:
     vulnerable to common relay or downgrade attacks.
     """
 
-    session_data = load_session()
+    session_data = require_session()
 
     smb_results = []
     findings = []
@@ -263,7 +264,7 @@ def authenticate_standard_user() -> str:
             If authentication cannot be completed.
     """
 
-    session_data = load_session()
+    session_data = require_session()
 
     while True:
 
@@ -321,7 +322,7 @@ def authenticate_domain_admin() -> tuple[str, str]:
             If authentication cannot be completed.
     """
 
-    session_data = load_session()
+    session_data = require_session()
 
     while True:
 
@@ -379,7 +380,7 @@ def run_password_policy_checks(
     requirements, account lockout configuration, and password age settings.
     """
 
-    session_data = load_session()
+    session_data = require_session()
 
     print_section("Password Policy")
 
@@ -598,7 +599,7 @@ def run_maq_checks(
     unprivileged users.
     """
 
-    session_data = load_session()
+    session_data = require_session()
 
     print_section("Machine Account Quota")
 
@@ -792,7 +793,7 @@ def run_dns_checks(
     Findings are generated when unauthorised DNS record creation is permitted.
     """
 
-    session_data = load_session()
+    session_data = require_session()
 
     print_section("DNS Record Creation")
 
@@ -893,7 +894,7 @@ def run_pre2k_checks(
     predictable default machine account credentials.
     """
 
-    session_data = load_session()
+    session_data = require_session()
 
     print_section("Pre-Windows 2000 Computer Accounts")
 
@@ -958,7 +959,7 @@ def run_privileged_group_checks(
     assessment threshold.
     """
 
-    session_data = load_session()
+    session_data = require_session()
 
     print_section("Privileged Group Membership")
 
@@ -1074,7 +1075,7 @@ def run_selected_checks(
         elif module == "dns":
             run_dns_checks(std_pass)
 
-        elif module == "prek2":
+        elif module == "pre2k":
             run_pre2k_checks(std_pass)
 
         elif module == "privileged":
@@ -1120,6 +1121,10 @@ def run_checks() -> None:
     console.print()
 
     run_dns_checks(std_pass)
+
+    console.print()
+
+    run_pre2k_checks(std_pass)
 
     console.print()
 

@@ -121,3 +121,29 @@ def normalize_hostname(
     """
 
     return hostname.upper()
+
+
+def require_session() -> dict:
+    """
+    Load session metadata required by assessment
+    modules.
+
+    Returns:
+        Parsed session metadata.
+
+    Raises:
+        RuntimeError:
+            If assessment session metadata is not
+            available.
+    """
+
+    try:
+
+        return load_session()
+
+    except RuntimeError as exc:
+
+        raise RuntimeError(
+            "Assessment session metadata not found. Run 'ad-kit enum' before "
+            "executing assessment checks."
+        ) from exc
