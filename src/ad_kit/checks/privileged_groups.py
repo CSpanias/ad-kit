@@ -11,7 +11,8 @@ administrative privileges.
 """
 
 from ad_kit.core.checks import run_check
-from ad_kit.core.finding import Finding, load_finding
+from ad_kit.core.finding import Finding
+from ad_kit.core.findings import load_finding
 from ad_kit.core.util import load_session, get_artefacts_dir
 
 
