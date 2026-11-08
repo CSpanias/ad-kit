@@ -31,7 +31,7 @@ from ad_kit.checks.passwords import (
 )
 from ad_kit.checks.smb import smb_configuration_check
 from ad_kit.checks.dns import dns_record_creation_check
-
+from ad_kit.checks.pre2k import pre2k_check
 from ad_kit.core.console import (
     console, 
     print_section, 
@@ -875,15 +875,86 @@ def run_dns_checks(
         get_artefacts_dir() / "findings-dns.md",
     )
 
+
+#-------------------------------------------------------------------------------
+# PRE2K
+#-------------------------------------------------------------------------------
+
+#-------------------------------------------------------------------------------
+# PRE-WINDOWS 2000 COMPUTER ACCOUNTS
+#-------------------------------------------------------------------------------
+
+def run_pre2k_checks(
+    std_pass: str | None = None,
+) -> None:
+    """
+    Execute pre-Windows 2000 computer account assessment checks.
+
+    This check identifies pre-created computer accounts susceptible to the 
+    legacy pre-Windows 2000 machine account password convention.
+
+    Findings are generated when Kerberos authentication can be achieved using
+    predictable default machine account credentials.
+    """
+
+    session_data = load_session()
+
+    print_section("Pre-Windows 2000 Computer Accounts")
+
+    if std_pass is None:
+
+        std_pass = (authenticate_standard_user())
+
+    with progress("Checking pre-created computer accounts..."):
+
+        pre2k_results, findings = (
+            pre2k_check(
+                session_data["dc_ip"],
+                session_data["standard_user"],
+                std_pass,
+            )
+        )
+
+    table = Table()
+
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row(
+        "Accounts Identified",
+        str(
+            pre2k_results["accounts_found"]
+        ),
+    )
+
+    table.add_row(
+        "TGT Acquisition",
+        (
+            "[red]✗ Successful[/red]"
+            if pre2k_results["tgt_obtained"]
+            else "[green]✓ Denied[/green]"
+        ),
+    )
+
+    console.print(table)
+
+    write_markdown_report(
+        findings,
+        get_artefacts_dir()
+        / "findings-pre2k.md",
+    )
+
 #-------------------------------------------------------------------------------
 # SELECTED MODULES
 #-------------------------------------------------------------------------------
+
 AVAILABLE_CHECKS = {
     "ldap": run_ldap_checks,
     "smb": run_smb_checks,
     "pass-pol": run_password_policy_checks,
     "maq": run_maq_checks,
     "dns": run_dns_checks,
+    "pre2k": run_pre2k_checks,
 }
 
 def run_selected_checks(
@@ -906,6 +977,7 @@ def run_selected_checks(
         "pass-pol",
         "maq",
         "dns",
+        "pre2k",
     }
 
     requires_authentication = any(
@@ -937,6 +1009,9 @@ def run_selected_checks(
 
         elif module == "dns":
             run_dns_checks(std_pass)
+
+        elif module == "prek2":
+            run_pre2k_checks(std_pass)
 
         else:
             print_error(f"Unknown module: {module}")

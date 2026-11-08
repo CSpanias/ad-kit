@@ -1,4 +1,4 @@
-#
+# ==============================================================================
 # LDAP Configuration Findings
 #
 # This file contains finding definitions relating to LDAP security controls
@@ -8,7 +8,7 @@
 # Findings defined in this file are intended to identify weaknesses that may 
 # enable credential relay, authentication tampering, unauthorised directory 
 # enumeration, or other attacks against Active Directory services.
-
+# ==============================================================================
 
 LDAP-001:
   id: LDAP-001

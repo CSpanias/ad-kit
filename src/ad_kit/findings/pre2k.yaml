@@ -1,0 +1,58 @@
+# ==============================================================================
+# PRE2K FINDINGS
+#
+# Findings relating to pre-created Active Directory computer accounts
+# susceptible to the pre-Windows 2000 machine account password convention.
+#
+# These findings identify situations where Kerberos authentication can be
+# achieved using predictable default machine account credentials.
+# ==============================================================================
+
+PRE2K-001:
+  id: PRE2K-001
+
+  title: Pre-Windows 2000 Computer Account Credentials Permit Authentication
+
+  commentary: |
+    A review of Active Directory (AD) computer accounts identified one or more 
+    computer accounts susceptible to the legacy pre-Windows 2000 computer 
+    account password convention.
+
+    Using credentials derived from the affected computer names, Kerberos 
+    Ticket Granting Tickets (TGTs) were successfully obtained, demonstrating 
+    that valid domain authentication could be achieved using predictable 
+    machine account credentials.
+
+    Further AD enumeration confirmed that the affected computer accounts 
+    remained active, with recent password change and logon activity observed. 
+    This indicates that the issue affects active computer accounts rather than 
+    dormant or historical objects.
+
+    Successful acquisition of Kerberos tickets provides an attacker with 
+    authenticated access to domain services and may facilitate further 
+    reconnaissance, domain enumeration, and support subsequent privilege 
+    escalation or lateral movement activities.
+
+    The presence of computer accounts configured with legacy pre-Windows 2000 
+    credential behaviour represents a security weakness that may allow 
+    unauthorised access using default or predictable machine account credentials.
+
+  remediation: |
+    To mitigate the risk associated with pre-Windows 2000 computer account
+    credentials, identify all computer accounts configured with the 
+    PASSWD_NOTREQD attribute (userAccountControl=4128) and determine whether 
+    they remain operationally required.
+
+    Any unused or legacy computer accounts should be disabled or removed. For 
+    active systems, computer account passwords should be reset and affected 
+    devices rejoined to the domain where necessary to ensure that predictable 
+    or legacy credentials can no longer be used for authentication.
+
+    Periodic reviews of computer account configurations should be performed to
+    identify accounts that may be susceptible to legacy authentication 
+    mechanisms and to ensure that secure machine password management is 
+    consistently enforced across the Active Directory environment.
+
+  references:
+    - https://trustedsec.com/blog/diving-into-pre-created-computer-accounts
+    - https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/useraccountcontrol-manipulate-account-properties

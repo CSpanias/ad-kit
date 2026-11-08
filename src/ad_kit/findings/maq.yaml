@@ -1,4 +1,4 @@
-#
+# ==============================================================================
 # Machine Account Quota Findings
 #
 # This file contains finding definitions relating to the Active Directory 
@@ -9,6 +9,7 @@
 # domain, potentially enabling attack paths involving Resource-Based
 # Constrained Delegation (RBCD), machine account abuse, and privilege 
 # escalation.
+# ==============================================================================
 
 MAQ-001:
   id: MAQ-001

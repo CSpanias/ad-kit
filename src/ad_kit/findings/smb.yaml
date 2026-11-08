@@ -1,4 +1,4 @@
-#
+# ==============================================================================
 # SMB Configuration Findings
 #
 # This file contains finding definitions relating to SMB security controls 
@@ -7,6 +7,7 @@
 # Findings defined in this file are intended to identify weaknesses that may 
 # expose systems to relay attacks, authentication tampering, or vulnerabilities
 # associated with legacy SMB protocols.
+# ==============================================================================
 
 SMB-001:
   id: SMB-001

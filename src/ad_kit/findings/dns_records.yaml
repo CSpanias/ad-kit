@@ -1,4 +1,4 @@
-#
+# ==============================================================================
 # DNS Record Creation Findings
 #
 # This file contains finding definitions relating to Active 
@@ -7,7 +7,7 @@
 # Findings defined in this file are intended to identify situations where
 # authenticated users are permitted to create arbitrary DNS records within
 # Active Directory integrated DNS zones.
-#
+# ==============================================================================
 
 DNS-001:
   id: DNS-001
