@@ -876,6 +876,74 @@ def run_dns_checks(
     )
 
 #-------------------------------------------------------------------------------
+# SELECTED MODULES
+#-------------------------------------------------------------------------------
+AVAILABLE_CHECKS = {
+    "ldap": run_ldap_checks,
+    "smb": run_smb_checks,
+    "pass-pol": run_password_policy_checks,
+    "maq": run_maq_checks,
+    "dns": run_dns_checks,
+}
+
+def run_selected_checks(
+    modules: list[str],
+) -> None:
+    """
+    Execute a user-specified selection of assessment modules.
+
+    This function allows individual assessment modules to be executed in any 
+    combination rather than running the complete assessment. Where one or
+    more authenticated checks are selected, Standard User credentials are 
+    requested once and reused for all applicable modules.
+
+    Args:
+        modules:
+            Assessment modules to execute.
+    """
+
+    authenticated_modules = {
+        "pass-pol",
+        "maq",
+        "dns",
+    }
+
+    requires_authentication = any(
+        module in authenticated_modules
+        for module in modules
+    )
+
+    std_pass = None
+
+    if requires_authentication:
+
+        std_pass = authenticate_standard_user()
+        console.print()
+
+    for module in modules:
+
+        if module == "ldap":
+
+            run_ldap_checks()
+
+        elif module == "smb":
+            run_smb_checks()
+
+        elif module == "pass-pol":
+            run_password_policy_checks(std_pass)
+
+        elif module == "maq":
+            run_maq_checks(std_pass)
+
+        elif module == "dns":
+            run_dns_checks(std_pass)
+
+        else:
+            print_error(f"Unknown module: {module}")
+
+        console.print()
+
+#-------------------------------------------------------------------------------
 # MAIN FUNCTION
 #-------------------------------------------------------------------------------
 

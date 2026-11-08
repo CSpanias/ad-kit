@@ -287,6 +287,30 @@ def dns() -> None:
 
     check.run_dns_checks()
 
+#-------------------------------------------------------------------------------
+# CHECK SELECTED
+#-------------------------------------------------------------------------------
+@check_app.command(
+    name="run",
+    help="Execute selected assessment modules.",
+)
+def selected(
+    modules: list[str],
+) -> None:
+    """
+    Execute one or more specified assessment modules.
+
+    Modules are executed in the order provided on the command line, allowing 
+    targeted assessment of specific Active Directory security controls without 
+    running the full assessment workflow.
+
+    Args:
+        modules:
+            Assessment modules to execute.
+    """
+
+    check.run_selected_checks(modules)
+
 
 if __name__ == "__main__":
     app()
