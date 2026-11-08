@@ -363,7 +363,9 @@ def authenticate_domain_admin() -> tuple[str, str]:
 # PASSWORD POLICY
 #-------------------------------------------------------------------------------
 
-def run_password_policy_checks() -> None:
+def run_password_policy_checks(
+    std_pass: str | None = None,
+) -> None:
     """
     Execute password policy assessment checks.
 
@@ -380,7 +382,8 @@ def run_password_policy_checks() -> None:
 
     print_section("Password Policy")
 
-    std_pass = authenticate_standard_user()
+    if std_pass is None:
+        std_pass = authenticate_standard_user()
 
     with progress("Retrieving password policy..."):
 
@@ -551,9 +554,9 @@ def run_password_policy_checks() -> None:
         lockout_policy_evidence.append(
             (
                 "The account lockout threshold was configured as "
-                f"{password_policy['lockout_threshold']} failed "
-                "authentication attempts, providing insufficient "
-                "protection against password guessing attacks."
+                f"{password_policy['lockout_threshold']} failed authentication "
+                "attempts, providing insufficient protection against password "
+                "guessing attacks."
             )
         )
 
@@ -580,24 +583,26 @@ def run_password_policy_checks() -> None:
 # MACHINE ACCOUNT QUOTA
 #-------------------------------------------------------------------------------
 
-def run_maq_checks() -> None:
+def run_maq_checks(
+    std_pass: str | None = None,
+) -> None:
     """
     Execute Machine Account Quota assessment checks.
 
-    This check evaluates the Active Directory Machine
-    Account Quota (MAQ) configuration and determines
-    whether authenticated users can create machine
+    This check evaluates the Active Directory Machine Account Quota (MAQ) 
+    configuration and determines whether authenticated users can create machine
     accounts within the domain.
 
-    Findings are generated when machine account
-    creation is permitted for unprivileged users.
+    Findings are generated when machine account creation is permitted for 
+    unprivileged users.
     """
 
     session_data = load_session()
 
     print_section("Machine Account Quota")
 
-    std_pass = authenticate_standard_user()
+    if std_pass is None:
+        std_pass = authenticate_standard_user()
 
     with progress("Checking Machine Account Quota..."):
 
@@ -771,7 +776,9 @@ def run_maq_checks() -> None:
 # DNS RECORD CREATION
 #-------------------------------------------------------------------------------
 
-def run_dns_checks() -> None:
+def run_dns_checks(
+    std_pass: str | None = None,
+) -> None:
     """
     Execute Active Directory-integrated DNS assessment checks.
 
@@ -788,7 +795,8 @@ def run_dns_checks() -> None:
 
     print_section("DNS Record Creation")
 
-    std_pass = authenticate_standard_user()
+    if std_pass is None:
+        std_pass = authenticate_standard_user()
 
     with progress("Checking DNS permissions..."):
 
@@ -889,12 +897,16 @@ def run_checks() -> None:
     console.print()
 
     # Authenticated checks
-    run_password_policy_checks()
+    std_pass = authenticate_standard_user()
 
     console.print()
 
-    run_maq_checks()
+    run_password_policy_checks(std_pass)
 
     console.print()
 
-    run_dns_checks()
+    run_maq_checks(std_pass)
+
+    console.print()
+
+    run_dns_checks(std_pass)
