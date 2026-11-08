@@ -66,6 +66,8 @@ def privileged_groups_check(
 
     findings: list[Finding] = []
 
+    excessive_groups = []
+
     try:
 
         session_data = load_session()
@@ -141,6 +143,7 @@ def privileged_groups_check(
             if not parts:
                 continue
 
+            # NetExec user table parsing fallback
             account_name = parts[-4]
 
             if account_name.lower() in excluded_users:
@@ -206,28 +209,35 @@ def privileged_groups_check(
         # Assessment threshold
         if percentage >= PRIVILEGED_GROUP_THRESHOLD:
 
-            finding = load_finding("privileged_groups", "PRIV-001")
+            excessive_groups.append((group, member_count, percentage))
+
+    if excessive_groups:
+
+        finding = load_finding("privileged_groups", "PRIV-001")
+
+        finding.evidence.append(
+            f"The domain contained {enabled_users} enabled user "
+            "accounts following exclusion of testing accounts used "
+            "during the assessment."
+        )
+
+        for group, member_count, percentage in excessive_groups:
 
             finding.evidence.append(
-                f"The domain contained {enabled_users} enabled user accounts "
-                "following exclusion of testing accounts used during the "
-                "assessment."
+                f"The '{group}' group contained {member_count} "
+                "member(s)."
             )
 
             finding.evidence.append(
-                f"The '{group}' group contained {member_count} member(s)."
+                f"'{group}' represented {percentage}% of the enabled "
+                "user population."
             )
 
-            finding.evidence.append(
-                f"'{group}' represented {percentage}% of the enabled user "
-                "population."
-            )
+        finding.evidence.append(
+            "The configured memberships exceeded the privileged group "
+            f"assessment threshold of {PRIVILEGED_GROUP_THRESHOLD:.0f}%."
+        )
 
-            finding.evidence.append(
-                "This exceeded the privileged group assessment threshold of "
-                f"{PRIVILEGED_GROUP_THRESHOLD:.0f}%."
-            )
-
-            findings.append(finding)
+        findings.append(finding)
 
     return results, findings
