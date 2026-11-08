@@ -1,0 +1,90 @@
+# ===========================================================================
+# PRIVILEGED GROUP FINDINGS
+#
+# Findings relating to excessive membership of privileged Active Directory
+# groups.
+#
+# These findings identify situations where highly privileged groups contain
+# a disproportionate number of members relative to the size of the domain,
+# increasing the number of credentials capable of performing
+# domain-level administrative actions.
+# ===========================================================================
+
+PRIV-001:
+  id: PRIV-001
+
+  title: Excessive Membership of Privileged Active Directory Groups
+
+  commentary: |
+    A review of privileged Active Directory (AD) group membership identified an 
+    excessive proportion of enabled user accounts holding elevated 
+    administrative privileges.
+
+    Privileged groups provide extensive access to domain resources, 
+    administrative configurations, security settings, and critical 
+    infrastructure components. Membership of such groups should be limited to a 
+    small number of dedicated administrative accounts with a clearly defined 
+    operational requirement.
+
+    The level of privileged access identified suggests that administrative 
+    permissions may have been assigned more broadly than necessary. This 
+    increases the organisation's attack surface by expanding the number of 
+    high-value credentials available to an attacker.
+
+    Excessive privileged group membership is commonly indicative of weaknesses 
+    in access governance and adherence to the Principle of Least Privilege 
+    (PoLP). Over time, elevated permissions may be retained for convenience, 
+    historical reasons, or temporary operational requirements, resulting in 
+    unnecessary access persisting long after the original business need has 
+    ceased.
+
+    In the event of credential theft through phishing, malware, password 
+    spraying, credential reuse, or other attack techniques, compromise of any 
+    privileged account may provide an attacker with immediate access to 
+    critical systems and services across the estate.
+
+    This may facilitate privilege escalation, lateral movement, unauthorised 
+    access to sensitive information, disruption of business operations, and 
+    ultimately compromise of the wider Active Directory environment.
+
+    Organisations that maintain strict privilege separation, utilise dedicated 
+    administrative accounts, and regularly review privileged group memberships 
+    significantly reduce both the likelihood and impact of successful attacks.
+
+  remediation: |
+    Conduct a comprehensive review of privileged Active Directory groups and 
+    confirm that all membership assignments remain operationally necessary and 
+    appropriately authorised.
+
+    Membership of highly privileged groups should be restricted to a small 
+    number of dedicated administrative accounts with a clearly defined business 
+    requirement.
+
+    Unnecessary, duplicate, shared, legacy, dormant, and inactive privileged 
+    accounts should be removed from privileged groups and disabled where 
+    appropriate.
+
+    Administrative personnel should utilise separate dedicated accounts for 
+    privileged activities. These accounts should be distinct from standard user 
+    accounts used for email, web browsing, and day-to-day productivity tasks.
+
+    Implement a tiered administrative model in which privileged permissions are 
+    used only when required to perform administrative functions and are not 
+    assigned to standard user accounts.
+
+    Where elevated permissions are required, delegated administration should be 
+    implemented wherever possible in preference to broad domain-level 
+    privileges.
+
+    Establish a formal process for periodic review and recertification of 
+    privileged access to ensure administrative permissions remain necessary, 
+    appropriate, and aligned with current job responsibilities.
+
+    Consider implementing additional protections for highly privileged 
+    accounts, including multi-factor authentication (MFA), Privileged Access 
+    Workstations (PAWs), enhanced monitoring, and Privileged Access Management 
+    (PAM) solutions where appropriate.
+
+  references:
+    - https://nist-sp-800-53-r5.bsafes.com/docs/3-1-access-control/ac-6-least-privilege/
+    - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/best-practices-for-securing-active-directory#avoid-granting-excessive-privileges

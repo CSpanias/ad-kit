@@ -293,6 +293,21 @@ def pre2k() -> None:
     check.run_pre2k_checks()
 
 #-------------------------------------------------------------------------------
+# PRIVILEGED GROUPS
+#-------------------------------------------------------------------------------
+@check_app.command(
+    name="privileged",
+    help="Review privileged Active Directory group membership.",
+)
+def privileged() -> None:
+    """
+    Execute privileged group membership assessment checks.
+    """
+
+    check.run_privileged_group_checks()
+
+
+#-------------------------------------------------------------------------------
 # CHECK SELECTED
 #-------------------------------------------------------------------------------
 @check_app.command(

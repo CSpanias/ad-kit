@@ -32,6 +32,7 @@ from ad_kit.checks.passwords import (
 from ad_kit.checks.smb import smb_configuration_check
 from ad_kit.checks.dns import dns_record_creation_check
 from ad_kit.checks.pre2k import pre2k_check
+from ad_kit.checks.privileged_groups import privileged_groups_check
 from ad_kit.core.console import (
     console, 
     print_section, 
@@ -875,11 +876,6 @@ def run_dns_checks(
         get_artefacts_dir() / "findings-dns.md",
     )
 
-
-#-------------------------------------------------------------------------------
-# PRE2K
-#-------------------------------------------------------------------------------
-
 #-------------------------------------------------------------------------------
 # PRE-WINDOWS 2000 COMPUTER ACCOUNTS
 #-------------------------------------------------------------------------------
@@ -945,6 +941,72 @@ def run_pre2k_checks(
     )
 
 #-------------------------------------------------------------------------------
+# PRIVILEGED GROUP MEMBERSHIP
+#-------------------------------------------------------------------------------
+
+def run_privileged_group_checks(
+    std_pass: str | None = None,
+) -> None:
+    """
+    Execute privileged group membership assessment checks.
+
+    This check evaluates membership of selected privileged Active Directory 
+    groups and compares membership levels against the number of enabled user 
+    accounts within the domain.
+
+    Findings are generated where privileged group membership exceeds the 
+    assessment threshold.
+    """
+
+    session_data = load_session()
+
+    print_section("Privileged Group Membership")
+
+    if std_pass is None:
+
+        std_pass = authenticate_standard_user()
+
+    with progress("Reviewing privileged group membership..."):
+
+        privileged_results, findings = (
+            privileged_groups_check(
+                session_data["dc_ip"],
+                session_data["standard_user"],
+                std_pass,
+            )
+        )
+
+    table = Table()
+
+    table.add_column("Group", style="cyan")
+    table.add_column("Members", style="green")
+    table.add_column("% Enabled Users", style="yellow")
+    table.add_column("Assessment", style="red")
+
+    for group, data in privileged_results["groups"].items():
+
+        percentage = data["percentage"]
+
+        table.add_row(
+            group,
+            str(data["member_count"]),
+            f"{percentage:.1f}%",
+            (
+                "[red]✗ Excessive[/red]"
+                if percentage >= 10.0
+                else "[green]✓ Normal[/green]"
+            ),
+        )
+
+    console.print(table)
+
+    write_markdown_report(
+        findings,
+        get_artefacts_dir()
+        / "findings-privileged-groups.md",
+    )
+
+#-------------------------------------------------------------------------------
 # SELECTED MODULES
 #-------------------------------------------------------------------------------
 
@@ -955,6 +1017,7 @@ AVAILABLE_CHECKS = {
     "maq": run_maq_checks,
     "dns": run_dns_checks,
     "pre2k": run_pre2k_checks,
+    "privileged": run_privileged_group_checks,
 }
 
 def run_selected_checks(
@@ -978,6 +1041,7 @@ def run_selected_checks(
         "maq",
         "dns",
         "pre2k",
+        "privileged",
     }
 
     requires_authentication = any(
@@ -1012,6 +1076,9 @@ def run_selected_checks(
 
         elif module == "prek2":
             run_pre2k_checks(std_pass)
+
+        elif module == "privileged":
+            run_privileged_group_checks(std_pass)
 
         else:
             print_error(f"Unknown module: {module}")
@@ -1053,3 +1120,7 @@ def run_checks() -> None:
     console.print()
 
     run_dns_checks(std_pass)
+
+    console.print()
+
+    run_privileged_group_checks(std_pass)
