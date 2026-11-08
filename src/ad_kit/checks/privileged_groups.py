@@ -11,8 +11,9 @@ administrative privileges.
 """
 
 from ad_kit.core.checks import run_check
-from ad_kit.core.finding import Finding
-from ad_kit.core.findings import load_finding
+from ad_kit.core.finding import Finding, load_finding
+from ad_kit.core.util import load_session, get_artefacts_dir
+
 
 
 PRIVILEGED_GROUPS = (
@@ -22,6 +23,8 @@ PRIVILEGED_GROUPS = (
     "Administrators",
     "DNSAdmins",
 )
+
+PRIVILEGED_GROUP_THRESHOLD = 10.0
 
 
 def privileged_groups_check(
@@ -62,33 +65,73 @@ def privileged_groups_check(
 
     findings: list[Finding] = []
 
-    # Enabled users
-    users_output = run_check(
-        "privileged-users",
-        [
-            "nxc",
-            "ldap",
-            dc_ip,
-            "-u",
-            username,
-            "-p",
-            password,
-            "--users",
-        ],
-    )
+    session_data = load_session()
+
+    excluded_users = {
+        user.lower()
+        for user in session_data.get("excluded_users", [])
+    }
 
     enabled_users = 0
 
-    for line in users_output.splitlines():
+    users_file = (
+        get_artefacts_dir()
+        / "domain-users-filtered.txt"
+    )
 
-        if (
-            "[+]" in line
-            or "[*]" in line
-            or not line.strip()
-        ):
-            continue
+    if users_file.exists():
 
-        enabled_users += 1
+        enabled_users = sum(
+            1
+            for line in users_file.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+
+    elif session_data.get("domain_users_filtered_count"):
+
+        enabled_users = session_data["domain_users_filtered_count"]
+
+    else:
+
+        users_output = run_check(
+            "privileged-users",
+            [
+                "nxc",
+                "ldap",
+                dc_ip,
+                "-u",
+                username,
+                "-p",
+                password,
+                "--users",
+            ],
+        )
+
+        parsing_users = False
+
+        for line in users_output.splitlines():
+
+            if "-Username-" in line:
+                parsing_users = True
+                continue
+
+            if not parsing_users:
+                continue
+
+            if not line.strip():
+                continue
+
+            parts = line.split()
+
+            if not parts:
+                continue
+
+            account_name = parts[-4]
+
+            if account_name.lower() in excluded_users:
+                continue
+
+            enabled_users += 1
 
     results["enabled_users"] = enabled_users
 
@@ -123,9 +166,13 @@ def privileged_groups_check(
 
             member = line.split()[-1].strip()
 
-            if member:
+            if not member:
+                continue
 
-                members.append(member)
+            if member.lower() in excluded_users:
+                continue
+
+            members.append(member)
 
         member_count = len(members)
 
@@ -142,7 +189,7 @@ def privileged_groups_check(
         }
 
         # Assessment threshold
-        if percentage >= 10.0:
+        if percentage >= PRIVILEGED_GROUP_THRESHOLD:
 
             finding = load_finding("privileged_groups", "PRIV-001")
 
@@ -157,6 +204,11 @@ def privileged_groups_check(
             finding.evidence.append(
                 f"'{group}' represented {percentage}% of the enabled user "
                 "population."
+            )
+
+            finding.evidence.append(
+                "This exceeded the privileged group assessment threshold of "
+                f"{PRIVILEGED_GROUP_THRESHOLD:.0f}%."
             )
 
             findings.append(finding)
