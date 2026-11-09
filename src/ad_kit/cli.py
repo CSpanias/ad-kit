@@ -352,6 +352,22 @@ def kerberoast() -> None:
     check.run_kerberoast_checks()
 
 #-------------------------------------------------------------------------------
+# CHECK ACTIVE DIRECTORY CERTIFICATE SERVICES
+#-------------------------------------------------------------------------------
+
+@check_app.command(
+    name="adcs",
+    help=("Review Active Directory Certificate Services (AD CS) configuration."
+    ),
+)
+def adcs() -> None:
+    """
+    Execute Active Directory Certificate Services (AD CS) assessment checks.
+    """
+
+    check.run_adcs_checks()
+
+#-------------------------------------------------------------------------------
 # CHECK SELECTED
 #-------------------------------------------------------------------------------
 @check_app.command(
