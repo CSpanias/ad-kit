@@ -97,6 +97,35 @@ As an example, the transferred artefacts can be directly used by [`password-audi
 
 ## Commands
 
+```bash
+$ ad-kit -h
+
+ Usage: ad-kit [OPTIONS] COMMAND [ARGS]...
+
+ Active Directory Assessment Toolkit.
+
+╭─Options──────────────────────────────────────────────────────────────────────╮
+│ --help  -h      <bool>  Show this message and exit.                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─Commands─────────────────────────────────────────────────────────────────────╮
+│ enum   Perform basic domain enumeration:                                     │
+│ tools  Manage assessment tools.                                              │
+│ check  Execute assessment checks.                                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples:
+
+     ad-kit tools install all
+     ad-kit tools install certipy
+     ad-kit tools status
+
+     ad-kit enum
+
+     ad-kit check all
+     ad-kit check ldap
+     ad-kit check ldap pass-pol
+```
+
 `tools` displays all tools registered in AD-Kit and their installation source:
 
 ```bash
@@ -105,30 +134,6 @@ $ ad-kit tools -h
 Usage: ad-kit tools [OPTIONS]
 
 Display all tools registered in AD-Kit and their installation source. 
-```
-
-`status` checks which registered tools are currently installed:
-
-```bash
-ad-kit status -h
-
-Usage: ad-kit status [OPTIONS]                                                           
-
-Check which registered tools are currently installed.
-```
-
-`install` installs one or more tools from the AD-Kit registry:
-
-```bash
-$ ad-kit install -h                     
-
-Usage: ad-kit install [OPTIONS] {tool}                                                           
-
-Install one or more tools from the AD-Kit registry. Use 'all' to install every registered tool.
-
-╭─Arguments───────────────────────────────────────────────────────────────────────────────────╮
-│ *    tool      <str>  Tool name or 'all'. [required]                                        │
-╰─────────────────────────────────────────────────────────────────────────────────────────────╯ 
 ```
 
 `enum` bootstraps an assessment:
@@ -140,11 +145,18 @@ Usage: ad-kit enum [OPTIONS]
 
 Perform basic domain enumeration:                                       
 
-• Discover the target domain        
-• Enumerate domain controllers       
+• Discover the target domain
+• Enumerate domain controllers
+• Configure NetExec's audit mode
 • Validate a standard user account
 • Validate a Domain Admin account
-• Collect BloodHound data using RustHound-CE 
+• Create user and machine account lists
+• Collect BloodHound data using RustHound-CE
+• Dump NTDS using secretsdump
+
+╭─Options──────────────────────────────────────────────────────────────────────╮
+│ --help  -h      <bool>  Show this message and exit.                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
 `check` executes AD assessment modules and generates Markdown findings with 
