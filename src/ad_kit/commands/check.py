@@ -35,7 +35,7 @@ from ad_kit.checks.smb import smb_configuration_check
 from ad_kit.checks.kerberoast import kerberoast_check
 from ad_kit.checks.dns import dns_record_creation_check
 from ad_kit.checks.pre2k import pre2k_check
-from src.ad_kit.checks.privileged_excessive import privileged_excessive_check
+from ad_kit.checks.privileged_excessive import privileged_excessive_check
 from ad_kit.core.console import (
     console, 
     print_section, 
