@@ -102,7 +102,7 @@ def delegation_check(
 
     if unconstrained_accounts:
 
-        finding = load_finding("delegation", "DELEG-001")
+        finding = load_finding("delegations", "DELEG-001")
 
         for account in sorted(unconstrained_accounts):
 
@@ -157,7 +157,7 @@ def delegation_check(
 
     if protocol_transition_accounts:
 
-        finding = load_finding("delegation", "DELEG-002")
+        finding = load_finding("delegations", "DELEG-002")
 
         for account in sorted(protocol_transition_accounts):
 
