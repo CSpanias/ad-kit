@@ -293,7 +293,7 @@ def pre2k() -> None:
     check.run_pre2k_checks()
 
 #-------------------------------------------------------------------------------
-# PRIVILEGED GROUPS
+# CHECK PRIVILEGED GROUPS
 #-------------------------------------------------------------------------------
 @check_app.command(
     name="privileged",
@@ -306,6 +306,20 @@ def privileged() -> None:
 
     check.run_privileged_group_checks()
 
+#-------------------------------------------------------------------------------
+# CHECK DELEGATION
+#-------------------------------------------------------------------------------
+
+@check_app.command(
+    name="delegation",
+    help="Review Active Directory delegation configuration.",
+)
+def delegation() -> None:
+    """
+    Execute Active Directory delegation assessment checks.
+    """
+
+    check.run_delegation_checks()
 
 #-------------------------------------------------------------------------------
 # CHECK SELECTED

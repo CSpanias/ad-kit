@@ -23,6 +23,7 @@ from ad_kit.core.checks import (
     validate_credentials,
     cleanup_test_artifact
 )
+from ad_kit.checks.delegation import delegation_check
 from ad_kit.checks.ldap import ldap_check
 from ad_kit.checks.maq import maq_check
 from ad_kit.checks.passwords import (
@@ -1008,6 +1009,65 @@ def run_privileged_group_checks(
     )
 
 #-------------------------------------------------------------------------------
+# DELEGATION
+#-------------------------------------------------------------------------------
+
+def run_delegation_checks(
+    std_pass: str | None = None,
+) -> None:
+    """
+    Execute Active Directory delegation assessment checks.
+
+    This check identifies accounts configured for Unconstrained Delegation and 
+    Kerberos Constrained Delegation with Protocol Transition.
+
+    Findings are generated where delegation configurations introduce an 
+    increased risk of impersonation, privilege escalation, or compromise of 
+    privileged accounts.
+    """
+
+    session_data = require_session()
+
+    print_section("Delegation")
+
+    if std_pass is None:
+
+        std_pass = authenticate_standard_user()
+
+    with progress("Reviewing delegation configuration..."):
+
+        delegation_results, findings = (
+            delegation_check(
+                session_data["dc_ip"],
+                session_data["standard_user"],
+                std_pass,
+            )
+        )
+
+    table = Table()
+
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row(
+        "Unconstrained Delegation",
+        str(len(delegation_results["unconstrained"])),
+    )
+
+    table.add_row(
+        "Protocol Transition",
+        str(len(delegation_results["protocol_transition"])),
+    )
+
+    console.print(table)
+
+    write_markdown_report(
+        findings,
+        get_artefacts_dir()
+        / "findings-delegation.md",
+    )
+
+#-------------------------------------------------------------------------------
 # SELECTED MODULES
 #-------------------------------------------------------------------------------
 
@@ -1019,6 +1079,7 @@ AVAILABLE_CHECKS = {
     "dns": run_dns_checks,
     "pre2k": run_pre2k_checks,
     "privileged": run_privileged_group_checks,
+    "delegation": run_delegation_checks,
 }
 
 def run_selected_checks(
@@ -1043,6 +1104,7 @@ def run_selected_checks(
         "dns",
         "pre2k",
         "privileged",
+        "delegation",
     }
 
     requires_authentication = any(
@@ -1080,6 +1142,9 @@ def run_selected_checks(
 
         elif module == "privileged":
             run_privileged_group_checks(std_pass)
+
+        elif module == "delegation":
+            run_delegation_checks(std_pass)
 
         else:
             print_error(f"Unknown module: {module}")
@@ -1129,3 +1194,7 @@ def run_checks() -> None:
     console.print()
 
     run_privileged_group_checks(std_pass)
+
+    console.print()
+
+    run_delegation_checks(std_pass)

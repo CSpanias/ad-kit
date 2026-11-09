@@ -1,0 +1,130 @@
+# ===========================================================================
+# DELEGATION FINDINGS
+#
+# Findings relating to Active Directory Kerberos delegation configurations.
+# 
+# These findings identify delegation mechanisms that may permit impersonation 
+# of domain users, expansion of an attacker's access, or facilitate privilege
+# escalation following compromise of a delegated account or system.
+# ===========================================================================
+
+DELEG-001:
+  id: DELEG-001
+
+  title: Unconstrained Delegation Enabled
+
+  commentary: |
+    A review of Active Directory (AD) delegation configurations identified one 
+    or more accounts configured with Unconstrained Delegation.
+
+    Unconstrained Delegation is a legacy Kerberos delegation mechanism that 
+    allows a service to impersonate users who authenticate to it when accessing 
+    other services within the domain.
+
+    When a user authenticates to a service configured for Unconstrained 
+    Delegation, their Ticket Granting Ticket (TGT) may be forwarded and cached 
+    in memory on the host. This enables the service to request additional 
+    Kerberos service tickets on behalf of the user.
+
+    If an attacker compromises a system hosting a delegated account or service, 
+    cached Kerberos credentials may be extracted and abused.
+
+    Where privileged users authenticate to the delegated system, compromise of 
+    cached credentials may facilitate impersonation of highly privileged 
+    accounts and provide a path to privilege escalation.
+
+    Abuse of Unconstrained Delegation has been demonstrated as an effective 
+    mechanism for obtaining privileged Kerberos credentials and may ultimately 
+    result in compromise of the wider AD environment.
+
+  remediation: |
+    Identify services and applications currently relying on accounts configured 
+    with Unconstrained Delegation and determine whether delegation remains 
+    operationally necessary.
+
+    Where delegation functionality is required, migrate configurations to 
+    Kerberos Constrained Delegation or Resource-Based Constrained Delegation 
+    (RBCD) where appropriate.
+
+    Remove the Unconstrained Delegation setting from affected accounts and 
+    systems wherever possible.
+
+    Ensure delegated services execute using dedicated service accounts with 
+    only the minimum privileges required for operation.
+
+    Consider migrating traditional service accounts to Group Managed Service 
+    Accounts (gMSAs) to improve credential management and reduce the risk 
+    associated with credential theft.
+
+    Monitor Kerberos authentication activity for anomalous delegation behaviour 
+    and investigate privileged account authentication to systems configured for 
+    delegation.
+
+  references:
+    - https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-constrained-delegation-overview
+    - https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-authentication-overview
+    - https://learn.microsoft.com/en-us/entra/architecture/service-accounts-govern-on-premises
+    - https://dirkjanm.io/krbrelayx-unconstrained-delegation-abuse-toolkit/
+
+DELEG-002:
+  id: DELEG-002
+
+  title: Kerberos Constrained Delegation with Protocol Transition Enabled
+
+  commentary: |
+    A review of Active Directory (AD) delegation configurations identified one 
+    or more accounts configured with Kerberos Constrained Delegation and 
+    Protocol Transition.
+
+    Protocol Transition allows delegated accounts to perform Service-for-User 
+    (S4U) operations, enabling the account to request Kerberos service tickets 
+    on behalf of domain users without requiring prior authentication from
+    those users.
+
+    Whilst this functionality is legitimate and is commonly used to support 
+    application and service requirements, it significantly increases the impact 
+    of account compromise.
+
+    An attacker who obtains control of a delegated account may be able to abuse 
+    Kerberos delegation functionality to impersonate domain users to configured 
+    services.
+
+    Depending on the delegated targets, account privileges, and availability of 
+    credential material, abuse of Protocol Transition may facilitate privilege 
+    escalation, access to sensitive systems, and lateral movement within the 
+    environment.
+
+    Excessive delegation privileges should be carefully reviewed, particularly 
+    where delegation targets include administrative or otherwise 
+    business-critical systems.
+
+  remediation: |
+    Review all accounts configured with Kerberos Constrained Delegation and 
+    determine whether Protocol Transition remains operationally necessary.
+
+    Remove Protocol Transition from delegation configurations unless there is a 
+    documented business requirement for its use.
+
+    Restrict delegation targets to only those services required for application
+    functionality and avoid delegating access to high-value systems wherever 
+    possible.
+
+    Apply the setting 'Account is sensitive and cannot be delegated' to 
+    privileged and administrative accounts to prevent delegated authentication.
+
+    Limit delegation privileges to dedicated service accounts with clearly 
+    defined operational requirements and ensure such accounts are appropriately 
+    protected.
+
+    Consider migrating service accounts to Group Managed Service Accounts 
+    (gMSAs) where possible to improve credential hygiene and reduce the 
+    likelihood of credential exposure.
+
+    Monitor Kerberos activity for S4U operations, delegated authentication 
+    activity, and other anomalous ticket requests that may indicate delegation 
+    abuse.
+
+  references:
+    - https://www.tiraniddo.dev/2022/05/exploiting-rbcd-using-normal-user.html
+    - https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-constrained-delegation-overview
+    - https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-authentication-overview
