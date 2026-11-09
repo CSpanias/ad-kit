@@ -1,34 +1,27 @@
 """
 Privileged group assessment checks.
 
-This module implements checks relating to privileged
-Active Directory group membership.
+This module implements checks relating to privileged Active Directory group 
+membership.
 
-Checks implemented within this module are intended
-to identify situations where a disproportionate
-number of enabled user accounts hold elevated
-administrative privileges.
+Checks implemented within this module are intended to identify situations where 
+a disproportionate number of enabled user accounts hold elevated administrative 
+privileges.
 """
 
-from ad_kit.core.checks import run_check
+from ad_kit.core.privileged import (
+    PRIVILEGED_GROUPS,
+    get_privileged_group_members,
+)
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
 from ad_kit.core.util import load_session, get_artefacts_dir
 
 
-
-PRIVILEGED_GROUPS = (
-    "Domain Admins",
-    "Enterprise Admins",
-    "Schema Admins",
-    "Administrators",
-    "DNSAdmins",
-)
-
 PRIVILEGED_GROUP_THRESHOLD = 10.0
 
 
-def privileged_groups_check(
+def privileged_excessive_check(
     dc_ip: str,
     username: str,
     password: str,
@@ -154,44 +147,17 @@ def privileged_groups_check(
     results["enabled_users"] = enabled_users
 
     # Privileged groups
+    group_memberships = (
+        get_privileged_group_members(
+            dc_ip,
+            username,
+            password,
+        )
+    )
+
     for group in PRIVILEGED_GROUPS:
 
-        output = run_check(
-            f"privileged-{group.lower().replace(' ', '-')}",
-            [
-                "nxc",
-                "ldap",
-                dc_ip,
-                "-u",
-                username,
-                "-p",
-                password,
-                "--groups",
-                group,
-            ],
-        )
-
-        members = []
-
-        for line in output.splitlines():
-
-            if (
-                "[+]" in line
-                or "[*]" in line
-                or not line.strip()
-            ):
-                continue
-
-            member = line.split()[-1].strip()
-
-            if not member:
-                continue
-
-            if member.lower() in excluded_users:
-                continue
-
-            members.append(member)
-
+        members = group_memberships[group]
         member_count = len(members)
 
         percentage = (
@@ -213,24 +179,23 @@ def privileged_groups_check(
 
     if excessive_groups:
 
-        finding = load_finding("privileged_groups", "PRIV-001")
+        finding = load_finding("privileged_excessive", "PRIV-001")
 
         finding.evidence.append(
-            f"The domain contained {enabled_users} enabled user "
-            "accounts following exclusion of testing accounts used "
-            "during the assessment."
+            f"The domain contained {enabled_users} enabled user accounts "
+            "following exclusion of testing accounts used during the "
+            "assessment."
         )
 
         for group, member_count, percentage in excessive_groups:
 
             finding.evidence.append(
-                f"The '{group}' group contained {member_count} "
-                "member(s)."
+                f"The '{group}' group contained {member_count} member(s)."
             )
 
             finding.evidence.append(
-                f"'{group}' represented {percentage}% of the enabled "
-                "user population."
+                f"'{group}' represented {percentage}% of the enabled user "
+                "population."
             )
 
         finding.evidence.append(

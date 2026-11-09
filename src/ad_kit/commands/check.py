@@ -32,9 +32,10 @@ from ad_kit.checks.passwords import (
     password_policy_assessment
 )
 from ad_kit.checks.smb import smb_configuration_check
+from ad_kit.checks.kerberoast import kerberoast_check
 from ad_kit.checks.dns import dns_record_creation_check
 from ad_kit.checks.pre2k import pre2k_check
-from ad_kit.checks.privileged_groups import privileged_groups_check
+from src.ad_kit.checks.privileged_excessive import privileged_groups_check
 from ad_kit.core.console import (
     console, 
     print_section, 
@@ -1115,19 +1116,74 @@ def run_asreproast_checks() -> None:
     )
 
 #-------------------------------------------------------------------------------
+# KERBEROASTING
+#-------------------------------------------------------------------------------
+
+def run_kerberoast_checks(
+    std_pass: str | None = None,
+) -> None:
+    """
+    Execute Kerberoasting assessment checks.
+
+    This check identifies Active Directory accounts associated with Service 
+    Principal Names (SPNs).
+
+    Findings are generated where Kerberos service tickets can be requested and 
+    subjected to offline password cracking attacks.
+    """
+
+    session_data = require_session()
+
+    print_section("Kerberoasting")
+
+    if std_pass is None:
+
+        std_pass = authenticate_standard_user()
+
+    with progress("Checking for Kerberoastable accounts..."):
+
+        kerberoast_results, findings = (
+            kerberoast_check(
+                session_data["dc_ip"],
+                session_data["domain"],
+                session_data["standard_user"],
+                std_pass,
+            )
+        )
+
+    table = Table()
+
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row(
+        "Kerberoastable Accounts",
+        str(kerberoast_results["account_count"]),
+    )
+
+    console.print(table)
+
+    write_markdown_report(
+        findings,
+        get_artefacts_dir()
+        / "findings-kerberoast.md",
+    )
+
+#-------------------------------------------------------------------------------
 # SELECTED MODULES
 #-------------------------------------------------------------------------------
 
 AVAILABLE_CHECKS = {
     "ldap": run_ldap_checks,
     "smb": run_smb_checks,
+    "asreproast": run_asreproast_checks,
     "pass-pol": run_password_policy_checks,
     "maq": run_maq_checks,
     "dns": run_dns_checks,
     "pre2k": run_pre2k_checks,
     "privileged": run_privileged_group_checks,
     "delegation": run_delegation_checks,
-    "asreproast": run_asreproast_checks,
+    "kerberoast": run_kerberoast_checks,
 }
 
 def run_selected_checks(
@@ -1153,6 +1209,7 @@ def run_selected_checks(
         "pre2k",
         "privileged",
         "delegation",
+        "kerberoast",
     }
 
     requires_authentication = any(
@@ -1196,6 +1253,9 @@ def run_selected_checks(
 
         elif module == "asreproast":
             run_asreproast_checks()
+
+        elif module == "kerberoast":
+            run_kerberoast_checks(std_pass)
 
         else:
             print_error(f"Unknown module: {module}")
@@ -1253,3 +1313,7 @@ def run_checks() -> None:
     console.print()
 
     run_delegation_checks(std_pass)
+
+    console.print()
+
+    run_kerberoast_checks(std_pass)

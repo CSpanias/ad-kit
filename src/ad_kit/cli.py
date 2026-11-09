@@ -225,6 +225,21 @@ def smb() -> None:
     check.run_smb_checks()
 
 #-------------------------------------------------------------------------------
+# CHECK AS-REP ROASTING
+#-------------------------------------------------------------------------------
+
+@check_app.command(
+    name="asreproast",
+    help="Identify accounts susceptible to AS-REP roasting.",
+)
+def asreproast() -> None:
+    """
+    Execute AS-REP roasting assessment checks.
+    """
+
+    check.run_asreproast_checks()
+
+#-------------------------------------------------------------------------------
 # CHECK PASSWORD POLICY MODULE
 #-------------------------------------------------------------------------------
 @check_app.command(
@@ -322,19 +337,19 @@ def delegation() -> None:
     check.run_delegation_checks()
 
 #-------------------------------------------------------------------------------
-# CHECK AS-REP ROASTING
+# CHECK KERBEROASTING
 #-------------------------------------------------------------------------------
 
 @check_app.command(
-    name="asreproast",
-    help="Identify accounts susceptible to AS-REP roasting.",
+    name="kerberoast",
+    help="Identify Kerberoastable accounts.",
 )
-def asreproast() -> None:
+def kerberoast() -> None:
     """
-    Execute AS-REP roasting assessment checks.
+    Execute Kerberoasting assessment checks.
     """
 
-    check.run_asreproast_checks()
+    check.run_kerberoast_checks()
 
 #-------------------------------------------------------------------------------
 # CHECK SELECTED

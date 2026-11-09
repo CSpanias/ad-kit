@@ -1,0 +1,122 @@
+# ===========================================================================
+# KERBEROASTING FINDINGS
+#
+# Findings relating to Active Directory accounts associated with Service
+# Principal Names (SPNs).
+#
+# These findings identify accounts for which Kerberos service tickets can
+# be requested and obtained, potentially exposing password-derived
+# authentication material to offline password cracking attacks.
+# ===========================================================================
+
+KERB-001:
+  id: KERB-001
+
+  title: Kerberoastable Accounts Identified
+
+  commentary: |
+    A review of Active Directory (AD) account configurations identified one or 
+    more accounts associated with Service Principal Names (SPNs).
+
+    SPNs are commonly used by applications and services to facilitate Kerberos
+    authentication. Where an SPN is associated with an account, an attacker may 
+    request a Kerberos service ticket for that service.
+
+    The returned service ticket contains password-derived cryptographic 
+    material that can be subjected to offline brute-force and dictionary 
+    attacks, a technique commonly referred to as Kerberoasting.
+
+    Because password cracking is performed offline, the activity does not 
+    generate additional authentication attempts against Active Directory and 
+    may therefore be difficult to detect through conventional account lockout 
+    controls and authentication monitoring.
+
+    Successful recovery of an affected account's password may provide an 
+    attacker with valid domain credentials, facilitating unauthorised access to 
+    corporate resources, domain enumeration, privilege escalation, and lateral 
+    movement.
+
+    Whilst exposure to Kerberoasting attacks is inherent to Kerberos service 
+    authentication, the likelihood of successful exploitation is largely 
+    dependent upon password strength and credential management practices.
+
+  remediation: |
+    Identify all service accounts associated with Service Principal Names and 
+    verify that each account remains operationally required.
+
+    Enforce strong password policies for service accounts, including long, 
+    unique passwords that are resistant to brute-force and dictionary attacks.
+
+    Review service account privileges and ensure only the minimum permissions 
+    required for operation are assigned.
+
+    Where possible, migrate traditional service accounts to Group Managed 
+    Service Accounts (gMSAs) to improve credential management, automate 
+    password rotation, and reduce the likelihood of password compromise.
+
+    Periodically review SPN registrations and remove obsolete, unused, or 
+    legacy service configurations.
+
+    Monitor Kerberos authentication activity and investigate unusual service 
+    ticket requests involving sensitive or high-value accounts.
+
+  references:
+    - https://learn.microsoft.com/en-us/entra/architecture/service-accounts-govern-on-premises
+    - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/group-managed-service-accounts/group-managed-service-accounts/group-managed-service-accounts-overview
+    - https://infrasos.com/kerberoasting-attack-detection-prevention-mitigation
+
+KERB-002:
+  id: KERB-002
+
+  title: Service Principal Names Assigned to Privileged Accounts
+
+  commentary: |
+    A review of Active Directory (AD) configurations identified one or more
+    privileged accounts associated with Service Principal Names (SPNs).
+
+    SPNs are typically assigned to dedicated service accounts and facilitate 
+    Kerberos authentication for applications and services. Assigning SPNs to 
+    privileged administrative accounts is considered poor security practice and 
+    introduces unnecessary risk.
+
+    Accounts associated with SPNs may be targeted through Kerberos service 
+    ticket requests, enabling attackers to obtain service tickets that can be 
+    subjected to offline password cracking attacks, commonly referred to as
+    Kerberoasting.
+
+    Where an SPN is associated with an account holding elevated privileges, 
+    successful password recovery may provide an attacker with immediate 
+    privileged access and a direct path towards compromise of the wider AD 
+    environment.
+
+    SPNs may become associated with privileged accounts through historical 
+    service configurations, legacy application deployments, temporary testing 
+    activities, or misconfigurations where dedicated service accounts were not 
+    provisioned.
+
+  remediation: |
+    Inventory and review all Service Principal Names (SPNs) configured on 
+    privileged accounts and determine whether the associated services remain 
+    operationally required.
+
+    Establish dedicated service accounts for application and service workloads 
+    and ensure only the minimum permissions required for operation are assigned.
+
+    Reassign SPNs from privileged administrative accounts to dedicated service 
+    accounts wherever possible.
+
+    Remove unnecessary administrative privileges from service accounts and 
+    review group memberships to ensure adherence to the Principle of Least 
+    Privilege (PoLP).
+
+    Remove SPNs from privileged accounts once migration activities have been 
+    completed and validated.
+
+    Consider implementing Group Managed Service Accounts (gMSAs) in accordance 
+    with Microsoft best practices to provide secure service authentication and 
+    automated password management.
+
+  references:
+    - https://learn.microsoft.com/en-us/entra/architecture/service-accounts-govern-on-premises
+    - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/group-managed-service-accounts/group-managed-service-accounts/group-managed-service-accounts-overview
+    - https://infrasos.com/kerberoasting-attack-detection-prevention-mitigation
