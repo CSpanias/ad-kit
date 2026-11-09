@@ -298,11 +298,9 @@ def authenticate_standard_user() -> str:
     """
     Prompt for and validate Standard User credentials.
 
-    The user is prompted to enter the password for the
-    Standard User account stored in the assessment
-    session. Authentication is validated against the
-    target domain before authenticated checks are
-    executed.
+    The user is prompted to enter the password for the Standard User account 
+    stored in the assessment session. Authentication is validated against the
+    target domain before authenticated checks are executed.
 
     Returns:
         The validated Standard User password.

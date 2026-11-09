@@ -29,21 +29,18 @@ def load_finding(
 
     Args:
         category:
-            Finding category name (e.g. ldap, smb,
-            passwords).
+            Finding category name (e.g. ldap, smb, passwords).
 
         finding_id:
-            Unique finding identifier
-            (e.g. LDAP-001, SMB-001).
+            Unique finding identifier (e.g. LDAP-001, SMB-001).
 
     Returns:
         A populated Finding instance.
 
     Raises:
         RuntimeError:
-            If the findings file cannot be located or
-            the specified finding definition does not
-            exist.
+            If the findings file cannot be located or the specified finding 
+            definition does not exist.
     """
 
     findings_file = (

@@ -128,3 +128,60 @@ DELEG-002:
     - https://www.tiraniddo.dev/2022/05/exploiting-rbcd-using-normal-user.html
     - https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-constrained-delegation-overview
     - https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-authentication-overview
+
+DELEG-003:
+  id: DELEG-003
+
+  title: Delegation Configured on Privileged Accounts
+
+  commentary: |
+    A review of Active Directory (AD) delegation configurations identified one 
+    or more privileged accounts configured with Kerberos delegation 
+    functionality.
+
+    Delegation mechanisms allow an account or service to authenticate on behalf 
+    of other users when accessing additional services within the domain. Whilst 
+    delegation may be required to support legitimate business and application 
+    requirements, assigning such functionality to privileged accounts increases 
+    the potential impact of account compromise.
+
+    Privileged accounts typically possess administrative access to critical 
+    systems, services, and AD resources. Where such accounts are also 
+    configured for delegation, an attacker may be able to abuse delegation 
+    functionality to impersonate users, access sensitive systems, or expand an 
+    existing foothold within the environment.
+
+    Delegation assigned to privileged accounts should be considered carefully 
+    and justified by a clearly defined operational requirement. Unnecessary 
+    delegation permissions increase attack surface and may facilitate privilege 
+    escalation, lateral movement, and compromise of business-critical systems.
+
+  remediation: |
+    Review all privileged accounts configured with Kerberos delegation and 
+    confirm that delegation remains necessary to support operational 
+    requirements.
+
+    Remove delegation permissions from privileged accounts wherever possible 
+    and implement dedicated service accounts for services requiring delegated 
+    authentication.
+
+    Restrict delegation functionality to the minimum number of accounts 
+    necessary and ensure delegated accounts operate with only the permissions 
+    required to perform their intended function.
+
+    Apply the Principle of Least Privilege (PoLP) to administrative and service
+    accounts and avoid combining elevated administrative privileges with 
+    delegation permissions wherever possible.
+
+    Consider implementing Group Managed Service Accounts (gMSAs) for delegated 
+    services to improve credential management and reduce the impact of service 
+    account compromise.
+
+    Periodically review delegation configurations and privileged group 
+    memberships to identify unnecessary privilege assignments and excessive 
+    delegation permissions.
+
+  references:
+    - https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-constrained-delegation-overview
+    - https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-authentication-overview
+    - https://learn.microsoft.com/en-us/entra/architecture/service-accounts-govern-on-premises

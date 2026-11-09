@@ -8,15 +8,10 @@ Checks implemented within this module are intended to identify accounts
 susceptible to AS-REP roasting attacks.
 """
 
-from pathlib import Path
-
 from ad_kit.core.checks import run_check
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
-from ad_kit.core.util import (
-    get_artefacts_dir,
-    load_session,
-)
+from ad_kit.core.util import get_artefacts_dir
 
 
 def asreproast_check(
@@ -50,8 +45,6 @@ def asreproast_check(
     }
 
     findings: list[Finding] = []
-
-    session_data = load_session()
 
     users_file = (
         get_artefacts_dir()
