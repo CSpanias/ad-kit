@@ -322,6 +322,21 @@ def delegation() -> None:
     check.run_delegation_checks()
 
 #-------------------------------------------------------------------------------
+# CHECK AS-REP ROASTING
+#-------------------------------------------------------------------------------
+
+@check_app.command(
+    name="asreproast",
+    help="Identify accounts susceptible to AS-REP roasting.",
+)
+def asreproast() -> None:
+    """
+    Execute AS-REP roasting assessment checks.
+    """
+
+    check.run_asreproast_checks()
+
+#-------------------------------------------------------------------------------
 # CHECK SELECTED
 #-------------------------------------------------------------------------------
 @check_app.command(

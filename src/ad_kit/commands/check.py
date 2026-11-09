@@ -23,6 +23,7 @@ from ad_kit.core.checks import (
     validate_credentials,
     cleanup_test_artifact
 )
+from ad_kit.checks.asreproast import asreproast_check
 from ad_kit.checks.delegations import delegation_check
 from ad_kit.checks.ldap import ldap_check
 from ad_kit.checks.maq import maq_check
@@ -1068,6 +1069,52 @@ def run_delegation_checks(
     )
 
 #-------------------------------------------------------------------------------
+# AS-REP ROASTING
+#-------------------------------------------------------------------------------
+
+def run_asreproast_checks() -> None:
+    """
+    Execute AS-REP roasting assessment checks.
+
+    This check identifies Active Directory accounts configured without Kerberos 
+    pre-authentication.
+
+    Findings are generated where accounts are susceptible to AS-REP roasting 
+    attacks.
+    """
+
+    session_data = require_session()
+
+    print_section("AS-REP Roasting")
+
+    with progress("Checking for AS-REP roastable accounts..."):
+
+        asrep_results, findings = (
+            asreproast_check(
+                session_data["dc_ip"],
+                session_data["domain"],
+            )
+        )
+
+    table = Table()
+
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row(
+        "AS-REP Roastable Accounts",
+        str(asrep_results["account_count"]),
+    )
+
+    console.print(table)
+
+    write_markdown_report(
+        findings,
+        get_artefacts_dir()
+        / "findings-asreproast.md",
+    )
+
+#-------------------------------------------------------------------------------
 # SELECTED MODULES
 #-------------------------------------------------------------------------------
 
@@ -1080,6 +1127,7 @@ AVAILABLE_CHECKS = {
     "pre2k": run_pre2k_checks,
     "privileged": run_privileged_group_checks,
     "delegation": run_delegation_checks,
+    "asreproast": run_asreproast_checks,
 }
 
 def run_selected_checks(
@@ -1146,6 +1194,9 @@ def run_selected_checks(
         elif module == "delegation":
             run_delegation_checks(std_pass)
 
+        elif module == "asreproast":
+            run_asreproast_checks()
+
         else:
             print_error(f"Unknown module: {module}")
 
@@ -1169,6 +1220,10 @@ def run_checks() -> None:
     console.print()
 
     run_smb_checks()
+
+    console.print()
+
+    run_asreproast_checks
 
     console.print()
 

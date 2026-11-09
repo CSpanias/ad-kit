@@ -1,0 +1,74 @@
+# ===========================================================================
+# AS-REP ROASTING FINDINGS
+#
+# Findings relating to Active Directory accounts configured without Kerberos 
+# pre-authentication.
+#
+# These findings identify accounts susceptible to AS-REP roasting attacks,
+# enabling attackers to obtain Kerberos authentication material and perform
+# offline password cracking without prior authentication.
+# ===========================================================================
+
+ASREP-001:
+  id: ASREP-001
+
+  title: Accounts Susceptible to AS-REP Roasting
+
+  commentary: |
+    A review of Active Directory (AD) account configurations identified one or 
+    more user accounts configured without Kerberos pre-authentication.
+
+    Accounts configured with the setting 'Do not require Kerberos 
+    pre-authentication' are susceptible to AS-REP roasting attacks.
+
+    An attacker may request Kerberos Authentication Service Responses (AS-REPs) 
+    from the Key Distribution Centre (KDC) without first providing valid 
+    credentials for the affected account.
+
+    The returned AS-REP response contains password-derived cryptographic 
+    material that can be subjected to offline brute-force and dictionary 
+    attacks without generating additional authentication attempts against 
+    Active Directory.
+
+    Because password cracking is performed offline, the attack generates 
+    minimal authentication activity and may be difficult to detect through
+    conventional monitoring of authentication events.
+
+    Successful recovery of affected account passwords may provide an attacker 
+    with valid domain credentials, facilitating unauthorised access to 
+    corporate resources, domain enumeration, privilege escalation, and lateral
+    movement.
+
+    Whilst exposure of AS-REP responses enables offline password attacks, the 
+    primary factor determining exploitability is password strength. Weak 
+    passwords significantly increase the likelihood of successful credential 
+    recovery.
+
+  remediation: |
+    Identify all accounts configured without Kerberos pre-authentication and 
+    determine whether the setting remains operationally necessary.
+
+    Enable Kerberos pre-authentication for affected accounts wherever possible 
+    to prevent retrieval of AS-REP responses without prior authentication.
+
+    Enforce strong password policies requiring unique and sufficiently complex 
+    passwords, particularly for privileged, administrative, service, and legacy 
+    accounts.
+
+    Implement Multi-Factor Authentication (MFA) for privileged accounts to 
+    reduce the impact of potential credential compromise.
+
+    Periodically review account configurations to identify accounts that do not 
+    require Kerberos pre-authentication and remove unnecessary exceptions.
+
+    Monitor Kerberos authentication activity for unusual AS-REQ and AS-REP 
+    activity and investigate unexpected requests involving privileged or 
+    sensitive accounts.
+
+    Legacy applications requiring disabled pre-authentication should be 
+    reviewed and remediated where operationally feasible.
+
+  references:
+    - https://attack.mitre.org/techniques/T1558/004/
+    - https://www.thehacker.recipes/ad/movement/kerberos/asreproast
+    - https://itpeoplenetwork.com/blog/itsecurity/Understanding-AS-REP-Roasting-Threat-Analysis-and-Prevention-Strategies.html
