@@ -23,7 +23,7 @@ from ad_kit.core.checks import (
     validate_credentials,
     cleanup_test_artifact
 )
-from ad_kit.checks.delegation import delegation_check
+from ad_kit.checks.delegations import delegation_check
 from ad_kit.checks.ldap import ldap_check
 from ad_kit.checks.maq import maq_check
 from ad_kit.checks.passwords import (
