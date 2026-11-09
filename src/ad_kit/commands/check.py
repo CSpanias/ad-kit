@@ -17,6 +17,11 @@ import typer
 
 from rich.table import Table
 
+from ad_kit.checks.adcs import (
+    adcs_check,
+    SUPPORTED_ESC_CLASSES,
+    SUPPORTED_ESC_FINDINGS,
+)
 from ad_kit.core.checks import (
     load_domain_computers,
     load_dc_hostnames,
@@ -1167,6 +1172,69 @@ def run_kerberoast_checks(
     )
 
 #-------------------------------------------------------------------------------
+# ACTIVE DIRECTORY CERTIFICATE SERVICES
+#-------------------------------------------------------------------------------
+
+def run_adcs_checks(
+    std_pass: str | None = None,
+) -> None:
+    """
+    Execute Active Directory Certificate Services (AD CS) assessment checks.
+
+    This check identifies known ESC attack paths within ADCS certificate 
+    templates and Certification Authorities.
+
+    Findings are currently generated for ESC1, ESC8 and ESC15. Additional ESC
+    classifications are reported for visibility.
+    """
+
+    session_data = require_session()
+
+    print_section("Active Directory Certificate Services")
+
+    if std_pass is None:
+
+        std_pass = authenticate_standard_user()
+
+    with progress("Reviewing AD CS configuration..."):
+
+        adcs_results, findings = (
+            adcs_check(
+                session_data["dc_ip"],
+                session_data["domain"],
+                session_data["standard_user"],
+                std_pass,
+            )
+        )
+
+    table = Table()
+
+    table.add_column("ESC Path", style="cyan")
+    table.add_column("Count", style="green")
+
+    for esc in SUPPORTED_ESC_CLASSES:
+
+        count = len(adcs_results.get(esc, []))
+
+        if count == 0:
+            continue
+
+        table.add_row(esc, str(count))
+
+    console.print(table)
+
+    print_info(
+        "Findings are currently generated for ESC1, ESC8 and ESC15. Other "
+        "identified ESC classifications are reported for visibility only."
+    )
+
+    write_markdown_report(
+        findings,
+        get_artefacts_dir()
+        / "findings-adcs.md",
+    )
+
+#-------------------------------------------------------------------------------
 # SELECTED MODULES
 #-------------------------------------------------------------------------------
 
@@ -1181,6 +1249,7 @@ AVAILABLE_CHECKS = {
     "privileged": run_privileged_group_checks,
     "delegation": run_delegation_checks,
     "kerberoast": run_kerberoast_checks,
+    "adcs": run_adcs_checks,
 }
 
 def run_selected_checks(
@@ -1207,6 +1276,7 @@ def run_selected_checks(
         "privileged",
         "delegation",
         "kerberoast",
+        "adcs",
     }
 
     requires_authentication = any(
@@ -1253,6 +1323,9 @@ def run_selected_checks(
 
         elif module == "kerberoast":
             run_kerberoast_checks(std_pass)
+
+        elif module == "adcs":
+            run_adcs_checks(std_pass)
 
         else:
             print_error(f"Unknown module: {module}")
@@ -1314,3 +1387,7 @@ def run_checks() -> None:
     console.print()
 
     run_kerberoast_checks(std_pass)
+
+    console.print()
+
+    run_adcs_checks(std_pass)

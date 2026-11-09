@@ -1,0 +1,191 @@
+# ===========================================================================
+# ACTIVE DIRECTORY CERTIFICATE SERVICES (AD CS) FINDINGS
+#
+# Findings relating to insecure Active Directory Certificate Services
+# (AD CS) configurations.
+#
+# These findings identify certificate templates, certification authority
+# settings, and enrolment mechanisms vulnerable to known Active Directory
+# Certificate Services abuse techniques, including privilege escalation,
+# persistence, impersonation, and domain compromise attack paths commonly
+# referred to as ESC vulnerabilities.
+#
+# Vulnerability classifications are based on the research published by
+# SpecterOps in "Certified Pre-Owned" and corresponding ESC attack path
+# definitions implemented by Certipy.
+# ===========================================================================
+
+ADCS-ESC1:
+  id: ADCS-ESC1
+
+  title: Vulnerable Certificate Template (ESC1)
+
+  commentary: |
+    A review of Active Directory Certificate Services (AD CS) identified one or 
+    more certificate templates vulnerable to the ESC1 attack path.
+
+    ESC1 vulnerabilities occur when certificate templates permit 
+    enrollee-supplied subject information whilst also allowing low-privileged
+    users to enrol for certificates capable of supporting authentication.
+
+    Under these circumstances, an attacker may request a certificate on behalf 
+    of another domain account, including privileged users, without knowledge of 
+    the target account's password.
+
+    Because certificates issued by an Enterprise Certification Authority may be 
+    used as an alternative authentication mechanism within Active Directory, 
+    successful exploitation may facilitate privilege escalation, persistence,
+    lateral movement, and compromise of the wider Active Directory (AD) 
+    environment.
+
+    Certificate-based authentication is highly trusted within AD environments
+    and certificates often remain valid for extended periods, increasing the 
+    potential impact of successful exploitation.
+
+  remediation: |
+    Review all published certificate templates and identify templates 
+    permitting enrollee-supplied subject information.
+
+    Disable the 'Supply in the request' setting on templates where it is not 
+    operationally required.
+
+    Restrict certificate enrolment permissions to authorised users and groups 
+    with a legitimate business requirement.
+
+    Remove authentication-capable Extended Key Usages (EKUs) from templates 
+    where certificate-based authentication is not required.
+
+    Enable CA Manager Approval and authorised signatures for sensitive 
+    templates wherever possible.
+
+    Review previously issued certificates and revoke any certificates that 
+    cannot be validated as legitimate.
+
+  references:
+    - https://github.com/ly4k/Certipy/wiki/06-‐-Privilege-Escalation#esc1-enrollee-supplied-subject-for-client-authentication
+    - https://specterops.io/blog/2021/06/17/certified-pre-owned/
+    - https://www.specterops.io/assets/resources/Certified_Pre-Owned.pdf
+
+ADCS-ESC8:
+  id: ADCS-ESC8
+
+  title: NTLM Relay to AD CS Web Enrollment (ESC8)
+
+  commentary: |
+    A review of the Active Directory Certificate Services (AD CS) deployment 
+    identified a configuration vulnerable to the ESC8 attack path.
+
+    ESC8 vulnerabilities occur when HTTP-based certificate enrolment services 
+    permit NTLM authentication without adequate protections against NTLM relay 
+    attacks.
+
+    Under these circumstances, an attacker may coerce a user or computer 
+    account to perform NTLM authentication and relay the resulting 
+    authentication to an AD CS enrolment endpoint.
+
+    If a certificate is successfully issued for the relayed identity, the 
+    attacker may obtain an authentication certificate capable of being used as 
+    an alternative credential within Active Directory (AD).
+
+    Because certificate-based authentication is highly trusted within AD,
+    successful exploitation may facilitate privilege escalation, persistence, 
+    lateral movement, and potentially compromise of the wider domain 
+    environment.
+
+    Certificates often remain valid for extended periods and may continue to 
+    provide access long after the original relay attack has occurred.
+
+  remediation: |
+    Review all AD CS web enrolment services and implement protections designed 
+    to prevent NTLM relay attacks.
+
+    Enable Extended Protection for Authentication (EPA) on IIS-hosted AD CS
+    services and configure EPA as Required wherever operationally feasible.
+
+    Configure certificate enrolment services to use HTTPS exclusively and 
+    remove unnecessary HTTP bindings.
+
+    Review whether NTLM authentication is required for certificate enrolment 
+    services and prefer Kerberos-based authentication where possible.
+
+    Remove or disable AD CS web enrolment services that are no longer required 
+    for business operations.
+
+    Review certificate templates and enrolment permissions to ensure 
+    certificates can only be requested by authorised users and systems.
+
+    Monitor certificate enrolment activity and investigate unusual certificate 
+    requests, particularly those involving privileged users and computer 
+    accounts.
+
+  references:
+    - https://github.com/ly4k/Certipy/wiki/06-‐-Privilege-Escalation#esc8-ntlm-relay-to-ad-cs-web-enrollment
+    - https://learn.microsoft.com/en-us/dotnet/framework/wcf/feature-details/extended-protection-for-authentication-overview
+    - https://support.microsoft.com/en-us/servicing/os/windows/2022/11/kb5021989-extended-protection-for-authentication
+    - https://specterops.io/wp-content/uploads/sites/3/2022/06/Certified_Pre-Owned.pdf
+
+ADCS-ESC15:
+  id: ADCS-ESC15
+
+  title: Vulnerable Certificate Template (ESC15)
+
+  commentary: |
+    A review of Active Directory Certificate Services (AD CS) identified one or 
+    more certificate templates vulnerable to the ESC15 attack path.
+
+    ESC15 vulnerabilities affect legacy Version 1 certificate templates that 
+    permit enrollee-supplied subject information and do not properly validate 
+    Application Policies supplied within certificate requests.
+
+    Under these circumstances, an attacker may be able to request certificates 
+    containing attacker-controlled authentication-related attributes capable of 
+    facilitating impersonation of another domain user.
+
+    If a certificate issued from the affected template can be mapped to a 
+    privileged Active Directory (AD) account, the certificate may be used as an 
+    alternative authentication mechanism without knowledge of the target 
+    account's password.
+
+    Because certificates issued by an Enterprise Certification Authority are 
+    highly trusted within AD environments, successful exploitation may 
+    facilitate privilege escalation, persistence, lateral movement, and 
+    compromise of the wider AD environment.
+
+    Certificate-based authentication often remains valid for extended periods 
+    and may provide an attacker with persistent access long after the original 
+    compromise has occurred.
+
+  remediation: |
+    Apply Microsoft security updates addressing CVE-2024-49019 to all Active 
+    Directory Certificate Services (ADCS) Certification Authority servers.
+
+    Review all published Version 1 certificate templates and identify templates 
+    permitting enrollee-supplied subject information.
+
+    Restrict enrolment permissions to authorised users and groups with a 
+    legitimate business requirement and remove unnecessary access granted to 
+    low-privileged users wherever possible.
+
+    Upgrade legacy Version 1 certificate templates to Version 2 or later where
+    operationally feasible to improve control over certificate requests and 
+    template configuration.
+
+    Review certificate templates permitting authentication-related 
+    functionality and verify that Application Policies and Extended Key Usages 
+    (EKUs) are configured appropriately.
+
+    Enable CA Manager Approval and require authorised signatures for sensitive
+    certificate templates wherever possible.
+
+    Review previously issued certificates and revoke certificates that cannot 
+    be verified as legitimate.
+
+    Conduct periodic reviews of AD CS configurations, certificate templates, 
+    and enrolment permissions to identify and remediate emerging 
+    certificate-based attack paths.
+
+  references:
+    - https://msrc.microsoft.com/update-guide/en-US/advisory/CVE-2024-49019
+    - https://github.com/ly4k/Certipy/wiki/06-‐-Privilege-Escalation#esc15-arbitrary-application-policy-injection-in-v1-templates-cve-2024-49019-ekuwu
+    - https://specterops.io/wp-content/uploads/sites/3/2022/06/Certified_Pre-Owned.pdf
+    - https://specterops.io/blog/2021/06/17/certified-pre-owned/
