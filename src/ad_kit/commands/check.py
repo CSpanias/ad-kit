@@ -246,6 +246,52 @@ def run_smb_checks() -> None:
     )
 
 #-------------------------------------------------------------------------------
+# AS-REP ROASTING
+#-------------------------------------------------------------------------------
+
+def run_asreproast_checks() -> None:
+    """
+    Execute AS-REP roasting assessment checks.
+
+    This check identifies Active Directory accounts configured without Kerberos 
+    pre-authentication.
+
+    Findings are generated where accounts are susceptible to AS-REP roasting 
+    attacks.
+    """
+
+    session_data = require_session()
+
+    print_section("AS-REP Roasting")
+
+    with progress("Checking for AS-REP roastable accounts..."):
+
+        asrep_results, findings = (
+            asreproast_check(
+                session_data["dc_ip"],
+                session_data["domain"],
+            )
+        )
+
+    table = Table()
+
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row(
+        "AS-REP Roastable Accounts",
+        str(asrep_results["account_count"]),
+    )
+
+    console.print(table)
+
+    write_markdown_report(
+        findings,
+        get_artefacts_dir()
+        / "findings-asreproast.md",
+    )
+
+#-------------------------------------------------------------------------------
 # AUTHENTICATED CHECKS
 #-------------------------------------------------------------------------------
 
@@ -1067,52 +1113,6 @@ def run_delegation_checks(
         findings,
         get_artefacts_dir()
         / "findings-delegation.md",
-    )
-
-#-------------------------------------------------------------------------------
-# AS-REP ROASTING
-#-------------------------------------------------------------------------------
-
-def run_asreproast_checks() -> None:
-    """
-    Execute AS-REP roasting assessment checks.
-
-    This check identifies Active Directory accounts configured without Kerberos 
-    pre-authentication.
-
-    Findings are generated where accounts are susceptible to AS-REP roasting 
-    attacks.
-    """
-
-    session_data = require_session()
-
-    print_section("AS-REP Roasting")
-
-    with progress("Checking for AS-REP roastable accounts..."):
-
-        asrep_results, findings = (
-            asreproast_check(
-                session_data["dc_ip"],
-                session_data["domain"],
-            )
-        )
-
-    table = Table()
-
-    table.add_column("Setting", style="cyan")
-    table.add_column("Value", style="green")
-
-    table.add_row(
-        "AS-REP Roastable Accounts",
-        str(asrep_results["account_count"]),
-    )
-
-    console.print(table)
-
-    write_markdown_report(
-        findings,
-        get_artefacts_dir()
-        / "findings-asreproast.md",
     )
 
 #-------------------------------------------------------------------------------
