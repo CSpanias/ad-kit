@@ -35,7 +35,7 @@ from ad_kit.checks.smb import smb_configuration_check
 from ad_kit.checks.kerberoast import kerberoast_check
 from ad_kit.checks.dns import dns_record_creation_check
 from ad_kit.checks.pre2k import pre2k_check
-from src.ad_kit.checks.privileged_excessive import privileged_groups_check
+from src.ad_kit.checks.privileged_excessive import privileged_excessive_check
 from ad_kit.core.console import (
     console, 
     print_section, 
@@ -45,7 +45,6 @@ from ad_kit.core.console import (
 from ad_kit.core.findings import load_finding
 from ad_kit.core.util import (
     progress, 
-    load_session, 
     get_artefacts_dir, 
     print_info,
     require_session,
@@ -1019,7 +1018,7 @@ def run_privileged_group_checks(
     with progress("Reviewing privileged group membership..."):
 
         privileged_results, findings = (
-            privileged_groups_check(
+            privileged_excessive_check(
                 session_data["dc_ip"],
                 session_data["standard_user"],
                 std_pass,
