@@ -29,7 +29,7 @@ app = typer.Typer(
 
         ad-kit check all
         ad-kit check ldap
-        ad-kit check ldap pass-pol
+        ad-kit check run ldap pass-pol
     """,
     no_args_is_help=True,
     context_settings={
@@ -50,7 +50,7 @@ console = Console()
 @app.callback()
 def main() -> None:
     """
-    AD-Kit command-line interface entrypoint.
+    ad-kit command-line interface entrypoint.
 
     Use the available commands to manage assessment tooling, perform Active
     Directory enumeration, and execute assessment checks.
@@ -62,7 +62,7 @@ def main() -> None:
 @tools_app.command(
     name="status",
     help=(
-        "Display all tools registered in AD-Kit and their installation source."
+        "Display all tools registered in ad-kit and their installation source."
     )
 )
 def tools() -> None:
@@ -101,8 +101,8 @@ def status() -> None:
 #-------------------------------------------------------------------------------
 @tools_app.command(
     help=(
-        "Install one or more tools from the AD-Kit registry. "
-        "Use 'all' to install every registered tool."
+        "Install one or more tools from the ad-kit registry. Use 'all' to "
+        "install every registered tool."
     )
 )
 def install(
@@ -112,7 +112,7 @@ def install(
     ),
 ) -> None:
     """
-    Install a tool defined in the AD-Kit registry.
+    Install a tool defined in the ad-kit registry.
 
     The tool name must exist in the registry. The appropriate
     installer implementation will be selected automatically
@@ -151,7 +151,7 @@ def enum() -> None:
 
     This command identifies the target domain, enumerates Domain Controllers,
     validates credentials, exports user and computer information, performs
-    BloodHound collection, and optionally dumps NTDS secrets.
+    BloodHound collection, and dumps NTDS secrets.
 
     Examples:
         ad-kit enum

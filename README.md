@@ -1,15 +1,14 @@
 # ad-kit
 
-`ad-kit` is an Active Directory assessment automation toolkit designed to 
-streamline common internal penetration testing workflows.
+`ad-kit` is an automation toolkit designed to make Active Directory (AD) 
+assessments more efficient.
 
-It combines tool management, environment preparation, Active Directory (AD) 
-enumeration, security assessment checks, BloodHound collection, and NTDS 
-extraction into a single command-line interface.
+It combines tool management, environment preparation, AD enumeration, domain 
+data collection, NTDS extraction, and common security checks into a single 
+command-line interface.
 
 The toolkit is intended to provide a repeatable methodology for conducting 
-AD security reviews by combining data collection, assessment logic, evidence 
-preservation, and report generation into a unified workflow.
+AD security reviews and generating consistent assessment output.
 
 ## Features
 
@@ -18,29 +17,13 @@ preservation, and report generation into a unified workflow.
 - Assessment session tracking and engagement metadata
 - [`netexec`](https://github.com/Pennyw0rth/NetExec) [audit mode](https://www.netexec.wiki/getting-started/audit-mode) configuration 
 - Standard User and Domain Admin credential validation
-- Automated Active Directory security assessment checks
-- Markdown finding generation with supporting evidence
 - BloodHound data collection via [`rusthound-ce`](https://github.com/g0h4n/RustHound-CE) 
 - NTDS extraction via Impacket [`secretsdump`](https://github.com/fortra/impacket/blob/master/examples/secretsdump.py) 
 - SCP command generation for artefact retrieval
-
-Current assessment modules include:
-
-1. LDAP signing and channel binding
-2. SMB signing and SMBv1
-3. Password policy review
-4. Machine Account Quota (MAQ)
-5. DNS record creation permissions
-6. Pre-Windows 2000 computer accounts
-7. Excessive privileged group membership
-8. Kerberos delegation review
-9. AS-REP roastable accounts
-10. Kerberoastable accounts
-11. Active Directory Certificate Services (AD CS) ESC review
+- Automated Active Directory security assessment checks
+- Markdown finding generation with supporting evidence
 
 ## Installation
-
-UV (Recommended)
 
 ```bash
 # Install UV
@@ -58,32 +41,23 @@ uv tool upgrade ad-kit
 
 ## Typical Workflow
 
-An Active Directory assessment generally follows the workflow below:
+A typical Active Directory assessment using `ad-kit` follows the workflow below:
 
-```text
-Install Required Tools on JumpBox
+```markdown
+Install Required Tools (`tools`)
     |
     v
-Enumerate Environment
+Enumerate Environment (`enum`)
     |
     +--> Session Metadata
     +--> Domain Users
     +--> Domain Controllers
+    +--> Credential Validation
+    +--> BloodHound Collection
+    +--> NTDS Extraction
     |
     v
-Validate Credentials
-    |
-    +--> Standard User
-    +--> Domain Admin
-    |
-    v
-Collect BloodHound Data & Dump NTDS
-    |
-    +--> *.zip
-    +--> *.ntds
-    |
-    v
-Security Assessment Checks
+Security Assessment Checks (`check`)
     |
     +--> Findings
     +--> Evidence
@@ -93,7 +67,9 @@ Security Assessment Checks
 Continue Engagement
 ```
 
-As an example, the transferred artefacts can be directly used by [`password-audit`](https://github.com/CSpanias/password-audit).
+The generated artefacts can be consumed by other assessment tooling. For 
+example, exported BloodHound collections (`.zip`) and NTDS dumps (`.ntds`) can 
+be processed directly using [`password-audit`](https://github.com/CSpanias/password-audit).
 
 ## Commands
 
@@ -123,7 +99,7 @@ $ ad-kit -h
 
      ad-kit check all
      ad-kit check ldap
-     ad-kit check ldap pass-pol
+     ad-kit check run ldap pass-pol
 ```
 
 `tools` displays all tools registered in AD-Kit and their installation source:
@@ -133,10 +109,10 @@ $ ad-kit tools -h
 
 Usage: ad-kit tools [OPTIONS]
 
-Display all tools registered in AD-Kit and their installation source. 
+Display all tools registered in ad-kit and their installation source. 
 ```
 
-`enum` bootstraps an assessment:
+`enum` bootstraps an AD assessment:
 
 ```bash
 $ ad-kit enum -h
@@ -159,8 +135,8 @@ Perform basic domain enumeration:
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
-`check` executes AD assessment modules and generates Markdown findings with 
-supporting evidence:
+`check` executes one or more AD assessment modules and generates Markdown 
+findings with supporting evidence:
 
 ```bash
 $ ad-kit check -h
