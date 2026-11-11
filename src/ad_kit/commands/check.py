@@ -1410,8 +1410,8 @@ def run_coercion_checks(
     table.add_column("Value", style="green")
 
     table.add_row(
-        "Coercible Hosts",
-        str(len(coercion_results["coercion_hosts"])),
+        "Coercible DCs",
+        str(len(coercion_results["coercion_dcs"])),
     )
 
     table.add_row(
@@ -1421,15 +1421,16 @@ def run_coercion_checks(
 
     console.print(table)
 
-    if coercion_results["coercion_hosts"]:
+    if coercion_results["coercion_dcs"]:
 
         finding = load_finding("coercion", "COERCE-001")
 
-        for host, techniques in (coercion_results["coercion_hosts"].items()):
+        for host, techniques in (coercion_results["coercion_dcs"].items()):
 
             finding.evidence.append(
-                f"Host `{host}` exposed the following authentication coercion "
-                f"technique(s): {', '.join(techniques)}."
+                f"Domain Controller `{host}` exposed the following "
+                "authentication coercion technique(s): "
+                f"{', '.join(techniques)}."
             )
 
         findings.append(finding)

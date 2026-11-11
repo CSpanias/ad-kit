@@ -6,8 +6,29 @@ from ad_kit.core.checks import run_check, load_dc_hostnames
 from ad_kit.core.util import get_artefacts_dir
 
 
+def extract_hostname(
+    line: str,
+) -> str | None:
+    """
+    Extract the target hostname from NetExec module output.
+
+    Args:
+        line:
+            NetExec output line.
+
+    Returns:
+        Uppercase hostname if successfully parsed, otherwise None.
+    """
+
+    parts = line.split()
+
+    if len(parts) < 4:
+        return None
+
+    return parts[3].upper()
+
+
 def coercion_check(
-    dc_ip: str,
     username: str,
     password: str,
 ) -> dict:
@@ -16,9 +37,6 @@ def coercion_check(
     Controllers with the Print Spooler service enabled.
 
     Args:
-        dc_ip:
-            Domain Controller IP address.
-
         username:
             LDAP username.
 
@@ -30,6 +48,11 @@ def coercion_check(
         Controllers running the Print Spooler service.
     """
 
+    targets = str(
+        get_artefacts_dir()
+        / "dc-hostnames.txt"
+    )
+
     dc_hostnames = {
         hostname.split(".")[0].upper()
         for hostname in load_dc_hostnames()
@@ -40,10 +63,7 @@ def coercion_check(
         [
             "nxc",
             "smb",
-            str(
-                get_artefacts_dir()
-                / "domain-computers.txt"
-            ),
+            targets,
             "-u",
             username,
             "-p",
@@ -58,10 +78,7 @@ def coercion_check(
         [
             "nxc",
             "smb",
-            str(
-                get_artefacts_dir()
-                / "domain-computers.txt"
-            ),
+            targets,
             "-u",
             username,
             "-p",
@@ -71,9 +88,24 @@ def coercion_check(
         ],
     )
 
-    spooler_dcs = set()
+    webdav_output = run_check(
+        "coercion-webdav",
+        [
+            "nxc",
+            "smb",
+            targets,
+            "-u",
+            username,
+            "-p",
+            password,
+            "-M",
+            "webdav",
+        ],
+    )
 
-    coercion_hosts = {}
+    spooler_dcs: set[str] = set()
+
+    coercion_dcs: dict[str, set[str]] = {}
 
     #---------------------------------------------------------------------------
     # SPOOLER
@@ -84,16 +116,30 @@ def coercion_check(
         if "Spooler service enabled" not in line:
             continue
 
-        parts = line.split()
-
-        if len(parts) < 4:
+        hostname = extract_hostname(line)
+        
+        if hostname is None:
             continue
-
-        hostname = parts[3].upper()
 
         if hostname in dc_hostnames:
 
             spooler_dcs.add(hostname)
+
+    #---------------------------------------------------------------------------
+    # WEBDAV
+    #---------------------------------------------------------------------------
+
+    for line in webdav_output.splitlines():
+
+        if "WebClient Service enabled" not in line:
+            continue
+
+        hostname = extract_hostname(line)
+
+        if hostname is None:
+            continue
+
+        coercion_dcs.setdefault(hostname, set()).add("WebDAV")
 
     #---------------------------------------------------------------------------
     # COERCION
@@ -104,22 +150,20 @@ def coercion_check(
         if "VULNERABLE," not in line:
             continue
 
-        parts = line.split()
-
-        if len(parts) < 4:
+        hostname = extract_hostname(line)
+        
+        if hostname is None:
             continue
-
-        hostname = parts[3].upper()
 
         technique = line.split("VULNERABLE,", 1)[1].strip()
 
-        coercion_hosts.setdefault(hostname, set()).add(technique)
+        coercion_dcs.setdefault(hostname, set()).add(technique)
 
     return {
         "spooler_dcs": sorted(spooler_dcs),
-        "coercion_hosts": {
+        "coercion_dcs": {
             host: sorted(techniques)
             for host, techniques
-            in sorted(coercion_hosts.items())
+            in sorted(coercion_dcs.items())
         },
     }

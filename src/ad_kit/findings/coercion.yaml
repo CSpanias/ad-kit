@@ -4,9 +4,9 @@
 # Findings relating to authentication coercion techniques that can trigger
 # outbound authentication from Windows systems.
 #
-# These findings identify hosts exposing RPC services and functionality
-# commonly abused to coerce outbound authentication through techniques such as 
-# PrinterBug, PetitPotam, DFSCoerce, and MSEven.
+# These findings identify Domain Controllers exposing RPC services and 
+# functionality commonly abused to coerce outbound authentication through 
+# techniques such as PrinterBug, PetitPotam, DFSCoerce, and MSEven.
 #
 # Although authentication coercion does not directly result in compromise, it 
 # may enable NTLM relay and other authentication-based attacks when combined 
@@ -16,25 +16,31 @@
 COERCE-001:
   id: COERCE-001
 
-  title: Hosts Susceptible to Authentication Coercion
+  title: Domain Controllers Susceptible to Authentication Coercion
 
   commentary: |
-    A review of domain-joined systems identified one or more hosts exposing
-    functionality commonly associated with authentication coercion attacks.
+    A review of Domain Controller (DC) configurations identified one or more
+    systems exposing functionality commonly associated with authentication
+    coercion attacks.
 
     Authentication coercion techniques abuse legitimate Windows services and
     RPC interfaces to trigger outbound authentication requests to
     attacker-controlled systems.
 
-    Techniques such as PrinterBug, PetitPotam, DFSCoerce, and MSEven may be
-    used to coerce users, servers, and Domain Controllers into performing NTLM 
-    authentication to attacker-controlled endpoints.
+    Techniques such as PrinterBug, PetitPotam, DFSCoerce, MSEven, and WebDAV
+    may be used to coerce DCs into performing outbound authentication to 
+    attacker-controlled endpoints.
 
     Whilst authentication coercion does not itself provide direct access to the 
     affected host, coerced authentication may facilitate NTLM relay attacks, 
     credential theft, certificate abuse, privilege escalation, and broader 
     compromise of the Active Directory environment when combined with 
     additional weaknesses.
+
+    Certain coercion techniques may facilitate both SMB and HTTP-based
+    authentication relay attacks, potentially increasing the impact of
+    misconfigurations affecting services such as Active Directory Certificate
+    Services (AD CS).
 
     Exposure of authentication coercion paths is of particular concern where
     Domain Controllers, Certification Authorities, or other high-value
@@ -44,8 +50,9 @@ COERCE-001:
     To reduce the risk of authentication relay and coercion-based attack
     paths, the following actions are recommended:
 
-    - Review systems exposing authentication coercion techniques and determine 
-      whether the associated services remain operationally necessary.
+    - Review affected Domain Controllers and determine whether services and RPC
+      interfaces associated with authentication coercion techniques remain
+      operationally necessary.
     - Disable or restrict unnecessary RPC services and functionality where
       business requirements permit.
     - Ensure NTLM relay protections are implemented throughout the environment, 
@@ -74,9 +81,9 @@ COERCE-002:
     A review of Domain Controller (DC) configurations identified one or more systems 
     with the Windows Print Spooler service enabled.
 
-    The Print Spooler service is generally unnecessary on DCs and has 
-    historically been associated with multiple security issues, including 
-    authentication coercion techniques such as PrinterBug.
+    The Print Spooler service is rarely required on DCs and has historically 
+    been associated with multiple security issues, including authentication 
+    coercion techniques such as PrinterBug.
 
     Where enabled, the service may increase the attack surface available to
     attackers and facilitate authentication relay attack paths involving
