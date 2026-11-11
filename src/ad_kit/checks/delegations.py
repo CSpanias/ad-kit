@@ -82,7 +82,7 @@ def delegation_check(
         ],
     )
 
-    unconstrained_accounts = []
+    unconstrained_accounts: set[str] = set()
 
     for line in output.splitlines():
 
@@ -106,7 +106,7 @@ def delegation_check(
             if hostname in dc_hostnames:
                 continue
 
-        unconstrained_accounts.append(account)
+        unconstrained_accounts.add(account)
 
     results["unconstrained"] = sorted(unconstrained_accounts)
 
@@ -144,7 +144,7 @@ def delegation_check(
         ],
     )
 
-    protocol_transition_accounts = []
+    protocol_transition_accounts: set[str] = set()
 
     for line in output.splitlines():
 
@@ -165,9 +165,9 @@ def delegation_check(
         if not parts:
             continue
 
-        account = parts[-4]
+        account = parts[0]
 
-        protocol_transition_accounts.append(account)
+        protocol_transition_accounts.add(account)
 
     results["protocol_transition"] = sorted(protocol_transition_accounts)
 
