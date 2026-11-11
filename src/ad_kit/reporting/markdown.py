@@ -17,22 +17,29 @@ def format_paragraphs(
     """
     Convert wrapped YAML text into readable report paragraphs.
 
-    Wrapped lines within a paragraph are joined into a single line while 
-    preserving paragraph breaks.
+    Wrapped lines within a paragraph are joined into a single line while
+    preserving paragraph breaks and Markdown lists.
     """
 
     paragraphs = []
 
     for paragraph in text.split("\n\n"):
 
+        lines = paragraph.splitlines()
+
+        if lines and lines[0].lstrip().startswith("-"):
+            paragraphs.append("\n".join(line.rstrip() for line in lines))
+            continue
+
         paragraphs.append(
             " ".join(
                 line.strip()
-                for line in paragraph.splitlines()
+                for line in lines
             )
         )
 
     return "\n\n".join(paragraphs)
+
 
 def write_markdown_report(
     findings: list[Finding],
@@ -83,7 +90,7 @@ def write_markdown_report(
 
             lines.append("### Remediation")
             lines.append("")
-            lines.append(format_paragraphs(finding.remediation))
+            lines.append(finding.remediation.strip())
             lines.append("")
 
             if finding.affected_assets:
