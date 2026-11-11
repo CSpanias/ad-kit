@@ -308,7 +308,7 @@ def enumerate_domain_controllers(
             for item in line.split("=", 1)
         )
 
-        dcs.append(hostname.upper(), ip)
+        dcs.append((hostname.upper(), ip))
 
     dcs = sorted(set(dcs))
 
