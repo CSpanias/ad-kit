@@ -38,27 +38,25 @@ DELEG-001:
     result in compromise of the wider AD environment.
 
   remediation: |
-    Identify services and applications currently relying on accounts configured 
-    with Unconstrained Delegation and determine whether delegation remains 
-    operationally necessary.
+    To reduce the risk of credential theft and delegated account abuse, the 
+    following actions are recommended:
 
-    Where delegation functionality is required, migrate configurations to 
+    - Identify services and applications currently relying on accounts 
+    configured with Unconstrained Delegation and determine whether delegation 
+    remains operationally necessary.
+    - Where delegation functionality is required, migrate configurations to 
     Kerberos Constrained Delegation or Resource-Based Constrained Delegation 
     (RBCD) where appropriate.
-
-    Remove the Unconstrained Delegation setting from affected accounts and 
+    - Remove the Unconstrained Delegation setting from affected accounts and 
     systems wherever possible.
-
-    Ensure delegated services execute using dedicated service accounts with 
+    - Ensure delegated services execute using dedicated service accounts with 
     only the minimum privileges required for operation.
-
-    Consider migrating traditional service accounts to Group Managed Service 
+    - Consider migrating traditional service accounts to Group Managed Service 
     Accounts (gMSAs) to improve credential management and reduce the risk 
     associated with credential theft.
-
-    Monitor Kerberos authentication activity for anomalous delegation behaviour 
-    and investigate privileged account authentication to systems configured for 
-    delegation.
+    - Monitor Kerberos authentication activity for anomalous delegation 
+    behaviour and investigate privileged account authentication to systems 
+    configured for delegation.
 
   references:
     - https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-constrained-delegation-overview
@@ -79,48 +77,37 @@ DELEG-002:
     Protocol Transition allows delegated accounts to perform Service-for-User 
     (S4U) operations, enabling the account to request Kerberos service tickets 
     on behalf of domain users without requiring prior authentication from
-    those users.
-
-    Whilst this functionality is legitimate and is commonly used to support 
-    application and service requirements, it significantly increases the impact 
-    of account compromise.
+    those users. Whilst this functionality is legitimate and is commonly used 
+    to support application and service requirements, it significantly increases 
+    the impact of account compromise.
 
     An attacker who obtains control of a delegated account may be able to abuse 
     Kerberos delegation functionality to impersonate domain users to configured 
-    services.
-
-    Depending on the delegated targets, account privileges, and availability of 
-    credential material, abuse of Protocol Transition may facilitate privilege 
-    escalation, access to sensitive systems, and lateral movement within the 
-    environment.
-
-    Excessive delegation privileges should be carefully reviewed, particularly 
-    where delegation targets include administrative or otherwise 
-    business-critical systems.
+    services. Depending on the delegated targets, account privileges, and 
+    availability of credential material, abuse of Protocol Transition may 
+    facilitate privilege escalation, access to sensitive systems, and lateral 
+    movement within the environment.
 
   remediation: |
-    Review all accounts configured with Kerberos Constrained Delegation and 
+    To reduce the likelihood of delegation abuse, the following actions are 
+    recommended:
+
+    - Review all accounts configured with Kerberos Constrained Delegation and 
     determine whether Protocol Transition remains operationally necessary.
-
-    Remove Protocol Transition from delegation configurations unless there is a 
-    documented business requirement for its use.
-
-    Restrict delegation targets to only those services required for application
-    functionality and avoid delegating access to high-value systems wherever 
-    possible.
-
-    Apply the setting 'Account is sensitive and cannot be delegated' to 
+    - Remove Protocol Transition from delegation configurations unless there is
+    a documented business requirement for its use.
+    - Restrict delegation targets to only those services required for 
+    application functionality and avoid delegating access to high-value systems 
+    wherever possible.
+    - Apply the setting 'Account is sensitive and cannot be delegated' to 
     privileged and administrative accounts to prevent delegated authentication.
-
-    Limit delegation privileges to dedicated service accounts with clearly 
+    - Limit delegation privileges to dedicated service accounts with clearly 
     defined operational requirements and ensure such accounts are appropriately 
     protected.
-
-    Consider migrating service accounts to Group Managed Service Accounts 
+    - Consider migrating service accounts to Group Managed Service Accounts 
     (gMSAs) where possible to improve credential hygiene and reduce the 
     likelihood of credential exposure.
-
-    Monitor Kerberos activity for S4U operations, delegated authentication 
+    - Monitor Kerberos activity for S4U operations, delegated authentication 
     activity, and other anomalous ticket requests that may indicate delegation 
     abuse.
 
@@ -157,27 +144,25 @@ DELEG-003:
     escalation, lateral movement, and compromise of business-critical systems.
 
   remediation: |
-    Review all privileged accounts configured with Kerberos delegation and 
+    To reduce the impact of privileged account compromise, the following 
+    actions are recommended:
+    
+    - Review all privileged accounts configured with Kerberos delegation and 
     confirm that delegation remains necessary to support operational 
     requirements.
-
-    Remove delegation permissions from privileged accounts wherever possible 
+    - Remove delegation permissions from privileged accounts wherever possible 
     and implement dedicated service accounts for services requiring delegated 
     authentication.
-
-    Restrict delegation functionality to the minimum number of accounts 
+    - Restrict delegation functionality to the minimum number of accounts 
     necessary and ensure delegated accounts operate with only the permissions 
     required to perform their intended function.
-
-    Apply the Principle of Least Privilege (PoLP) to administrative and service
-    accounts and avoid combining elevated administrative privileges with 
-    delegation permissions wherever possible.
-
-    Consider implementing Group Managed Service Accounts (gMSAs) for delegated 
-    services to improve credential management and reduce the impact of service 
-    account compromise.
-
-    Periodically review delegation configurations and privileged group 
+    - Apply the Principle of Least Privilege (PoLP) to administrative and 
+    service accounts and avoid combining elevated administrative privileges 
+    with delegation permissions wherever possible.
+    - Consider implementing Group Managed Service Accounts (gMSAs) for 
+    delegated services to improve credential management and reduce the impact 
+    of service account compromise.
+    - Periodically review delegation configurations and privileged group 
     memberships to identify unnecessary privilege assignments and excessive 
     delegation permissions.
 

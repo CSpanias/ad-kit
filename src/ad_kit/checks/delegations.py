@@ -106,6 +106,10 @@ def delegation_check(
             if hostname in dc_hostnames:
                 continue
 
+        # Ignore the Azure AD Kerberos Trust computer object
+        if account.lower() == "azureadkerberos$":
+            continue
+
         unconstrained_accounts.add(account)
 
     results["unconstrained"] = sorted(unconstrained_accounts)
