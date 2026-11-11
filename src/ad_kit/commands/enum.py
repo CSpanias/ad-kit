@@ -277,7 +277,6 @@ def enumerate_domain_controllers(
         RuntimeError:
             If Domain Controllers cannot be identified.
     """
-
     result = subprocess.run(
         [
             "nxc",
@@ -287,9 +286,7 @@ def enumerate_domain_controllers(
             username,
             "-p",
             password,
-            "--query",
-            "(primaryGroupID=516)",
-            "dNSHostName",
+            "--dc-list",
         ],
         capture_output=True,
         text=True,
@@ -297,47 +294,28 @@ def enumerate_domain_controllers(
     )
 
     if result.returncode != 0:
-        raise RuntimeError(
-            "Failed to enumerate Domain Controllers."
-        )
+        raise RuntimeError("Failed to enumerate Domain Controllers.")
 
-    dc_hostnames: list[str] = []
+    dcs = []
 
     for line in result.stdout.splitlines():
 
-        if "dNSHostName" not in line:
+        if " = " not in line:
             continue
 
-        hostname = (
-            line.split()[-1]
-            .strip()
-            .upper()
+        hostname, ip = (
+            item.strip()
+            for item in line.split("=", 1)
         )
 
-        dc_hostnames.append(hostname)
+        dcs.append(hostname.upper(), ip)
 
-    dc_hostnames = sorted(set(dc_hostnames))
+    dcs = sorted(set(dcs))
 
-    if not dc_hostnames:
-        raise RuntimeError(
-            "No Domain Controllers were identified."
-        )
+    if not dcs:
+        raise RuntimeError("No Domain Controllers were identified.")
 
-    domain_controllers: list[tuple[str, str]] = []
-
-    for hostname in dc_hostnames:
-
-        try:
-            ip = socket.gethostbyname(hostname)
-            domain_controllers.append((hostname, ip))
-
-        except socket.gaierror:
-            continue
-
-    if not domain_controllers:
-        raise RuntimeError("Failed to resolve any Domain Controllers.")
-
-    return sorted(domain_controllers, key=lambda dc: dc[0])
+    return dcs
 
 
 def export_domain_computers(
