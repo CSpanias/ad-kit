@@ -665,6 +665,8 @@ def run_maq_checks(
             std_pass,
         )
 
+    print(f"Before DA cleanup: {maq_results}")
+
     table = Table()
 
     table.add_column("Setting", style="cyan")
@@ -722,6 +724,8 @@ def run_maq_checks(
 
             maq_results["cleanup_method"] = "Manual Intervention Required"
 
+    print(f"After DA cleanup: {maq_results}")
+
     table.add_row("Machine Cleanup", maq_results["cleanup_method"])
 
     console.print(table)
@@ -762,19 +766,19 @@ def run_maq_checks(
                     "Administrator account."
                 )
 
-            elif maq_results["machine_deleted"]:
+            else:
 
                 finding.evidence.append(
                     "The machine account was successfully removed using the "
                     "creating account."
                 )
 
-            else:
+        else:
 
-                finding.evidence.append(
-                    "The machine account could not be removed following "
-                    "testing and requires manual remediation."
-                )
+            finding.evidence.append(
+                "The machine account could not be removed following "
+                "testing and requires manual remediation."
+            )
 
         generated_findings.append(finding)
 
