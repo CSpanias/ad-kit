@@ -665,8 +665,6 @@ def run_maq_checks(
             std_pass,
         )
 
-    print(f"Before DA cleanup: {maq_results}")
-
     table = Table()
 
     table.add_column("Setting", style="cyan")
@@ -723,8 +721,6 @@ def run_maq_checks(
         else:
 
             maq_results["cleanup_method"] = "Manual Intervention Required"
-
-    print(f"After DA cleanup: {maq_results}")
 
     table.add_row("Machine Cleanup", maq_results["cleanup_method"])
 

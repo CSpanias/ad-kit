@@ -225,8 +225,17 @@ def cleanup_test_artifact(
         True if the artefact was removed successfully, otherwise False.
     """
 
-    output = run_check(name, command)
-    return "successfully removed" in output.lower()
+    SUCCESS_STRINGS = (
+        "successfully removed",
+        "successfully deleted",
+    )
+
+    output = run_check(name, command).lower()
+
+    return any(
+        success in output
+        for success in SUCCESS_STRINGS
+    )
 
 
 def run_check(
