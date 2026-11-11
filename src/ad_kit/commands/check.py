@@ -506,131 +506,91 @@ def run_password_policy_checks(
 
     findings = []
 
-    password_policy_issues = []
-    lockout_policy_issues = []
-
-    password_policy_evidence = []
-    lockout_policy_evidence = []
-
-    # Determine failed password policy settings
-    for setting in (
-        "minimum_length",
-        "password_history",
-        "minimum_age",
-        "maximum_age",
-        "complexity",
-    ):
-
-        if assessment[setting] != "[green]✓ OK[/green]":
-            password_policy_issues.append(setting)
-
-    # Determine failed lockout settings
-    for setting in (
-        "observation_window",
-        "lockout_duration",
-        "lockout_threshold",
-    ):
-
-        if assessment[setting] != "[green]✓ OK[/green]":
-            lockout_policy_issues.append(setting)
+    policy_evidence = []
 
     # Build password policy evidence
     if assessment["minimum_length"] != "[green]✓ OK[/green]":
 
-        password_policy_evidence.append(
-            (
-                "Minimum password length was configured as "
-                f"{password_policy['minimum_length']} characters, which is "
-                "below the recommended best practice."
-            )
+        policy_evidence.append(
+            "Minimum password length was configured as "
+             f"{password_policy['minimum_length']} characters, which is below "
+             "the recommended best practice."
         )
 
     if assessment["password_history"] != "[green]✓ OK[/green]":
 
-        password_policy_evidence.append(
-            (
-                "Password history retained only "
-                f"{password_policy['password_history']} previous "
-                "password(s), increasing the likelihood of password reuse."
-            )
+        policy_evidence.append(
+            "Password history retained only "
+            f"{password_policy['password_history']} previous password(s), "
+            "increasing the likelihood of password reuse."
         )
 
     if assessment["minimum_age"] != "[green]✓ OK[/green]":
 
-        password_policy_evidence.append(
-            (
-                "Minimum password age was not configured, allowing users to "
-                "rapidly change passwords and potentially circumvent "
-                "password history controls."
-            )
+        policy_evidence.append(
+            "Minimum password age was not configured, allowing users to "
+                "rapidly change passwords and potentially circumvent password "
+                "history controls."
         )
 
     if assessment["maximum_age"] != "[green]✓ OK[/green]":
 
-        password_policy_evidence.append(
-            (
-                "Maximum password age was not configured, resulting in "
-                "passwords that may remain unchanged indefinitely."
-            )
+        policy_evidence.append(
+            "Maximum password age was not configured, resulting in passwords "
+            "that may remain unchanged indefinitely."
         )
 
     if assessment["complexity"] != "[green]✓ OK[/green]":
 
-        password_policy_evidence.append(
-            (
-                "Password complexity requirements were disabled, allowing "
-                "weak or easily guessable passwords to be configured."
-            )
+        policy_evidence.append(
+            "Password complexity requirements were disabled, allowing weak or "
+            "easily guessable passwords to be configured."
         )
 
     # Build lockout policy evidence
     if assessment["observation_window"] != "[green]✓ OK[/green]":
 
-        lockout_policy_evidence.append(
-            (
-                "The account lockout observation window was configured "
-                f"as {password_policy['observation_window']}."
-            )
+        policy_evidence.append(
+            "The account lockout observation window was configured as "
+            f"{password_policy['observation_window']}, which may provide "
+            "insufficient protection against password guessing attacks."
         )
 
     if assessment["lockout_duration"] != "[green]✓ OK[/green]":
 
-        lockout_policy_evidence.append(
-            (
-                "The account lockout duration was configured as "
-                f"{password_policy['lockout_duration']}."
-            )
+        policy_evidence.append(
+            "The account lockout duration was configured as "
+            f"{password_policy['lockout_duration']}, which is below the "
+            "recommended baseline."
         )
 
     if assessment["lockout_threshold"] != "[green]✓ OK[/green]":
 
-        lockout_policy_evidence.append(
-            (
-                "The account lockout threshold was configured as "
-                f"{password_policy['lockout_threshold']} failed authentication "
-                "attempts, providing insufficient protection against password "
-                "guessing attacks."
-            )
+        policy_evidence.append(
+            "The account lockout threshold was configured as "
+            f"{password_policy['lockout_threshold']} failed authentication "
+            "attempts, providing insufficient protection against password "
+            "guessing attacks."
         )
 
     # Policy controls
-    if password_policy_issues:
+    if policy_evidence:
 
         finding = load_finding("password_policy", "PASS-001")
-        finding.evidence.extend(password_policy_evidence)
-        findings.append(finding)
 
-    # Lockout controls
-    if lockout_policy_issues:
+        finding.evidence.append(
+            "The following password and account lockout policy weaknesses were "
+            "identified:"
+        )
 
-        finding = load_finding("password_policy", "PASS-002")
-        finding.evidence.extend(lockout_policy_evidence)
-        findings.append(finding)  
+        finding.evidence.extend(policy_evidence)
+
+        findings.append(finding) 
 
     write_markdown_report(
         findings,
         get_artefacts_dir() / "findings-passwords.md",
-    )  
+    )
 
 #-------------------------------------------------------------------------------
 # MACHINE ACCOUNT QUOTA
@@ -741,7 +701,7 @@ def run_maq_checks(
         if maq_results["machine_created"]:
 
             finding.evidence.append(
-                f"Authenticated user {session_data['standard_user']}' "
+                f"Authenticated user `{session_data['standard_user']}` "
                 f"successfully created machine account "
                 f"`{maq_results['machine_name']}$`."
             )
@@ -1311,7 +1271,7 @@ def run_checks() -> None:
 
     console.print()
 
-    run_asreproast_checks
+    run_asreproast_checks()
 
     console.print()
 
