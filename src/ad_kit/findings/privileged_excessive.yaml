@@ -47,43 +47,36 @@ PRIV-001:
     access to sensitive information, disruption of business operations, and 
     ultimately compromise of the wider Active Directory environment.
 
-    Organisations that maintain strict privilege separation, utilise dedicated 
-    administrative accounts, and regularly review privileged group memberships 
-    significantly reduce both the likelihood and impact of successful attacks.
-
   remediation: |
-    Conduct a comprehensive review of privileged Active Directory groups and 
-    confirm that all membership assignments remain operationally necessary and 
-    appropriately authorised.
+    To reduce the risks associated with excessive privileged access, the
+    following actions are recommended:
 
-    Membership of highly privileged groups should be restricted to a small 
-    number of dedicated administrative accounts with a clearly defined business 
-    requirement.
-
-    Unnecessary, duplicate, shared, legacy, dormant, and inactive privileged 
-    accounts should be removed from privileged groups and disabled where 
-    appropriate.
-
-    Administrative personnel should utilise separate dedicated accounts for 
-    privileged activities. These accounts should be distinct from standard user 
-    accounts used for email, web browsing, and day-to-day productivity tasks.
-
-    Implement a tiered administrative model in which privileged permissions are 
-    used only when required to perform administrative functions and are not 
-    assigned to standard user accounts.
-
-    Where elevated permissions are required, delegated administration should be 
-    implemented wherever possible in preference to broad domain-level 
-    privileges.
-
-    Establish a formal process for periodic review and recertification of 
-    privileged access to ensure administrative permissions remain necessary, 
-    appropriate, and aligned with current job responsibilities.
-
-    Consider implementing additional protections for highly privileged 
-    accounts, including multi-factor authentication (MFA), Privileged Access 
-    Workstations (PAWs), enhanced monitoring, and Privileged Access Management 
-    (PAM) solutions where appropriate.
+    - Conduct a comprehensive review of privileged Active Directory groups and 
+      confirm that all membership assignments remain operationally necessary 
+      and appropriately authorised.
+    - Membership of highly privileged groups should be restricted to a small 
+      number of dedicated administrative accounts with a clearly defined 
+      business requirement.
+    - Unnecessary, duplicate, shared, legacy, dormant, and inactive privileged 
+      accounts should be removed from privileged groups and disabled where 
+      appropriate.
+    - Administrative personnel should utilise separate dedicated accounts for 
+      privileged activities. These accounts should be distinct from standard 
+      user accounts used for email, web browsing, and day-to-day productivity 
+      tasks.
+    - Implement a tiered administrative model in which privileged permissions 
+      are used only when required to perform administrative functions and are 
+      not assigned to standard user accounts.
+    - Where elevated permissions are required, delegated administration should 
+      be implemented wherever possible in preference to broad domain-level 
+      privileges.
+    - Establish a formal process for periodic review and recertification of 
+      privileged access to ensure administrative permissions remain necessary, 
+      appropriate, and aligned with current job responsibilities.
+    - Consider implementing additional protections for highly privileged 
+      accounts, including multi-factor authentication (MFA), Privileged Access 
+      Workstations (PAWs), enhanced monitoring, and Privileged Access 
+      Management (PAM) solutions where appropriate.
 
   references:
     - https://nist-sp-800-53-r5.bsafes.com/docs/3-1-access-control/ac-6-least-privilege/

@@ -45,28 +45,26 @@ ASREP-001:
     recovery.
 
   remediation: |
-    Identify all accounts configured without Kerberos pre-authentication and 
-    determine whether the setting remains operationally necessary.
+    To reduce the risk of unauthorised access arising from accounts susceptible 
+    to AS-REP roasting attacks, the following actions are recommended:
 
-    Enable Kerberos pre-authentication for affected accounts wherever possible 
-    to prevent retrieval of AS-REP responses without prior authentication.
-
-    Enforce strong password policies requiring unique and sufficiently complex 
-    passwords, particularly for privileged, administrative, service, and legacy 
-    accounts.
-
-    Implement Multi-Factor Authentication (MFA) for privileged accounts to 
-    reduce the impact of potential credential compromise.
-
-    Periodically review account configurations to identify accounts that do not 
-    require Kerberos pre-authentication and remove unnecessary exceptions.
-
-    Monitor Kerberos authentication activity for unusual AS-REQ and AS-REP 
-    activity and investigate unexpected requests involving privileged or 
-    sensitive accounts.
-
-    Legacy applications requiring disabled pre-authentication should be 
-    reviewed and remediated where operationally feasible.
+    - Identify all accounts configured without Kerberos pre-authentication and 
+      determine whether the setting remains operationally necessary.
+    - Enable Kerberos pre-authentication for affected accounts wherever 
+      possible to prevent retrieval of AS-REP responses without prior 
+      authentication.
+    - Enforce strong password policies requiring unique and sufficiently 
+      complex passwords, particularly for privileged, administrative, service, 
+      and legacy accounts.
+    - Implement Multi-Factor Authentication (MFA) for privileged accounts to 
+      reduce the impact of potential credential compromise.
+    - Periodically review account configurations to identify accounts that do 
+      not require Kerberos pre-authentication and remove unnecessary exceptions.
+    - Monitor Kerberos authentication activity for unusual AS-REQ and AS-REP 
+      activity and investigate unexpected requests involving privileged or 
+      sensitive accounts.
+    - Legacy applications requiring disabled pre-authentication should be 
+      reviewed and remediated where operationally feasible.
 
   references:
     - https://attack.mitre.org/techniques/T1558/004/

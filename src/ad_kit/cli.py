@@ -240,6 +240,29 @@ def asreproast() -> None:
     check.run_asreproast_checks()
 
 #-------------------------------------------------------------------------------
+# CHECK LOCAL ADMINISTRATOR ACCESS
+#-------------------------------------------------------------------------------
+
+@check_app.command(
+    name="local-admin",
+    help="Identify systems where the Standard User has local administrator "
+        "access.",
+)
+def local_admin() -> None:
+    """
+    Execute local administrator access assessment checks.
+
+    This command determines whether the configured Standard User account has
+    local administrator privileges on domain-joined systems and Domain
+    Controllers.
+
+    Findings are generated where excessive local administrative privileges are
+    identified.
+    """
+
+    check.run_local_admin_checks()
+
+#-------------------------------------------------------------------------------
 # CHECK PASSWORD POLICY MODULE
 #-------------------------------------------------------------------------------
 @check_app.command(

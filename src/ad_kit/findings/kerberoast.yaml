@@ -41,24 +41,22 @@ KERB-001:
     dependent upon password strength and credential management practices.
 
   remediation: |
-    Identify all service accounts associated with Service Principal Names and 
-    verify that each account remains operationally required.
+    To reduce the risk of credential compromise arising from Kerberoasting
+    attacks, the following actions are recommended:
 
-    Enforce strong password policies for service accounts, including long, 
-    unique passwords that are resistant to brute-force and dictionary attacks.
-
-    Review service account privileges and ensure only the minimum permissions 
-    required for operation are assigned.
-
-    Where possible, migrate traditional service accounts to Group Managed 
-    Service Accounts (gMSAs) to improve credential management, automate 
-    password rotation, and reduce the likelihood of password compromise.
-
-    Periodically review SPN registrations and remove obsolete, unused, or 
-    legacy service configurations.
-
-    Monitor Kerberos authentication activity and investigate unusual service 
-    ticket requests involving sensitive or high-value accounts.
+    - Identify all service accounts associated with Service Principal Names and 
+      verify that each account remains operationally required.
+    - Enforce strong password policies for service accounts, including long, 
+      unique passwords that are resistant to brute-force and dictionary attacks.
+    - Review service account privileges and ensure only the minimum permissions 
+      required for operation are assigned.
+    - Where possible, migrate traditional service accounts to Group Managed 
+      Service Accounts (gMSAs) to improve credential management, automate 
+      password rotation, and reduce the likelihood of password compromise.
+    - Periodically review SPN registrations and remove obsolete, unused, or 
+      legacy service configurations.
+    - Monitor Kerberos authentication activity and investigate unusual service 
+      ticket requests involving sensitive or high-value accounts.
 
   references:
     - https://learn.microsoft.com/en-us/entra/architecture/service-accounts-govern-on-premises
@@ -95,26 +93,25 @@ KERB-002:
     provisioned.
 
   remediation: |
-    Inventory and review all Service Principal Names (SPNs) configured on 
-    privileged accounts and determine whether the associated services remain 
-    operationally required.
-
-    Establish dedicated service accounts for application and service workloads 
-    and ensure only the minimum permissions required for operation are assigned.
-
-    Reassign SPNs from privileged administrative accounts to dedicated service 
-    accounts wherever possible.
-
-    Remove unnecessary administrative privileges from service accounts and 
-    review group memberships to ensure adherence to the Principle of Least 
-    Privilege (PoLP).
-
-    Remove SPNs from privileged accounts once migration activities have been 
-    completed and validated.
-
-    Consider implementing Group Managed Service Accounts (gMSAs) in accordance 
-    with Microsoft best practices to provide secure service authentication and 
-    automated password management.
+    To reduce the risk of privileged account compromise through Kerberoasting
+    attacks, the following actions are recommended:
+    
+    - Inventory and review all Service Principal Names (SPNs) configured on 
+      privileged accounts and determine whether the associated services remain 
+      operationally required.
+    - Establish dedicated service accounts for application and service 
+      workloads and ensure only the minimum permissions required for operation 
+      are assigned.
+    - Reassign SPNs from privileged administrative accounts to dedicated 
+      service accounts wherever possible.
+    - Remove unnecessary administrative privileges from service accounts and 
+      review group memberships to ensure adherence to the Principle of Least 
+      Privilege (PoLP).
+    - Remove SPNs from privileged accounts once migration activities have been 
+      completed and validated.
+    - Consider implementing Group Managed Service Accounts (gMSAs) in 
+      accordance with Microsoft best practices to provide secure service 
+      authentication and automated password management.
 
   references:
     - https://learn.microsoft.com/en-us/entra/architecture/service-accounts-govern-on-premises

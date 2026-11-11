@@ -1,0 +1,110 @@
+# ===========================================================================
+# LOCAL ADMINISTRATOR ACCESS FINDINGS
+#
+# Findings relating to excessive local administrative access granted to
+# standard Active Directory (AD) users.
+#
+# These findings identify situations where a standard user account has
+# administrative rights over domain-joined systems, potentially enabling
+# credential theft, privilege escalation, lateral movement, and further
+# compromise of the AD environment.
+# ===========================================================================
+
+LA-001:
+  id: LA-001
+
+  title: Standard User Has Local Administrator Access
+
+  commentary: |
+    A review of local administrative permissions identified one or more
+    domain-joined systems on which a standard user account possessed local
+    administrator privileges.
+
+    Local administrator access provides extensive control over a system and
+    permits actions including software installation, service modification,
+    security control configuration, access to sensitive local data, and
+    interaction with other user sessions.
+
+    Attackers who compromise an account with local administrator access may
+    be able to harvest credentials, extract authentication material,
+    establish persistence, bypass security controls, and move laterally
+    throughout the environment.
+
+    Excessive distribution of local administrator privileges increases the
+    attack surface available to adversaries and commonly contributes to
+    privilege escalation paths within Active Directory environments.
+
+  remediation: |
+    To reduce the risks associated with excessive local administrative
+    access, the following actions are recommended:
+
+    - Review all local administrator group memberships and identify systems
+      where administrative access has been granted to standard user accounts.
+    - Remove local administrator privileges from users who do not have a clear 
+      operational requirement for elevated access.
+    - Implement the Principle of Least Privilege (PoLP) and ensure users are
+      granted only the permissions required to perform their duties.
+    - Utilise dedicated administrative accounts for privileged activities
+      rather than assigning administrative access to standard user accounts.
+    - Regularly review local administrator assignments to identify and remove
+      unnecessary, legacy, dormant, or temporary administrative access.
+    - Consider implementing privileged access management controls and endpoint 
+      privilege management solutions where appropriate.
+    - Monitor administrative logon activity and investigate unexpected or
+      unusual use of local administrator privileges.
+
+  references:
+    - https://learn.microsoft.com/en-us/windows/security/identity-protection/access-control/local-accounts
+    - https://learn.microsoft.com/en-us/security/privileged-access-workstations/privileged-access-access-model
+    - https://attack.mitre.org/tactics/TA0004/
+
+
+LA-002:
+  id: LA-002
+
+  title: Standard User Has Administrative Access to Domain Controller
+
+  commentary: |
+    A review of administrative permissions identified one or more Domain
+    Controllers on which a standard user account possessed administrative
+    access.
+
+    Administrative access to a Domain Controller (DC) represents a critical
+    security exposure because DCs host Active Directory (AD) services and 
+    maintain sensitive authentication and directory data for the domain.
+
+    An attacker who compromises a user account with administrative access to
+    a DC may be able to extract password hashes, obtain Kerberos authentication 
+    material, modify AD objects, establish persistence, and potentially 
+    compromise the wider domain environment.
+
+    Administrative access to DCs should be restricted to a small number of 
+    authorised administrative accounts with a clearly defined operational 
+    requirement.
+
+  remediation: |
+    To reduce the risk of Active Directory compromise arising from
+    administrative access to Domain Controllers, the following actions are
+    recommended:
+
+    - Review all administrative permissions granted on Domain Controllers (DCs)
+      and confirm that access remains operationally necessary and appropriately 
+      authorised.
+    - Remove DC administrative access from standard user accounts and migrate 
+      administrative activities to dedicated privileged accounts.
+    - Restrict privileged access to a limited set of authorised administrators 
+      with a clearly defined business requirement.
+    - Implement a tiered administrative model to ensure privileged credentials 
+      are used only for administrative tasks.
+    - Require administrators to utilise dedicated Privileged Access 
+      Workstations (PAWs) when performing administrative activities on DCs.
+    - Implement Multi-Factor Authentication (MFA) and enhanced monitoring for 
+      privileged administrative accounts where feasible.
+    - Conduct periodic reviews and recertification of privileged access to
+      ensure permissions remain appropriate and aligned with current job
+      responsibilities.
+
+  references:
+    - https://learn.microsoft.com/en-us/security/privileged-access-workstations/privileged-access-access-model
+    - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/securing-domain-controllers-against-attack
+    - https://attack.mitre.org/tactics/TA0004/

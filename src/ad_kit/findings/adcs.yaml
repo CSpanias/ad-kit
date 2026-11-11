@@ -43,23 +43,22 @@ ADCS-ESC1:
     potential impact of successful exploitation.
 
   remediation: |
-    Review all published certificate templates and identify templates 
-    permitting enrollee-supplied subject information.
+    To reduce the risk of certificate-based impersonation and privilege
+    escalation through vulnerable certificate templates, the following actions
+    are recommended:
 
-    Disable the 'Supply in the request' setting on templates where it is not 
-    operationally required.
-
-    Restrict certificate enrolment permissions to authorised users and groups 
-    with a legitimate business requirement.
-
-    Remove authentication-capable Extended Key Usages (EKUs) from templates 
-    where certificate-based authentication is not required.
-
-    Enable CA Manager Approval and authorised signatures for sensitive 
-    templates wherever possible.
-
-    Review previously issued certificates and revoke any certificates that 
-    cannot be validated as legitimate.
+    - Review all published certificate templates and identify templates 
+      permitting enrollee-supplied subject information.
+    - Disable the 'Supply in the request' setting on templates where it is not 
+      operationally required.
+    - Restrict certificate enrolment permissions to authorised users and groups 
+      with a legitimate business requirement.
+    - Remove authentication-capable Extended Key Usages (EKUs) from templates 
+      where certificate-based authentication is not required.
+    - Enable CA Manager Approval and authorised signatures for sensitive 
+      templates wherever possible.
+    - Review previously issued certificates and revoke any certificates that 
+      cannot be validated as legitimate.
 
   references:
     - https://github.com/ly4k/Certipy/wiki/06-‐-Privilege-Escalation#esc1-enrollee-supplied-subject-for-client-authentication
@@ -96,27 +95,24 @@ ADCS-ESC8:
     provide access long after the original relay attack has occurred.
 
   remediation: |
-    Review all AD CS web enrolment services and implement protections designed 
-    to prevent NTLM relay attacks.
+    To reduce the risk of NTLM relay attacks against Active Directory
+    Certificate Services (AD CS), the following actions are recommended:
 
-    Enable Extended Protection for Authentication (EPA) on IIS-hosted AD CS
-    services and configure EPA as Required wherever operationally feasible.
-
-    Configure certificate enrolment services to use HTTPS exclusively and 
-    remove unnecessary HTTP bindings.
-
-    Review whether NTLM authentication is required for certificate enrolment 
-    services and prefer Kerberos-based authentication where possible.
-
-    Remove or disable AD CS web enrolment services that are no longer required 
-    for business operations.
-
-    Review certificate templates and enrolment permissions to ensure 
-    certificates can only be requested by authorised users and systems.
-
-    Monitor certificate enrolment activity and investigate unusual certificate 
-    requests, particularly those involving privileged users and computer 
-    accounts.
+    - Review all AD CS web enrolment services and implement protections 
+      designed to prevent NTLM relay attacks.
+    - Enable Extended Protection for Authentication (EPA) on IIS-hosted AD CS
+      services and configure EPA as Required wherever operationally feasible.
+    - Configure certificate enrolment services to use HTTPS exclusively and 
+      remove unnecessary HTTP bindings.
+    - Review whether NTLM authentication is required for certificate enrolment 
+      services and prefer Kerberos-based authentication where possible.
+    - Remove or disable AD CS web enrolment services that are no longer 
+      required for business operations.
+    - Review certificate templates and enrolment permissions to ensure 
+      certificates can only be requested by authorised users and systems.
+    - Monitor certificate enrolment activity and investigate unusual 
+      certificate requests, particularly those involving privileged users and 
+      computer accounts.
 
   references:
     - https://github.com/ly4k/Certipy/wiki/06-‐-Privilege-Escalation#esc8-ntlm-relay-to-ad-cs-web-enrollment
@@ -156,33 +152,29 @@ ADCS-ESC15:
     compromise has occurred.
 
   remediation: |
-    Apply Microsoft security updates addressing CVE-2024-49019 to all Active 
-    Directory Certificate Services (ADCS) Certification Authority servers.
+    To reduce the risk of certificate template abuse and unauthorised
+    certificate-based authentication, the following actions are recommended:
 
-    Review all published Version 1 certificate templates and identify templates 
-    permitting enrollee-supplied subject information.
-
-    Restrict enrolment permissions to authorised users and groups with a 
-    legitimate business requirement and remove unnecessary access granted to 
-    low-privileged users wherever possible.
-
-    Upgrade legacy Version 1 certificate templates to Version 2 or later where
-    operationally feasible to improve control over certificate requests and 
-    template configuration.
-
-    Review certificate templates permitting authentication-related 
-    functionality and verify that Application Policies and Extended Key Usages 
-    (EKUs) are configured appropriately.
-
-    Enable CA Manager Approval and require authorised signatures for sensitive
-    certificate templates wherever possible.
-
-    Review previously issued certificates and revoke certificates that cannot 
-    be verified as legitimate.
-
-    Conduct periodic reviews of AD CS configurations, certificate templates, 
-    and enrolment permissions to identify and remediate emerging 
-    certificate-based attack paths.
+    - Apply Microsoft security updates addressing CVE-2024-49019 to all Active 
+      Directory Certificate Services (ADCS) Certification Authority servers.
+    - Review all published Version 1 certificate templates and identify 
+      templates permitting enrollee-supplied subject information.
+    - Restrict enrolment permissions to authorised users and groups with a 
+      legitimate business requirement and remove unnecessary access granted to 
+      low-privileged users wherever possible.
+    - Upgrade legacy Version 1 certificate templates to Version 2 or later 
+      where operationally feasible to improve control over certificate requests 
+      and template configuration.
+    - Review certificate templates permitting authentication-related 
+      functionality and verify that Application Policies and Extended Key 
+      Usages (EKUs) are configured appropriately.
+    - Enable CA Manager Approval and require authorised signatures for 
+      sensitive certificate templates wherever possible.
+    - Review previously issued certificates and revoke certificates that cannot 
+      be verified as legitimate.
+    - Conduct periodic reviews of AD CS configurations, certificate templates, 
+      and enrolment permissions to identify and remediate emerging 
+      certificate-based attack paths.
 
   references:
     - https://msrc.microsoft.com/update-guide/en-US/advisory/CVE-2024-49019

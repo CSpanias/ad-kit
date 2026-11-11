@@ -9,6 +9,7 @@ a disproportionate number of enabled user accounts hold elevated administrative
 privileges.
 """
 
+from ad_kit.core.checks import run_check
 from ad_kit.core.privileged import (
     PRIVILEGED_GROUPS,
     get_privileged_group_members,
@@ -190,18 +191,9 @@ def privileged_excessive_check(
         for group, member_count, percentage in excessive_groups:
 
             finding.evidence.append(
-                f"The '{group}' group contained {member_count} member(s)."
+                f"The `{group}` group contained {member_count} member(s) which "
+                f"represented {percentage}% of the enabled user population."
             )
-
-            finding.evidence.append(
-                f"'{group}' represented {percentage}% of the enabled user "
-                "population."
-            )
-
-        finding.evidence.append(
-            "The configured memberships exceeded the privileged group "
-            f"assessment threshold of {PRIVILEGED_GROUP_THRESHOLD:.0f}%."
-        )
 
         findings.append(finding)
 

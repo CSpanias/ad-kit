@@ -31,6 +31,7 @@ from ad_kit.core.checks import (
 from ad_kit.checks.asreproast import asreproast_check
 from ad_kit.checks.delegations import delegation_check
 from ad_kit.checks.ldap import ldap_check
+from ad_kit.checks.local_admin import local_admin_check
 from ad_kit.checks.maq import maq_check
 from ad_kit.checks.passwords import (
     password_policy_check, 
@@ -411,6 +412,101 @@ def authenticate_domain_admin() -> tuple[str, str]:
 
         if not typer.confirm("Try again?", default=True):
             raise RuntimeError("Authentication cancelled.")
+
+#-------------------------------------------------------------------------------
+# LOCAL ADMINISTRATOR ACCESS
+#-------------------------------------------------------------------------------
+
+def run_local_admin_checks(
+    std_pass: str | None = None,
+) -> None:
+    """
+    Execute local administrator access assessment checks.
+
+    This check determines whether the supplied standard user account possesses
+    local administrator privileges on any domain-joined systems.
+
+    Findings are generated where local administrative access is identified on
+    member servers, workstations, or Domain Controllers.
+    """
+
+    session_data = require_session()
+
+    print_section("Local Administrator Access")
+
+    if std_pass is None:
+
+        std_pass = authenticate_standard_user()
+
+    with progress("Checking local administrator access..."):
+
+        local_admin_results = (
+            local_admin_check(
+                session_data["dc_ip"],
+                session_data["domain"],
+                session_data["standard_user"],
+                std_pass,
+            )
+        )
+
+    table = Table()
+
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row("Hosts", str(len(local_admin_results["hosts"])))
+
+    table.add_row(
+        "Domain Controllers",
+        str(len(local_admin_results["domain_controllers"])),
+    )
+
+    console.print(table)
+
+    findings = []
+
+    if local_admin_results["hosts"]:
+
+        finding = load_finding("local_admin", "LA-001")
+
+        for host in local_admin_results["hosts"]:
+
+            finding.evidence.append(
+                f"Authenticated user `{session_data['standard_user']}` "
+                f"was identified as a local administrator on `{host}`."
+            )
+
+        finding.evidence.append(
+            f"A total of {len(local_admin_results['hosts'])} host(s) permitted "
+            "local administrator access."
+        )
+
+        findings.append(finding)
+
+    if local_admin_results["domain_controllers"]:
+
+        finding = load_finding("local_admin", "LA-002")
+
+        for host in local_admin_results["domain_controllers"]:
+
+            finding.evidence.append(
+                f"Authenticated user `{session_data['standard_user']}` "
+                "was identified as an administrator on Domain Controller "
+                f"`{host}`."
+            )
+
+        finding.evidence.append(
+            f"A total of {len(local_admin_results['domain_controllers'])} "
+            "Domain Controller(s) permitted administrative access."
+        )
+
+        findings.append(finding)
+
+    write_markdown_report(
+        findings,
+        get_artefacts_dir()
+        / "findings-local-admin.md",
+    )
 
 #-------------------------------------------------------------------------------
 # PASSWORD POLICY
@@ -1157,6 +1253,8 @@ def run_adcs_checks(
         / "findings-adcs.md",
     )
 
+
+
 #-------------------------------------------------------------------------------
 # SELECTED MODULES
 #-------------------------------------------------------------------------------
@@ -1173,6 +1271,7 @@ AVAILABLE_CHECKS = {
     "delegation": run_delegation_checks,
     "kerberoast": run_kerberoast_checks,
     "adcs": run_adcs_checks,
+    "local-admin": run_local_admin_checks,
 }
 
 def run_selected_checks(
@@ -1192,6 +1291,7 @@ def run_selected_checks(
     """
 
     authenticated_modules = {
+        "local-admin",
         "pass-pol",
         "maq",
         "dns",
@@ -1222,6 +1322,9 @@ def run_selected_checks(
 
         elif module == "smb":
             run_smb_checks()
+
+        elif module == "local-admin":
+            run_local_admin_checks(std_pass)
 
         elif module == "pass-pol":
             run_password_policy_checks(std_pass)
@@ -1282,6 +1385,10 @@ def run_checks() -> None:
 
     # Authenticated checks
     std_pass = authenticate_standard_user()
+
+    console.print()
+
+    run_local_admin_checks(std_pass)
 
     console.print()
 
