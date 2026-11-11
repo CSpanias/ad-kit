@@ -27,8 +27,26 @@ def format_paragraphs(
 
         lines = paragraph.splitlines()
 
+        # Markdown list
         if lines and lines[0].lstrip().startswith("-"):
-            paragraphs.append("\n".join(line.rstrip() for line in lines))
+
+            items = []
+            current = ""
+
+            for line in lines:
+                stripped = line.strip()
+
+                if stripped.startswith("-"):
+                    if current:
+                        items.append(current)
+                    current = stripped
+                else:
+                    current += f" {stripped}"
+
+            if current:
+                items.append(current)
+
+            paragraphs.append("\n".join(items))
             continue
 
         paragraphs.append(
