@@ -298,17 +298,19 @@ def enumerate_domain_controllers(
 
     dcs = []
 
+    dc_regex = re.compile(r"([A-Za-z0-9.-]+\.[A-Za-z0-9.-]+)\s*=\s*([0-9.]+)")
+
     for line in result.stdout.splitlines():
 
-        if " = " not in line:
+        match = dc_regex.search(line)
+
+        if not match:
             continue
 
-        hostname, ip = (
-            item.strip()
-            for item in line.split("=", 1)
-        )
+        hostname = match.group(1).upper()
+        ip = match.group(2)
 
-        dcs.append((hostname.upper(), ip))
+        dcs.append((hostname, ip))
 
     dcs = sorted(set(dcs))
 
