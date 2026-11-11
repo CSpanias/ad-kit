@@ -114,64 +114,64 @@ def write_markdown_report(
             Report output path.
     """
 
-    lines: list[str] = []
+    if not findings:
 
+        if output_file.exists():
+            output_file.unlink()
+            
+        return
+
+    lines: list[str] = []
+    
     lines.append("# Active Directory Assessment Findings")
     lines.append("")
 
-    if not findings:
-        lines.append("No findings identified.")
+    for finding in findings:
+
+        lines.append(f"## {finding.id} - {finding.title}")
         lines.append("")
-    else:
 
-        for finding in findings:
+        lines.append("### Commentary")
+        lines.append("")
+        lines.append(format_paragraphs(finding.commentary))
+        lines.append("")
 
-            lines.append(
-                f"## {finding.id} - {finding.title}"
-            )
+        if finding.evidence:
+
+            lines.append("### Evidence")
             lines.append("")
 
-            lines.append("### Commentary")
-            lines.append("")
-            lines.append(format_paragraphs(finding.commentary))
-            lines.append("")
+            for evidence in finding.evidence:
+                lines.append(f"- {evidence}")
 
-            if finding.evidence:
-
-                lines.append("### Evidence")
-                lines.append("")
-
-                for evidence in finding.evidence:
-                    lines.append(f"- {evidence}")
-
-                lines.append("")
-
-            lines.append("### Remediation")
-            lines.append("")
-            lines.append(_format_remediation(finding.remediation))
             lines.append("")
 
-            if finding.affected_assets:
+        lines.append("### Remediation")
+        lines.append("")
+        lines.append(_format_remediation(finding.remediation))
+        lines.append("")
 
-                lines.append("### Affected Assets")
-                lines.append("")
+        if finding.affected_assets:
 
-                for asset in finding.affected_assets:
+            lines.append("### Affected Assets")
+            lines.append("")
 
-                    lines.append(f"- {asset}")
+            for asset in finding.affected_assets:
 
-                lines.append("")
+                lines.append(f"- {asset}")
 
-            if finding.references:
+            lines.append("")
 
-                lines.append("### References")
-                lines.append("")
+        if finding.references:
 
-                for reference in finding.references:
+            lines.append("### References")
+            lines.append("")
 
-                    lines.append(f"- [{reference}]({reference})")
+            for reference in finding.references:
 
-                lines.append("")
+                lines.append(f"- [{reference}]({reference})")
+
+            lines.append("")
 
     output_file.write_text(
         "\n".join(lines),

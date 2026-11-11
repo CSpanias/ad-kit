@@ -84,12 +84,12 @@ def dns_record_creation_check(
         finding = load_finding("dns_records", "DNS-001")
 
         finding.evidence.append(
-            f"Authenticated user '{username}' successfully created DNS record "
-            f"'{record_name}.{domain}'."
+            f"Authenticated user '`{username}`' successfully created DNS "
+            f"record '`{record_name}.{domain}`'."
         )
 
         finding.evidence.append(
-            f"The created DNS record resolved to {record_ip}."
+            f"The created DNS record resolved to `{record_ip}`."
         )
 
         findings.append(finding)

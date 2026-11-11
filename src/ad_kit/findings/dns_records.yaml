@@ -41,20 +41,20 @@ DNS-001:
     confidentiality, integrity, and availability of AD services.
 
   remediation: |
-    Review permissions applied to all Active Directory-integrated DNS zones and 
-    records and ensure that modification rights are restricted to authorised
-    administrative groups.
-
-    Computer accounts should be permitted to securely register and update their 
-    own DNS records where operationally required, while all other record 
+    To reduce the risk of unauthorised DNS record creation and DNS-based 
+    attacks, the following actions are recommended:
+    
+    - Review permissions applied to all Active Directory-integrated DNS zones 
+    and records and ensure that modification rights are restricted to 
+    authorised administrative groups.
+    - Computer accounts should be permitted to securely register and update 
+    their own DNS records where operationally required, while all other record 
     creation and modification activities should be limited to appropriately 
     privileged users.
-
-    DNS zones should be configured to use secure dynamic updates wherever 
+    - DNS zones should be configured to use secure dynamic updates wherever 
     possible to ensure that only authenticated and authorised systems can
     register or modify DNS records.
-
-    DNS auditing and logging should be enabled to support the detection and 
+    - DNS auditing and logging should be enabled to support the detection and 
     investigation of unauthorised or suspicious DNS activity.
 
   references:

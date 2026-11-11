@@ -1259,9 +1259,9 @@ def run_selected_checks(
     Execute a user-specified selection of assessment modules.
 
     This function allows individual assessment modules to be executed in any 
-    combination rather than running the complete assessment. Where one or
-    more authenticated checks are selected, Standard User credentials are 
-    requested once and reused for all applicable modules.
+    combination rather than running the complete assessment. Where one or more 
+    authenticated checks are selected, Standard User credentials are requested 
+    once and reused for all applicable modules.
 
     Args:
         modules:
