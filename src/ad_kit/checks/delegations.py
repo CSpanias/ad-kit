@@ -162,10 +162,12 @@ def delegation_check(
 
         parts = line.split()
 
-        if not parts:
+        if len(parts) < 6:
             continue
 
-        account = parts[0]
+        # NetExec prepends: LDAP <IP> <PORT> <HOST> before the delegation 
+        # table columns.
+        account = parts[4]
 
         protocol_transition_accounts.add(account)
 
