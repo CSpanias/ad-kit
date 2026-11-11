@@ -31,6 +31,7 @@ from ad_kit.core.checks import (
 from ad_kit.checks.asreproast import asreproast_check
 from ad_kit.checks.delegations import delegation_check
 from ad_kit.checks.ldap import ldap_check
+from ad_kit.checks.ldap_info import ldap_info_check, is_sensitive_value
 from ad_kit.checks.local_admin import local_admin_check
 from ad_kit.checks.maq import maq_check
 from ad_kit.checks.passwords import (
@@ -1253,7 +1254,121 @@ def run_adcs_checks(
         / "findings-adcs.md",
     )
 
+#-------------------------------------------------------------------------------
+# LDAP INFORMATION EXPOSURE
+#-------------------------------------------------------------------------------
 
+def run_ldap_info_checks(
+    std_pass: str | None = None,
+) -> None:
+    """
+    Execute LDAP information exposure assessment checks.
+
+    This check reviews commonly accessible LDAP attributes for potentially
+    sensitive information, including account descriptions, informational
+    fields, and password-related attributes.
+
+    Findings are generated where sensitive information or password material is 
+    identified within LDAP attributes.
+    """
+
+    session_data = require_session()
+
+    print_section("LDAP Information Exposure")
+
+    if std_pass is None:
+
+        std_pass = authenticate_standard_user()
+
+    with progress("Reviewing LDAP attributes..."):
+
+        ldap_info_results = (
+            ldap_info_check(
+                session_data["dc_ip"],
+                session_data["standard_user"],
+                std_pass,
+            )
+        )
+
+    findings = []
+
+    sensitive_attributes = []
+
+    for entry in ldap_info_results["descriptions"]:
+
+        if is_sensitive_value(entry["value"]):
+
+            sensitive_attributes.append(
+                (
+                    entry["user"],
+                    entry["value"],
+                    "description",
+                )
+            )
+
+    for entry in ldap_info_results["info_fields"]:
+
+        if is_sensitive_value(entry["value"]):
+
+            sensitive_attributes.append(
+                (
+                    entry["user"],
+                    entry["value"],
+                    "info",
+                )
+            )
+
+    table = Table()
+
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row("Sensitive LDAP Attributes", str(len(sensitive_attributes)))
+    table.add_row(
+        "userPassword Values",
+        str(len(ldap_info_results["user_passwords"])),
+    )
+
+    table.add_row(
+        "unixUserPassword Values",
+        str(len(ldap_info_results["unix_passwords"])),
+    )
+
+    console.print(table)
+
+    if sensitive_attributes:
+
+        finding = load_finding("ldap_info", "LDAPINFO-001")
+
+        for user, value, attribute in sensitive_attributes:
+
+            finding.evidence.append(
+                f"Account `{user}` contained potentially sensitive information "
+                f"within the LDAP `{attribute}` attribute: `{value}`."
+            )
+
+        findings.append(finding)
+
+    password_entries = (
+        ldap_info_results["user_passwords"]
+        + ldap_info_results["unix_passwords"]
+    )
+
+    if password_entries:
+
+        finding = load_finding("ldap_info", "LDAPINFO-002")
+
+        for entry in password_entries:
+
+            finding.evidence.append(entry)
+
+        findings.append(finding)
+
+    write_markdown_report(
+        findings,
+        get_artefacts_dir()
+        / "findings-ldap-info.md",
+    )
 
 #-------------------------------------------------------------------------------
 # SELECTED MODULES
@@ -1272,6 +1387,7 @@ AVAILABLE_CHECKS = {
     "kerberoast": run_kerberoast_checks,
     "adcs": run_adcs_checks,
     "local-admin": run_local_admin_checks,
+    "ldap-info": run_ldap_info_checks,
 }
 
 def run_selected_checks(
@@ -1300,6 +1416,7 @@ def run_selected_checks(
         "delegation",
         "kerberoast",
         "adcs",
+        "ldap-info",
     }
 
     requires_authentication = any(
@@ -1352,6 +1469,9 @@ def run_selected_checks(
 
         elif module == "adcs":
             run_adcs_checks(std_pass)
+
+        elif module == "ldap-info":
+            run_ldap_info_checks(std_pass)
 
         else:
             print_error(f"Unknown module: {module}")
@@ -1421,3 +1541,7 @@ def run_checks() -> None:
     console.print()
 
     run_adcs_checks(std_pass)
+
+    console.print()
+
+    run_ldap_info_checks(std_pass)

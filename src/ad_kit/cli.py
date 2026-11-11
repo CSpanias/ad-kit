@@ -391,6 +391,21 @@ def adcs() -> None:
     check.run_adcs_checks()
 
 #-------------------------------------------------------------------------------
+# CHECK LDAP INFORMATION EXPOSURE
+#-------------------------------------------------------------------------------
+
+@check_app.command(
+    name="ldap-info",
+    help="Review LDAP attributes for sensitive information exposure.",
+)
+def ldap_info() -> None:
+    """
+    Execute LDAP information exposure assessment checks.
+    """
+
+    check.run_ldap_info_checks()
+
+#-------------------------------------------------------------------------------
 # CHECK SELECTED
 #-------------------------------------------------------------------------------
 @check_app.command(

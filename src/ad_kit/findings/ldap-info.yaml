@@ -1,0 +1,104 @@
+# ===========================================================================
+# LDAP INFORMATION EXPOSURE FINDINGS
+#
+# Findings relating to sensitive information exposed through LDAP attributes.
+#
+# These findings identify Active Directory accounts containing potentially
+# sensitive information within commonly accessible LDAP attributes, including
+# account descriptions, informational fields, and password-related
+# attributes.
+#
+# Information stored within these attributes may be accessible to
+# authenticated users and can assist attackers with credential discovery,
+# password attacks, privilege escalation, lateral movement, and compromise
+# of the wider Active Directory environment.
+# ===========================================================================
+
+LDAPINFO-001:
+  id: LDAPINFO-001
+
+  title: Sensitive Information Stored in LDAP Attributes
+
+  commentary: |
+    A review of Active Directory (AD) account attributes identified one or more 
+    accounts containing potentially sensitive information within LDAP 
+    attributes accessible to authenticated domain users.
+
+    Information stored within user descriptions and account information fields 
+    may include usernames, passwords, service account details, infrastructure 
+    information, operational notes, contact information, application ownership 
+    details, and other sensitive data.
+
+    Attackers commonly review LDAP attributes during the enumeration phase of
+    an attack to identify information that may assist with credential
+    discovery, password attacks, privilege escalation, or lateral movement.
+
+    Although these attributes are frequently used for administrative and
+    operational purposes, they should not contain credentials or other
+    sensitive information that could facilitate unauthorised access.
+
+  remediation: |
+    To reduce the risk of information disclosure through LDAP attributes,
+    the following actions are recommended:
+
+    - Review all account descriptions and informational fields containing
+      business, administrative, or operational data.
+    - Remove passwords, credentials, connection strings, access tokens,
+      sensitive infrastructure information, and other confidential data from
+      LDAP attributes.
+    - Establish administrative guidance governing acceptable use of account
+      descriptions and informational fields.
+    - Implement periodic reviews of Active Directory account attributes to
+      identify and remove inappropriate data.
+    - Consider monitoring for the creation or modification of sensitive LDAP
+      attribute values where operationally feasible.
+
+  references:
+    - https://attack.mitre.org/tactics/TA0007/
+    - https://attack.mitre.org/techniques/T1087/
+    - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/
+
+
+LDAPINFO-002:
+  id: LDAPINFO-002
+
+  title: Password Data Stored in LDAP Attributes
+
+  commentary: |
+    A review of Active Directory (AD) account attributes identified one or more 
+    accounts exposing values through password-related LDAP attributes.
+
+    Attributes such as userPassword and unixUserPassword may contain password 
+    material, password hashes, or credential information that can potentially 
+    be accessed by authenticated users depending on AD configuration and access 
+    control permissions.
+
+    Exposure of password-related data through LDAP significantly increases the 
+    risk of credential compromise and may provide attackers with immediate 
+    access to valid authentication material without requiring password guessing 
+    or brute-force attacks.
+
+    The presence of password-related data within LDAP should be considered a
+    serious security concern and investigated as a matter of priority.
+
+  remediation: |
+    To reduce the risk of credential compromise arising from password data
+    exposed through LDAP attributes, the following actions are recommended:
+
+    - Identify all accounts containing values within password-related LDAP
+      attributes and determine whether the data remains operationally
+      required.
+    - Remove unnecessary password information from LDAP attributes wherever
+      possible.
+    - Review and restrict permissions applied to password-related attributes to 
+      ensure access is granted only where explicitly required.
+    - Rotate any passwords or credentials identified during the assessment.
+    - Review associated applications and services to determine why 
+      password-related data is being stored within Active Directory.
+    - Implement periodic reviews of LDAP attributes to identify and remove
+      sensitive credential material.
+
+  references:
+    - https://attack.mitre.org/techniques/T1552/
+    - https://attack.mitre.org/techniques/T1552/001/
+    - https://learn.microsoft.com/en-us/windows/win32/adsi/security-descriptors-on-directory-objects
