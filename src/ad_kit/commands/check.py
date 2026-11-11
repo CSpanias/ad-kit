@@ -17,11 +17,7 @@ import typer
 
 from rich.table import Table
 
-from ad_kit.checks.adcs import (
-    adcs_check,
-    SUPPORTED_ESC_CLASSES,
-    SUPPORTED_ESC_FINDINGS,
-)
+from ad_kit.checks.adcs import adcs_check, SUPPORTED_ESC_CLASSES
 from ad_kit.core.checks import (
     load_domain_computers,
     load_dc_hostnames,
@@ -29,6 +25,7 @@ from ad_kit.core.checks import (
     cleanup_test_artifact
 )
 from ad_kit.checks.asreproast import asreproast_check
+from ad_kit.checks.coercion import coercion_check
 from ad_kit.checks.delegations import delegation_check
 from ad_kit.checks.ldap import ldap_check
 from ad_kit.checks.ldap_info import ldap_info_check, is_sensitive_value
@@ -1371,6 +1368,92 @@ def run_ldap_info_checks(
     )
 
 #-------------------------------------------------------------------------------
+# AUTHENTICATION COERCION
+#-------------------------------------------------------------------------------
+
+def run_coercion_checks(
+    std_pass: str | None = None,
+) -> None:
+    """
+    Execute authentication coercion assessment checks.
+
+    This check identifies hosts exposing authentication coercion techniques and 
+    Domain Controllers with the Print Spooler service enabled.
+
+    Findings are generated where systems expose coercion attack paths or
+    unnecessary Print Spooler functionality on Domain Controllers.
+    """
+
+    session_data = require_session()
+
+    print_section("Authentication Coercion")
+
+    if std_pass is None:
+
+        std_pass = authenticate_standard_user()
+
+    with progress("Reviewing coercion attack paths..."):
+
+        coercion_results = (
+            coercion_check(
+                session_data["dc_ip"],
+                session_data["standard_user"],
+                std_pass,
+            )
+        )
+
+    findings = []
+
+    table = Table()
+
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row(
+        "Coercible Hosts",
+        str(len(coercion_results["coercion_hosts"])),
+    )
+
+    table.add_row(
+        "DCs with Print Spooler",
+        str(len(coercion_results["spooler_dcs"])),
+    )
+
+    console.print(table)
+
+    if coercion_results["coercion_hosts"]:
+
+        finding = load_finding("coercion", "COERCE-001")
+
+        for host, techniques in (coercion_results["coercion_hosts"].items()):
+
+            finding.evidence.append(
+                f"Host `{host}` exposed the following authentication coercion "
+                f"technique(s): {', '.join(techniques)}."
+            )
+
+        findings.append(finding)
+
+    if coercion_results["spooler_dcs"]:
+
+        finding = load_finding("coercion", "COERCE-002")
+
+        for dc in coercion_results["spooler_dcs"]:
+
+            finding.evidence.append(
+                f"Domain Controller `{dc}` had the Print Spooler service "
+                "enabled."
+            )
+
+        findings.append(finding)
+
+    write_markdown_report(
+        findings,
+        get_artefacts_dir()
+        / "findings-coercion.md",
+    )
+
+#-------------------------------------------------------------------------------
 # SELECTED MODULES
 #-------------------------------------------------------------------------------
 
@@ -1388,6 +1471,7 @@ AVAILABLE_CHECKS = {
     "adcs": run_adcs_checks,
     "local-admin": run_local_admin_checks,
     "ldap-info": run_ldap_info_checks,
+    "coercion": run_coercion_checks,
 }
 
 def run_selected_checks(
@@ -1417,6 +1501,7 @@ def run_selected_checks(
         "kerberoast",
         "adcs",
         "ldap-info",
+        "coercion",
     }
 
     requires_authentication = any(
@@ -1472,6 +1557,9 @@ def run_selected_checks(
 
         elif module == "ldap-info":
             run_ldap_info_checks(std_pass)
+
+        elif module == "coercion":
+            run_coercion_checks(std_pass)
 
         else:
             print_error(f"Unknown module: {module}")
@@ -1545,3 +1633,7 @@ def run_checks() -> None:
     console.print()
 
     run_ldap_info_checks(std_pass)
+
+    console.print()
+
+    run_coercion_checks(std_pass)

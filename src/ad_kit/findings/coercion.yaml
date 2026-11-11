@@ -1,0 +1,103 @@
+# ===========================================================================
+# AUTHENTICATION COERCION FINDINGS
+#
+# Findings relating to authentication coercion techniques that can trigger
+# outbound authentication from Windows systems.
+#
+# These findings identify hosts exposing RPC services and functionality
+# commonly abused to coerce outbound authentication through techniques such as 
+# PrinterBug, PetitPotam, DFSCoerce, and MSEven.
+#
+# Although authentication coercion does not directly result in compromise, it 
+# may enable NTLM relay and other authentication-based attacks when combined 
+# with vulnerable services elsewhere in the environment.
+# ===========================================================================
+
+COERCE-001:
+  id: COERCE-001
+
+  title: Hosts Susceptible to Authentication Coercion
+
+  commentary: |
+    A review of domain-joined systems identified one or more hosts exposing
+    functionality commonly associated with authentication coercion attacks.
+
+    Authentication coercion techniques abuse legitimate Windows services and
+    RPC interfaces to trigger outbound authentication requests to
+    attacker-controlled systems.
+
+    Techniques such as PrinterBug, PetitPotam, DFSCoerce, and MSEven may be
+    used to coerce users, servers, and Domain Controllers into performing NTLM 
+    authentication to attacker-controlled endpoints.
+
+    Whilst authentication coercion does not itself provide direct access to the 
+    affected host, coerced authentication may facilitate NTLM relay attacks, 
+    credential theft, certificate abuse, privilege escalation, and broader 
+    compromise of the Active Directory environment when combined with 
+    additional weaknesses.
+
+    Exposure of authentication coercion paths is of particular concern where
+    Domain Controllers, Certification Authorities, or other high-value
+    systems are affected.
+
+  remediation: |
+    To reduce the risk of authentication relay and coercion-based attack
+    paths, the following actions are recommended:
+
+    - Review systems exposing authentication coercion techniques and determine 
+      whether the associated services remain operationally necessary.
+    - Disable or restrict unnecessary RPC services and functionality where
+      business requirements permit.
+    - Ensure NTLM relay protections are implemented throughout the environment, 
+      including SMB signing and Extended Protection for Authentication (EPA) 
+      where appropriate.
+    - Review Active Directory Certificate Services (AD CS) deployments and
+      ensure certificate enrolment services are protected against relay attacks.
+    - Restrict outbound authentication paths from high-value systems where
+      operationally feasible.
+    - Monitor authentication activity originating from privileged systems and 
+      investigate unexpected outbound authentication attempts.
+
+  references:
+    - https://github.com/p0dalirius/Coercer
+    - https://github.com/topotam/PetitPotam
+    - https://learn.microsoft.com/en-us/windows/security/identity-protection/access-control/ntlm-overview
+    - https://attack.mitre.org/techniques/T1187/
+
+
+COERCE-002:
+  id: COERCE-002
+
+  title: Print Spooler Enabled on Domain Controllers
+
+  commentary: |
+    A review of Domain Controller (DC) configurations identified one or more systems 
+    with the Windows Print Spooler service enabled.
+
+    The Print Spooler service is generally unnecessary on DCs and has 
+    historically been associated with multiple security issues, including 
+    authentication coercion techniques such as PrinterBug.
+
+    Where enabled, the service may increase the attack surface available to
+    attackers and facilitate authentication relay attack paths involving
+    privileged systems.
+
+    Microsoft guidance generally recommends disabling the Print Spooler service 
+    on DCs unless a specific operational requirement exists.
+
+  remediation: |
+    To reduce the attack surface of DCs, the following actions are recommended:
+
+    - Review whether the Print Spooler service is required on affected DCs.
+    - Disable the Print Spooler service on DCs wherever operationally feasible.
+    - Review legacy printing workflows and dependencies before disabling the 
+      service.
+    - Implement monitoring to identify unauthorised re-enablement of the Print 
+      Spooler service.
+    - Periodically review DC configurations to ensure unnecessary services 
+      remain disabled.
+
+  references:
+    - https://learn.microsoft.com/en-us/windows-server/security/windows-services/security-guidelines-for-disabling-system-services-in-windows-server#print-spooler
+    - https://support.microsoft.com/en-us/topic/managing-deployment-of-printer-rpc-binding-changes-for-cve-2021-1678-kb4599464-12a69652-30b9-3d61-d9f7-7201623a8b25
+    - https://attack.mitre.org/techniques/T1187/

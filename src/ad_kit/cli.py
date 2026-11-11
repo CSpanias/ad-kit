@@ -195,7 +195,7 @@ def check_all() -> None:
 #-------------------------------------------------------------------------------
 @check_app.command(
     name="ldap",
-    help="Execute LDAP security checks."
+    help="Execute LDAP configuration checks."
 )
 def ldap() -> None:
     """
@@ -212,7 +212,7 @@ def ldap() -> None:
 #-------------------------------------------------------------------------------
 @check_app.command(
     name="smb",
-    help="Execute SMB security checks."
+    help="Execute SMB configuration checks."
 )
 def smb() -> None:
     """
@@ -404,6 +404,25 @@ def ldap_info() -> None:
     """
 
     check.run_ldap_info_checks()
+
+#-------------------------------------------------------------------------------
+# CHECK AUTHENTICATION COERCION
+#-------------------------------------------------------------------------------
+
+@check_app.command(
+    name="coercion",
+    help="Review hosts for authentication coercion attack paths.",
+)
+def coercion() -> None:
+    """
+    Execute authentication coercion assessment checks.
+
+    This command identifies hosts exposing authentication coercion techniques 
+    such as PrinterBug, PetitPotam, DFSCoerce, and MSEven, and reviews Domain 
+    Controllers for Print Spooler exposure.
+    """
+
+    check.run_coercion_checks()
 
 #-------------------------------------------------------------------------------
 # CHECK SELECTED
