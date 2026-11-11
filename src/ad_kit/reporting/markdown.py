@@ -59,6 +59,46 @@ def format_paragraphs(
     return "\n\n".join(paragraphs)
 
 
+def _format_remediation(text: str) -> str:
+    """
+    Preserve paragraphs while collapsing wrapped bullet items into single-line 
+    Markdown list entries.
+    """
+
+    lines = text.splitlines()
+
+    output = []
+    current_bullet = None
+
+    for line in lines:
+        stripped = line.strip()
+
+        if not stripped:
+            if current_bullet:
+                output.append(current_bullet)
+                current_bullet = None
+
+            output.append("")
+            continue
+
+        if stripped.startswith("- "):
+            if current_bullet:
+                output.append(current_bullet)
+
+            current_bullet = stripped
+
+        elif current_bullet:
+            current_bullet += f" {stripped}"
+
+        else:
+            output.append(stripped)
+
+    if current_bullet:
+        output.append(current_bullet)
+
+    return "\n".join(output)
+
+
 def write_markdown_report(
     findings: list[Finding],
     output_file: Path,
@@ -108,7 +148,7 @@ def write_markdown_report(
 
             lines.append("### Remediation")
             lines.append("")
-            lines.append(finding.remediation.strip())
+            lines.append(_format_remediation(finding.remediation))
             lines.append("")
 
             if finding.affected_assets:
