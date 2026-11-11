@@ -578,14 +578,19 @@ def run_password_policy_checks(
 
         finding = load_finding("password_policy", "PASS-001")
 
-        finding.evidence.append(
-            "The following password and account lockout policy weaknesses were "
-            "identified:"
+        weaknesses = "\n".join(
+            f"- {evidence}"
+            for evidence in policy_evidence
         )
 
-        finding.evidence.extend(policy_evidence)
+        finding.commentary = (
+            "The assessment identified the following weaknesses within the "
+            "Active Directory password and account lockout policy:\n\n"
+            f"{weaknesses}\n\n"
+            + finding.commentary
+        )
 
-        findings.append(finding) 
+        findings.append(finding)
 
     write_markdown_report(
         findings,
