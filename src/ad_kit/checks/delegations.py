@@ -15,6 +15,11 @@ from ad_kit.core.findings import load_finding
 from ad_kit.core.privileged import get_privileged_users
 
 
+IGNORED_DELEGATION_ACCOUNTS = {
+        "azureadkerberos$",
+    }
+
+
 def delegation_check(
     dc_ip: str,
     username: str,
@@ -104,7 +109,7 @@ def delegation_check(
                 continue
 
         # Ignore the Azure AD Kerberos Trust computer object
-        if account.lower() == "azureadkerberos$":
+        if account.lower() in IGNORED_DELEGATION_ACCOUNTS:
             continue
 
         unconstrained_accounts.add(account)
@@ -169,6 +174,10 @@ def delegation_check(
         # NetExec prepends: LDAP <IP> <PORT> <HOST> before the delegation 
         # table columns.
         account = parts[4]
+
+        # Ignore the Azure AD Kerberos Trust computer object
+        if account.lower() in IGNORED_DELEGATION_ACCOUNTS:
+            continue
 
         protocol_transition_accounts.add(account)
 

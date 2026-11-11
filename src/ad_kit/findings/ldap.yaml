@@ -47,34 +47,30 @@ LDAP-001:
 
 LDAP-002:
   id: LDAP-002
-  title: LDAP Channel Binding Not Required
+  title: LDAP Channel Binding Not Enforced
 
   commentary: |
     The assessment identified that one or more Domain Controllers (DCs) did not 
-    require LDAP channel binding.
+    Enforced LDAP channel binding.
 
     LDAP channel binding associates authentication credentials with the 
     specific Transport Layer Security (TLS) session over which authentication 
-    occurs, helping to prevent credential relay attacks.
-
-    Without channel binding, an attacker in an Adversary-in-the-Middle (AitM) 
-    position may be able to intercept authentication requests sent over a 
-    secure connection and relay them to a DC over a separate session.
+    occurs, helping to prevent credential relay attacks. Without channel 
+    binding, an attacker in an Adversary-in-the-Middle (AitM) position may be 
+    able to intercept authentication requests sent over a secure connection and 
+    relay them to a DC over a separate session.
 
     Because the DC does not verify that the authentication request is bound to 
     the original secure channel, the relayed authentication may be accepted as 
-    legitimate.
-
-    Enforcing LDAP channel binding significantly reduces the risk of credential 
-    relay attacks against Active Directory services.
+    legitimate. Enforcing LDAP channel binding significantly reduces the risk 
+    of credential relay attacks against Active Directory services.
 
   remediation: |
     Configure LDAP channel binding to be enforced across all Domain Controllers 
-    to reduce the risk of credential relay attacks.
-
-    Where possible, the setting should be configured as 'Always'. If 
-    compatibility constraints exist, 'When Supported' may be used as an interim 
-    measure while dependent systems are remediated.
+    to reduce the risk of credential relay attacks. Where possible, the setting 
+    should be configured as `Always`. If compatibility constraints exist, `When 
+    Supported` may be used as an interim measure while dependent systems are 
+    remediated.
 
     Prior to implementation, testing should be performed to identify and 
     address any compatibility issues affecting legacy applications, services, 
@@ -95,22 +91,23 @@ LDAP-003:
     anonymous LDAP bind operations.
 
     Anonymous binds allow unauthenticated users to query directory information 
-    without providing valid credentials.
-
-    Depending on the directory configuration, this may allow attackers to 
-    enumerate users, groups, domain information, and other directory objects 
-    which can assist with reconnaissance and attack planning.
+    without providing valid credentials. Depending on the directory 
+    configuration, this may allow attackers to enumerate users, groups, domain 
+    information, and other directory objects which can assist with 
+    reconnaissance and attack planning.
 
     Directory services should require authentication for LDAP queries wherever 
     possible to limit unauthorised access to Active Directory information.
 
   remediation: |
-    Disable anonymous LDAP bind operations and require authentication for 
+    To reduce the risk of unauthorised access to Active Directory information, 
+    the following actions are recommended:
+    
+    - Disable anonymous LDAP bind operations and require authentication for 
     directory queries.
-
-    Review any systems, applications, or network appliances that utilise LDAP 
+    - Review any systems, applications, or network appliances that utilise LDAP 
     to ensure authenticated connections are used where required.
-
+    
     Prior to implementation, testing should be performed to identify and 
     address any compatibility issues affecting legacy systems or third-party 
     integrations.

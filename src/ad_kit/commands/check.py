@@ -667,15 +667,8 @@ def run_maq_checks(
 
     table = Table()
 
-    table.add_column(
-        "Setting",
-        style="cyan",
-    )
-
-    table.add_column(
-        "Value",
-        style="green",
-    )
+    table.add_column("Setting", style="cyan")
+    table.add_column("Value", style="green")
 
     table.add_row(
         "Machine Account Quota",
@@ -723,102 +716,76 @@ def run_maq_checks(
 
         if maq_results["machine_deleted"]:
 
-            maq_results["cleanup_method"] = (
-                "Domain Administrator"
-            )
+            maq_results["cleanup_method"] = "Domain Administrator"
 
         else:
 
-            maq_results["cleanup_method"] = (
-                "Manual Intervention Required"
-            )
+            maq_results["cleanup_method"] = "Manual Intervention Required"
 
-    table.add_row(
-        "Machine Cleanup",
-        maq_results["cleanup_method"],
-    )
+    table.add_row("Machine Cleanup", maq_results["cleanup_method"])
 
     console.print(table)
 
     generated_findings = []
 
-    maq = int(
-        maq_results["machine_account_quota"]
-    )
+    maq = int(maq_results["machine_account_quota"])
 
     if maq > 0:
 
-        finding = load_finding(
-            "maq",
-            "MAQ-001",
-        )
+        finding = load_finding("maq", "MAQ-001")
 
         finding.evidence.append(
-            f"Machine Account Quota was configured as {maq}."
+            f"Machine Account Quota was configured as `{maq}`."
         )
 
         if maq_results["machine_created"]:
 
             finding.evidence.append(
-                f"Authenticated user "
-                f"'{session_data['standard_user']}' "
+                f"Authenticated user {session_data['standard_user']}' "
                 f"successfully created machine account "
-                f"'{maq_results['machine_name']}$'."
+                f"`{maq_results['machine_name']}$`."
             )
 
         if maq_results["machine_authenticated"]:
 
             finding.evidence.append(
-                f"The created machine account "
-                f"'{maq_results['machine_name']}$' "
+                f"The created machine account `{maq_results['machine_name']}$` "
                 "authenticated successfully."
             )
 
         if maq_results["machine_deleted"]:
 
-            if (
-                maq_results["cleanup_method"]
-                == "Domain Administrator"
-            ):
+            if maq_results["cleanup_method"] == "Domain Administrator":
 
                 finding.evidence.append(
-                    "The machine account was removed "
-                    "using a Domain Administrator "
-                    "account."
+                    "The machine account was removed using a Domain "
+                    "Administrator account."
                 )
 
             else:
 
                 finding.evidence.append(
-                    "The machine account was "
-                    "successfully removed using the "
+                    "The machine account was successfully removed using the "
                     "creating account."
                 )
 
-        elif (
-            maq_results["cleanup_method"]
-            == "Domain Admin Required"
-        ):
+        else:
 
-            finding.evidence.append(
-                "The machine account could not be "
-                "removed using the creating account."
-            )
+            if maq_results["cleanup_method"] == "Domain Admin Required":
 
-        elif (
-            maq_results["cleanup_method"]
-            == "Manual Intervention Required"
-        ):
+                finding.evidence.append(
+                    "The machine account could not be removed using the "
+                    "creating account."
+                )
 
-            finding.evidence.append(
-                "The machine account could not be "
-                "removed following testing and "
-                "requires manual remediation."
-            )
+            elif maq_results["cleanup_method"] == "Manual Intervention Required":
 
-        generated_findings.append(
-            finding
-        )
+                finding.evidence.append(
+                    "The machine account could not be removed following testing "
+                    "and requires manual remediation."
+                )
+
+        generated_findings.append(finding)
 
     write_markdown_report(
         generated_findings,
