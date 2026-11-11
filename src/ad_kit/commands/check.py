@@ -762,27 +762,18 @@ def run_maq_checks(
                     "Administrator account."
                 )
 
-            else:
+            elif maq_results["machine_deleted"]:
 
                 finding.evidence.append(
                     "The machine account was successfully removed using the "
                     "creating account."
                 )
 
-        else:
-
-            if maq_results["cleanup_method"] == "Domain Admin Required":
+            else:
 
                 finding.evidence.append(
-                    "The machine account could not be removed using the "
-                    "creating account."
-                )
-
-            elif maq_results["cleanup_method"] == "Manual Intervention Required":
-
-                finding.evidence.append(
-                    "The machine account could not be removed following testing "
-                    "and requires manual remediation."
+                    "The machine account could not be removed following "
+                    "testing and requires manual remediation."
                 )
 
         generated_findings.append(finding)
