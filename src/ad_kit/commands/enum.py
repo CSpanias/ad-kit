@@ -374,24 +374,20 @@ def export_domain_computers(
 
     computers = []
 
+    computer_regex = re.compile(r"\b([A-Za-z0-9\-]+)\$")
+
     for line in result.stdout.splitlines():
 
-        candidate = line.strip().split()[-1]
+        for match in computer_regex.findall(line):
 
-        if candidate.endswith("$"):
-
-            fqdn = (candidate.rstrip("$").upper() + f".{domain.upper()}")
-            computers.append(fqdn)
+            computers.append(f"{match.upper()}.{domain.upper()}")
 
     computers = sorted(set(computers))
 
     (
         get_artefacts_dir()
         / "domain-computers.txt"
-    ).write_text(
-        "\n".join(computers) + "\n",
-        encoding="utf-8",
-    )
+    ).write_text("\n".join(computers) + "\n", encoding="utf-8",)
 
     return len(computers)
 
