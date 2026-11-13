@@ -298,7 +298,7 @@ def enumerate_domain_controllers(
 
     dcs = []
 
-    dc_regex = re.compile(r"([A-Za-z0-9.-]+)\s*=\s*([0-9.]+)")
+    dc_regex = re.compile(r"([A-Za-z0-9.-]+\.[A-Za-z0-9.-]+)\s*=\s*([0-9.]+)")
 
     for line in result.stdout.splitlines():
 
