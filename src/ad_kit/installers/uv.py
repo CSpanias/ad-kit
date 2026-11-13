@@ -86,6 +86,7 @@ class UVInstaller(Installer):
                 "tool",
                 "install",
                 "--reinstall",
+                "--force",
                 tool.source,
             ],
             capture_output=True,
