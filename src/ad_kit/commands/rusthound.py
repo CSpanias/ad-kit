@@ -4,9 +4,8 @@ RustHound collection command.
 
 import subprocess
 
-from ad_kit.core.console import print_error, print_info, print_success
+from ad_kit.core.console import print_error, print_info, print_success, console
 from ad_kit.core.util import get_artefacts_dir
-
 
 def run_rusthound(
     domain: str,
@@ -24,6 +23,7 @@ def run_rusthound(
     output_dir = get_artefacts_dir()
 
     print_info(f"Running RustHound against {domain} ({dc_ip})...")
+    console.print()
 
     result = subprocess.run(
         [
@@ -52,9 +52,11 @@ def run_rusthound(
             or "server requires binds to turn on integrity checking" in combined
             or "ldap operation result: rc=8" in combined
         ):
+            console.print()
             print_info(
                 "RustHound requires LDAP over TLS; retrying with --ldaps..."
             )
+            console.print()
 
             result = subprocess.run(
                 [
