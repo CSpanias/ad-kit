@@ -34,7 +34,7 @@ from ad_kit.checks.ldap import ldap_check
 from ad_kit.checks.ldap_info import ldap_info_check, is_sensitive_value
 from ad_kit.checks.local_admin import local_admin_check
 from ad_kit.checks.maq import maq_check
-from ad_kit.checks.passwd_notreqd import passwd_notreqd_check
+from ad_kit.checks.password_not_required import password_not_required_check
 from ad_kit.checks.password_never_expires import password_never_expires_check
 from ad_kit.checks.passwords import (
     password_policy_check, 
@@ -725,7 +725,7 @@ def run_password_policy_checks(
 # PASSWORD NOT REQUIRED ACCOUNTS
 #-------------------------------------------------------------------------------
 
-def run_passwd_notreqd_checks(
+def run_password_not_required_checks(
     std_pass: str | None = None,
 ) -> None:
     """
@@ -743,7 +743,7 @@ def run_passwd_notreqd_checks(
         std_pass = authenticate_standard_user()
 
     with progress("Checking accounts with PASSWD_NOTREQD..."):
-        results, findings = passwd_notreqd_check(
+        results, findings = password_not_required_check(
             session_data["dc_ip"],
             session_data["standard_user"],
             std_pass,
@@ -763,7 +763,7 @@ def run_passwd_notreqd_checks(
 
     write_markdown_report(
         findings,
-        get_artefacts_dir() / "findings-passwd-notreqd.md",
+        get_artefacts_dir() / "findings-password-not-required.md",
     )
 
 #-------------------------------------------------------------------------------
@@ -1579,7 +1579,7 @@ AVAILABLE_CHECKS = {
     "smb": run_smb_checks,
     "asreproast": run_asreproast_checks,
     "pass-pol": run_password_policy_checks,
-    "passwd-notreqd": run_passwd_notreqd_checks,
+    "password-not-required": run_password_not_required_checks,
     "password-never-expires": run_password_never_expires_checks,
     "maq": run_maq_checks,
     "dns": run_dns_checks,
@@ -1612,7 +1612,7 @@ def run_selected_checks(
     authenticated_modules = {
         "local-admin",
         "pass-pol",
-        "passwd-notreqd",
+        "password-not-required",
         "password-never-expires",
         "maq",
         "dns",
@@ -1652,8 +1652,8 @@ def run_selected_checks(
         elif module == "pass-pol":
             run_password_policy_checks(std_pass)
 
-        elif module == "passwd-notreqd":
-            run_passwd_notreqd_checks(std_pass)
+        elif module == "password-not-required":
+            run_password_not_required_checks(std_pass)
 
         elif module == "password-never-expires":
             run_password_never_expires_checks(std_pass)
@@ -1732,7 +1732,7 @@ def run_checks() -> None:
 
     console.print()
 
-    run_passwd_notreqd_checks(std_pass)
+    run_password_not_required_checks(std_pass)
 
     console.print()
 

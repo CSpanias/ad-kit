@@ -154,7 +154,7 @@ $ ad-kit check -h
 │ smb         Execute SMB security checks.                                                                    │
 │ asreproast  Identify AS-REP roastable accounts; check privileged group membership.                          │
 │ pass-pol    Execute password policy checks.                                                                 │
-│ passwd-notreqd  Identify enabled accounts with PASSWD_NOTREQD set.                                         │
+│ password-not-required  Identify enabled accounts with PASSWD_NOTREQD set.                                 │
 │ maq         Execute Machine Account Quota check.                                                            │
 │ dns         Execute DNS permission check.                                                                   │
 │ pre2k       Identify pre-created computer accounts susceptible to the pre-Windows 2000 password convention. │

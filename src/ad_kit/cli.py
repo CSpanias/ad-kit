@@ -287,15 +287,15 @@ def pass_pol() -> None:
 # CHECK PASSWORD-NOT-REQUIRED ACCOUNTS
 #-------------------------------------------------------------------------------
 @check_app.command(
-    name="passwd-notreqd",
+    name="password-not-required",
     help="Identify enabled accounts with PASSWD_NOTREQD set.",
 )
-def passwd_notreqd() -> None:
+def password_not_required() -> None:
     """
     Identify enabled accounts with the PASSWD_NOTREQD flag set.
     """
 
-    check.run_passwd_notreqd_checks()
+    check.run_password_not_required_checks()
 
 #-------------------------------------------------------------------------------
 # CHECK PASSWORDS THAT NEVER EXPIRE

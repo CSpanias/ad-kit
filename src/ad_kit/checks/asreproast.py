@@ -15,6 +15,25 @@ from ad_kit.core.privileged import get_privileged_users
 from ad_kit.core.util import get_artefacts_dir
 
 
+def _parse_asrep_account(
+    hash_line: str,
+) -> str | None:
+    """
+    Extract the account name from a Hashcat-formatted AS-REP hash.
+    """
+
+    fields = hash_line.split("$", 3)
+    if len(fields) != 4 or fields[1] != "krb5asrep":
+        return None
+
+    principal = fields[3].split(":", 1)[0]
+    account, separator, _domain = principal.partition("@")
+    if not separator or not account:
+        return None
+
+    return account
+
+
 def asreproast_check(
     dc_ip: str,
     domain: str,
@@ -69,14 +88,10 @@ def asreproast_check(
         [
             "GetNPUsers.py",
             f"{domain}/",
-            "-dc-ip",
-            dc_ip,
-            "-format",
-            "hashcat",
-            "-outputfile",
-            str(output_file),
-            "-usersfile",
-            str(users_file),
+            "-dc-ip", dc_ip,
+            "-format", "hashcat",
+            "-outputfile", str(output_file),
+            "-usersfile", str(users_file),
             "-no-pass",
         ],
     )
@@ -94,13 +109,8 @@ def asreproast_check(
         if not line:
             continue
 
-        # Example: $krb5asrep$23$user@DOMAIN:...
-        try:
-
-            account = line.split("$")[-1].split("@")[0]
-
-        except (IndexError, ValueError):
-
+        account = _parse_asrep_account(line)
+        if account is None:
             continue
 
         accounts.append(account)
