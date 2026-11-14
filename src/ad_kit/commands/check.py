@@ -40,7 +40,10 @@ from ad_kit.checks.passwords import (
     password_policy_check, 
     password_policy_assessment
 )
-from ad_kit.checks.smb import smb_configuration_check
+from ad_kit.checks.smb import (
+    smb_configuration_check,
+    smb_writable_share_check,
+)
 from ad_kit.checks.kerberoast import kerberoast_check
 from ad_kit.checks.dns import dns_record_creation_check
 from ad_kit.checks.pre2k import pre2k_check
@@ -122,9 +125,8 @@ def run_smb_checks() -> None:
     """
     Execute SMB security checks against discovered hosts.
 
-    This check evaluates SMB signing requirements and SMBv1 support across 
-    Domain Controllers and domain joined systems. It also checks for anonymous
-    SMB enumeration of shares and user accounts.
+    This check evaluates SMB signing, SMBv1, anonymous enumeration, and
+    standard-user write access to shares across discovered systems.
 
     Findings are intended to identify legacy SMB configurations and systems 
     vulnerable to common relay or downgrade attacks.
@@ -141,9 +143,11 @@ def run_smb_checks() -> None:
 
     unknown_hosts = []
 
+    hosts = load_domain_computers()
+
     with progress("Checking SMB configuration..."):
 
-        for host in load_domain_computers():
+        for host in hosts:
 
             result = smb_configuration_check(
                 host,
@@ -248,6 +252,52 @@ def run_smb_checks() -> None:
 
     console.print(host_table)
 
+    writable_share_results = []
+    standard_user = session_data.get("standard_user", "")
+    writable_checks_run = False
+    if hosts:
+        if standard_user:
+            standard_password = authenticate_standard_user()
+            writable_checks_run = True
+
+            with progress("Checking writable SMB shares..."):
+
+                for host in hosts:
+
+                    shares = smb_writable_share_check(
+                        host,
+                        session_data["dc_ip"],
+                        standard_user,
+                        standard_password,
+                    )
+
+                    if shares:
+                        writable_share_results.append({
+                            "host": host,
+                            "shares": shares,
+                        })
+        else:
+            print_info(
+                "Skipping writable SMB share checks: no Standard User is "
+                "configured for this session."
+            )
+
+    print_section("SMB Checks - Writable Shares")
+
+    writable_table = Table()
+    writable_table.add_column("Host", style="cyan")
+    writable_table.add_column("Share / Permissions", style="yellow")
+
+    for result in writable_share_results:
+
+        for share in result["shares"]:
+            writable_table.add_row(result["host"], share)
+
+    console.print(writable_table)
+
+    if writable_checks_run and not writable_share_results:
+        print_info("No writable SMB shares found for the Standard User.")
+
     if unknown_hosts:
 
         print_info(
@@ -300,6 +350,25 @@ def run_smb_checks() -> None:
                 )
 
             finding.affected_assets.append(host)
+
+        finding.affected_assets = sorted(set(finding.affected_assets))
+        findings.append(finding)
+
+    if writable_share_results:
+
+        finding = load_finding("smb", "SMB-004")
+
+        for result in writable_share_results:
+
+            host = result["host"]
+            finding.affected_assets.append(host)
+
+            for share in result["shares"]:
+                finding.evidence.append(
+                    f"NetExec reported WRITE access for Standard User "
+                    f"'{standard_user}' to '{share}' on "
+                    f"'{host}'."
+                )
 
         finding.affected_assets = sorted(set(finding.affected_assets))
         findings.append(finding)

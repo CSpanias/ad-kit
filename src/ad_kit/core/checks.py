@@ -183,6 +183,7 @@ def validate_credentials(
             "-u", username,
             "-p", password,
         ],
+        sensitive_values=[password],
     )
 
     for line in output.splitlines():
@@ -241,13 +242,15 @@ def cleanup_test_artifact(
 def run_check(
     name: str,
     command: list[str],
+    sensitive_values: list[str] | None = None,
 ) -> str:
     """
     Execute an assessment check and preserve evidence.
 
     The supplied command is executed, its output is written to the assessment 
     evidence directory, and the command stdout is returned to the caller for
-    parsing.
+    parsing. Sensitive values are redacted from progress output, saved
+    evidence, and returned stdout.
 
     Args:
         name:
@@ -255,6 +258,9 @@ def run_check(
 
         command:
             Command and arguments to execute.
+
+        sensitive_values:
+            Command values to redact from progress output and saved evidence.
 
     Returns:
         Command standard output.
@@ -264,14 +270,28 @@ def run_check(
             If the command exits with a non-zero return code.
     """
 
-    with progress(f"Running {' '.join(command)}"):
+    secrets = [
+        value
+        for value in (sensitive_values or [])
+        if value
+    ]
+    display_command = [
+        "[REDACTED]" if argument in secrets else argument
+        for argument in command
+    ]
+
+    with progress(f"Running {' '.join(display_command)}"):
         result = subprocess.run(command, capture_output=True, text=True)
-        
+
+    output = result.stdout
+    for secret in secrets:
+        output = output.replace(secret, "[REDACTED]")
+
     evidence_file = (get_evidence_dir() / f"{name}.txt")
-    evidence = (f"$ {' '.join(command)}\n\n {result.stdout}")
+    evidence = (f"$ {' '.join(display_command)}\n\n {output}")
     evidence_file.write_text(evidence, encoding="utf-8")
 
     if result.returncode != 0:
         raise RuntimeError(f"Check failed: {name}")
 
-    return result.stdout
+    return output

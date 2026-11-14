@@ -17,18 +17,13 @@ def _smb_log_payload(line: str) -> str | None:
     return match.group(1).strip() if match else None
 
 
-def _parse_share_count(output: str) -> int:
-    """Count shares in NetExec's share list or enumerated table output."""
+def _is_user_table_header(row: str) -> bool:
+    row_lower = row.lower()
+    return "username" in row_lower and "last pw set" in row_lower
 
-    share_list_count = len(
-        re.findall(
-            r"""['"]shi1_netname['"]\s*:""",
-            output,
-            re.IGNORECASE,
-        )
-    )
 
-    table_count = 0
+def _parse_share_rows(output: str) -> list[str]:
+    shares = []
     in_share_table = False
     table_header_seen = False
 
@@ -57,14 +52,28 @@ def _parse_share_count(output: str) -> int:
 
         row_lower = row.lower()
         if (
-            "username" in row_lower
-            and "last pw set" in row_lower
-        ) or row.startswith("[") or row_lower.startswith("enumerated "):
+            _is_user_table_header(row)
+            or row.startswith("[")
+            or row_lower.startswith("enumerated ")
+        ):
             break
 
-        table_count += 1
+        shares.append(" ".join(row.split()))
 
-    return max(share_list_count, table_count)
+    return shares
+
+
+def _parse_share_count(output: str) -> int:
+    """Count shares in NetExec's share list or enumerated table output."""
+
+    share_list_count = len(
+        re.findall(
+            r"""['"]shi1_netname['"]\s*:""",
+            output,
+            re.IGNORECASE,
+        )
+    )
+    return max(share_list_count, len(_parse_share_rows(output)))
 
 
 def _parse_user_count(output: str) -> int:
@@ -77,7 +86,7 @@ def _parse_user_count(output: str) -> int:
             continue
 
         row_lower = row.lower()
-        if "username" in row_lower and "last pw set" in row_lower:
+        if _is_user_table_header(row):
             user_table_seen = True
             continue
 
@@ -95,12 +104,35 @@ def _parse_user_count(output: str) -> int:
     if user_table_seen:
         return user_count
 
+    # NetExec may report only the last page's count when enumeration is paged.
     users_match = re.search(
         r"Enumerated\s+(\d+)\s+local users:",
         output,
         re.IGNORECASE,
     )
     return int(users_match.group(1)) if users_match else 0
+
+
+def smb_writable_share_check(
+    host: str,
+    dc_ip: str,
+    username: str,
+    password: str,
+) -> list[str]:
+    """Return NetExec-reported writable shares without writing to them."""
+
+    output = run_check(
+        f"smb-writable-shares-{host}",
+        [
+            "nxc", "smb", host,
+            "-u", username,
+            "-p", password,
+            "--shares", "WRITE",
+            "--dns-server", dc_ip,
+        ],
+        sensitive_values=[password],
+    )
+    return _parse_share_rows(output)
 
 
 def smb_configuration_check(

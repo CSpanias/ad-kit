@@ -151,7 +151,7 @@ $ ad-kit check -h
 ╭─Commands────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ all         Execute all assessment checks.                                                                  │
 │ ldap        Execute LDAP security checks.                                                                   │
-│ smb         Check SMB configuration and anonymous enumeration.                                             │
+│ smb         Check SMB configuration, anonymous access, and writable shares.                                 │
 │ asreproast  Identify AS-REP roastable accounts; check privileged group membership.                          │
 │ pass-pol    Execute password policy checks.                                                                 │
 │ password-not-required  Identify enabled accounts with PASSWD_NOTREQD set.                                 │

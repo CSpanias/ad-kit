@@ -2,8 +2,8 @@
 # SMB Configuration Findings
 #
 # This file contains finding definitions relating to SMB security controls
-# within Active Directory environments, including signing, SMBv1, and
-# anonymous enumeration.
+# within Active Directory environments, including signing, SMBv1, anonymous
+# enumeration, and writable shares.
 #
 # Findings defined in this file are intended to identify weaknesses that may 
 # expose systems to relay attacks, authentication tampering, or vulnerabilities
@@ -96,3 +96,21 @@ SMB-003:
   references:
     - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/network-access-restrict-anonymous-access-to-named-pipes-and-shares
     - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/network-access-do-not-allow-anonymous-enumeration-of-sam-accounts-and-shares
+
+SMB-004:
+  id: SMB-004
+  title: SMB Shares Writable by Standard User
+
+  commentary: |
+    The assessment identified one or more SMB shares for which ACL-based 
+    permission check reported WRITE access for the Standard User.
+
+    Writable shares may permit unintended modification or placement of files.
+    This check does not create or modify files; effective access can also be
+    affected by filesystem permissions and server-side controls.
+
+  remediation: |
+    Review both share and filesystem permissions on the affected shares.
+    Remove unnecessary write access and grant it only to accounts or groups
+    with a documented business need. Confirm the effective permissions after
+    policy changes.
