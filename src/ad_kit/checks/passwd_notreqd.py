@@ -63,11 +63,11 @@ def passwd_notreqd_check(
     if enabled_accounts:
         finding = load_finding("password_policy", "PASS-002")
         finding.evidence.append(
-            f"{len(enabled_accounts)} enabled account(s) have the "
-            "PASSWD_NOTREQD flag set."
+            f"A total of {len(enabled_accounts)} enabled account(s) have the "
+            "PASSWD_NOTREQD flag set:"
         )
         finding.evidence.extend(
-            f"Account '{account}' is enabled with PASSWD_NOTREQD set."
+            f"`{account}`"
             for account in enabled_accounts
         )
         findings.append(finding)

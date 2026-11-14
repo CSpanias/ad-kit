@@ -294,6 +294,20 @@ def passwd_notreqd() -> None:
     check.run_passwd_notreqd_checks()
 
 #-------------------------------------------------------------------------------
+# CHECK PASSWORDS THAT NEVER EXPIRE
+#-------------------------------------------------------------------------------
+@check_app.command(
+    name="password-never-expires",
+    help="Identify enabled accounts with passwords configured to never expire.",
+)
+def password_never_expires() -> None:
+    """
+    Identify enabled accounts configured with non-expiring passwords.
+    """
+
+    check.run_password_never_expires_checks()
+
+#-------------------------------------------------------------------------------
 # CHECK MAQ
 #-------------------------------------------------------------------------------
 @check_app.command(

@@ -32,6 +32,7 @@ from ad_kit.checks.ldap_info import ldap_info_check, is_sensitive_value
 from ad_kit.checks.local_admin import local_admin_check
 from ad_kit.checks.maq import maq_check
 from ad_kit.checks.passwd_notreqd import passwd_notreqd_check
+from ad_kit.checks.password_never_expires import password_never_expires_check
 from ad_kit.checks.passwords import (
     password_policy_check, 
     password_policy_assessment
@@ -735,6 +736,48 @@ def run_passwd_notreqd_checks(
     write_markdown_report(
         findings,
         get_artefacts_dir() / "findings-passwd-notreqd.md",
+    )
+
+#-------------------------------------------------------------------------------
+# PASSWORD NEVER EXPIRES ACCOUNTS
+#-------------------------------------------------------------------------------
+
+def run_password_never_expires_checks(
+    std_pass: str | None = None,
+) -> None:
+    """
+    Identify enabled accounts configured with non-expiring passwords.
+    """
+
+    session_data = require_session()
+
+    print_section("Password Never Expires Accounts")
+
+    if std_pass is None:
+        std_pass = authenticate_standard_user()
+
+    with progress("Checking accounts with non-expiring passwords..."):
+        results, findings = password_never_expires_check(
+            session_data["dc_ip"],
+            session_data["standard_user"],
+            std_pass,
+        )
+
+    table = Table()
+    table.add_column("Enabled Account", style="cyan")
+    table.add_column("Status", style="yellow")
+
+    if results["accounts"]:
+        for account in results["accounts"]:
+            table.add_row(account, "Password never expires")
+    else:
+        table.add_row("None found", "[green]✓ OK[/green]")
+
+    console.print(table)
+
+    write_markdown_report(
+        findings,
+        get_artefacts_dir() / "findings-password-never-expires.md",
     )
 
 #-------------------------------------------------------------------------------
@@ -1509,6 +1552,7 @@ AVAILABLE_CHECKS = {
     "asreproast": run_asreproast_checks,
     "pass-pol": run_password_policy_checks,
     "passwd-notreqd": run_passwd_notreqd_checks,
+    "password-never-expires": run_password_never_expires_checks,
     "maq": run_maq_checks,
     "dns": run_dns_checks,
     "pre2k": run_pre2k_checks,
@@ -1541,6 +1585,7 @@ def run_selected_checks(
         "local-admin",
         "pass-pol",
         "passwd-notreqd",
+        "password-never-expires",
         "maq",
         "dns",
         "pre2k",
@@ -1581,6 +1626,9 @@ def run_selected_checks(
 
         elif module == "passwd-notreqd":
             run_passwd_notreqd_checks(std_pass)
+
+        elif module == "password-never-expires":
+            run_password_never_expires_checks(std_pass)
 
         elif module == "maq":
             run_maq_checks(std_pass)
@@ -1656,6 +1704,10 @@ def run_checks() -> None:
     console.print()
 
     run_passwd_notreqd_checks(std_pass)
+
+    console.print()
+
+    run_password_never_expires_checks(std_pass)
 
     console.print()
 
