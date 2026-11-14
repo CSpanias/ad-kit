@@ -34,7 +34,7 @@ def coercion_check(
 ) -> dict:
     """
     Identify systems exposing authentication coercion techniques and Domain 
-    Controllers with the Print Spooler service enabled.
+    Controllers (DCs) with the Print Spooler service enabled.
 
     Args:
         username:
@@ -44,8 +44,8 @@ def coercion_check(
             LDAP password.
 
     Returns:
-        Dictionary containing identified coercion techniques and Domain 
-        Controllers running the Print Spooler service.
+        Dictionary containing identified coercion techniques and DCs running 
+        the Print Spooler service.
     """
 
     targets = str(
@@ -61,45 +61,30 @@ def coercion_check(
     spooler_output = run_check(
         "coercion-spooler",
         [
-            "nxc",
-            "smb",
-            targets,
-            "-u",
-            username,
-            "-p",
-            password,
-            "-M",
-            "spooler",
+            "nxc", "smb", targets,
+            "-u", username,
+            "-p", password,
+            "-M", "spooler",
         ],
     )
 
     coercion_output = run_check(
         "coercion-plus",
         [
-            "nxc",
-            "smb",
-            targets,
-            "-u",
-            username,
-            "-p",
-            password,
-            "-M",
-            "coerce_plus",
+            "nxc", "smb", targets,
+            "-u", username,
+            "-p", password,
+            "-M", "coerce_plus",
         ],
     )
 
     webdav_output = run_check(
         "coercion-webdav",
         [
-            "nxc",
-            "smb",
-            targets,
-            "-u",
-            username,
-            "-p",
-            password,
-            "-M",
-            "webdav",
+            "nxc", "smb", targets,
+            "-u", username,
+            "-p", password,
+            "-M", "webdav",
         ],
     )
 
