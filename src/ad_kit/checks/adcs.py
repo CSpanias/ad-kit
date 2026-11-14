@@ -8,6 +8,8 @@ templates and Certification Authorities vulnerable to known ESC attack paths.
 """
 
 
+import re
+
 from ad_kit.core.checks import run_check
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
@@ -73,61 +75,77 @@ def adcs_check(
     output = run_check(
         "adcs-find",
         [
-            "certipy",
-            "find",
-            "-u",
-            f"{username}@{domain}",
-            "-p",
-            password,
-            "-dc-ip",
-            dc_ip,
-            "-stdout",
-            "-vuln",
+            "certipy", "find",
+            "-u", f"{username}@{domain}",
+            "-p", password,
+            "-dc-ip", dc_ip,
+            "-stdout", "-vuln",
         ],
     )
 
     current_template = None
     current_ca = None
+    in_vulnerabilities = False
 
     for line in output.splitlines():
 
         line = line.strip()
 
-        # Template names
+        #-----------------------------------------------------------------------
+        # Extract template names
+        #-----------------------------------------------------------------------
         if line.startswith("Template Name"):
 
             try:
                 current_template = line.split(":", 1)[1].strip()
+                current_ca = None
+                in_vulnerabilities = False
 
             except IndexError:
                 continue
 
-        # Certificate Authorities
+        #-----------------------------------------------------------------------
+        # Extract Certificate Authorities
+        #-----------------------------------------------------------------------
         elif line.startswith("CA Name"):
 
             try:
                 current_ca = line.split(":", 1)[1].strip()
+                current_template = None
+                in_vulnerabilities = False
 
             except IndexError:
                 continue
 
-        # ESC Vulnerabilities
-        for esc in SUPPORTED_ESC_CLASSES:
+        #-----------------------------------------------------------------------
+        # Extract ESC-related vulnerabilities
+        #-----------------------------------------------------------------------
+        elif line == "[!] Vulnerabilities":
+            in_vulnerabilities = True
+            continue
 
-            if esc not in line:
-                continue
+        elif line.startswith(("[*]", "[!]")):
+            in_vulnerabilities = False
+            continue
 
-            if esc == "ESC8":
-                if current_ca:
-                    results[esc].append(current_ca)
+        if not in_vulnerabilities:
+            continue
 
-            else:
-                if current_template:
-                    results[esc].append(current_template)
+        vulnerability = re.match(r"^(ESC\d+)\s*:", line)
+        if vulnerability is None:
+            continue
 
-            break
+        esc = vulnerability.group(1).upper()
+        if esc not in results:
+            continue
 
-    # Generate findings
+        asset = current_ca if esc == "ESC8" else current_template
+        if asset and asset not in results[esc]:
+            results[esc].append(asset)
+
+    #---------------------------------------------------------------------------
+    # Build findings from parsed vulnerabilities
+    #---------------------------------------------------------------------------
     for esc, finding_id in SUPPORTED_ESC_FINDINGS.items():
 
         if not results[esc]:
@@ -137,6 +155,8 @@ def adcs_check(
 
         for asset in sorted(set(results[esc])):
 
+            # This check only changes evidence wording; 
+            # ESC8 names its CA, not a template.
             if esc == "ESC8":
 
                 finding.evidence.append(
