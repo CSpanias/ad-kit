@@ -7,6 +7,16 @@ import re
 from ad_kit.core.checks import run_check
 
 
+def _smb_log_payload(line: str) -> str | None:
+    line = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", line)
+    match = re.match(
+        r"^\s*SMB\s+\S+\s+\d+\s+\S+\s+(.*)$",
+        line,
+        re.IGNORECASE,
+    )
+    return match.group(1).strip() if match else None
+
+
 def _parse_share_count(output: str) -> int:
     """Count shares in NetExec's share list or enumerated table output."""
 
@@ -23,8 +33,6 @@ def _parse_share_count(output: str) -> int:
     table_header_seen = False
 
     for line in output.splitlines():
-        line = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", line)
-
         if "enumerated shares" in line.lower():
             in_share_table = True
             continue
@@ -32,15 +40,9 @@ def _parse_share_count(output: str) -> int:
         if not in_share_table:
             continue
 
-        row_match = re.match(
-            r"^\s*SMB\s+\S+\s+\d+\s+\S+\s+(.*)$",
-            line,
-            re.IGNORECASE,
-        )
-        if not row_match:
+        row = _smb_log_payload(line)
+        if row is None:
             continue
-
-        row = row_match.group(1).strip()
 
         if not table_header_seen:
             if all(
@@ -53,12 +55,52 @@ def _parse_share_count(output: str) -> int:
         if not row or re.fullmatch(r"[-\s]+", row):
             continue
 
-        if row.startswith("[") or row.lower().startswith("enumerated "):
+        row_lower = row.lower()
+        if (
+            "username" in row_lower
+            and "last pw set" in row_lower
+        ) or row.startswith("[") or row_lower.startswith("enumerated "):
             break
 
         table_count += 1
 
     return max(share_list_count, table_count)
+
+
+def _parse_user_count(output: str) -> int:
+    user_count = 0
+    user_table_seen = False
+
+    for line in output.splitlines():
+        row = _smb_log_payload(line)
+        if row is None:
+            continue
+
+        row_lower = row.lower()
+        if "username" in row_lower and "last pw set" in row_lower:
+            user_table_seen = True
+            continue
+
+        if not user_table_seen:
+            continue
+
+        if not row or re.fullmatch(r"[-\s]+", row):
+            continue
+
+        if row.startswith("[") or row_lower.startswith("enumerated "):
+            break
+
+        user_count += 1
+
+    if user_table_seen:
+        return user_count
+
+    users_match = re.search(
+        r"Enumerated\s+(\d+)\s+local users:",
+        output,
+        re.IGNORECASE,
+    )
+    return int(users_match.group(1)) if users_match else 0
 
 
 def smb_configuration_check(
@@ -139,13 +181,7 @@ def smb_configuration_check(
             ],
         )
         anonymous_shares = _parse_share_count(enumeration_output)
-        users_match = re.search(
-            r"Enumerated\s+(\d+)\s+local users:",
-            enumeration_output,
-            re.IGNORECASE,
-        )
-        if users_match:
-            anonymous_users = int(users_match.group(1))
+        anonymous_users = _parse_user_count(enumeration_output)
 
     if signing == "true":
         signing = "[green]✓ Enabled[/green]"
