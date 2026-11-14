@@ -33,6 +33,7 @@ SUPPORTED_ESC_CLASSES = (
     "ESC13",
     "ESC15",
     "ESC16",
+    "ESC17",
 )
 
 

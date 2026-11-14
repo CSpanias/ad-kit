@@ -20,6 +20,7 @@ Certificate Templates
       ESC1 : Enrollee supplies subject and template allows client authentication.
       ESC1 : repeated ESC1 detail.
       ESC15 : Version 1 template accepts application policies.
+      ESC17 : Enrollee supplies subject and template allows server authentication.
     [*] Remarks
       ESC1 : a remark is not a vulnerability.
 """
@@ -49,6 +50,7 @@ Certificate Templates
     assert results["ESC1"] == ["VulnerableTemplate"]
     assert results["ESC8"] == ["MOLLYSEC-ROOT-CA"]
     assert results["ESC15"] == ["VulnerableTemplate"]
+    assert results["ESC17"] == ["VulnerableTemplate"]
     assert [finding.id for finding in findings] == [
         "ADCS-ESC1",
         "ADCS-ESC8",
