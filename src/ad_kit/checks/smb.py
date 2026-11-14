@@ -7,6 +7,60 @@ import re
 from ad_kit.core.checks import run_check
 
 
+def _parse_share_count(output: str) -> int:
+    """Count shares in NetExec's share list or enumerated table output."""
+
+    share_list_count = len(
+        re.findall(
+            r"""['"]shi1_netname['"]\s*:""",
+            output,
+            re.IGNORECASE,
+        )
+    )
+
+    table_count = 0
+    in_share_table = False
+    table_header_seen = False
+
+    for line in output.splitlines():
+        line = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", line)
+
+        if "enumerated shares" in line.lower():
+            in_share_table = True
+            continue
+
+        if not in_share_table:
+            continue
+
+        row_match = re.match(
+            r"^\s*SMB\s+\S+\s+\d+\s+\S+\s+(.*)$",
+            line,
+            re.IGNORECASE,
+        )
+        if not row_match:
+            continue
+
+        row = row_match.group(1).strip()
+
+        if not table_header_seen:
+            if all(
+                column in row.lower()
+                for column in ("share", "permissions", "remark")
+            ):
+                table_header_seen = True
+            continue
+
+        if not row or re.fullmatch(r"[-\s]+", row):
+            continue
+
+        if row.startswith("[") or row.lower().startswith("enumerated "):
+            break
+
+        table_count += 1
+
+    return max(share_list_count, table_count)
+
+
 def smb_configuration_check(
     host: str,
     dc_ip: str,
@@ -84,13 +138,7 @@ def smb_configuration_check(
                 "--dns-server", dc_ip,
             ],
         )
-        anonymous_shares = len(
-            re.findall(
-                r"""['"]shi1_netname['"]\s*:""",
-                enumeration_output,
-                re.IGNORECASE,
-            )
-        )
+        anonymous_shares = _parse_share_count(enumeration_output)
         users_match = re.search(
             r"Enumerated\s+(\d+)\s+local users:",
             enumeration_output,
@@ -106,6 +154,9 @@ def smb_configuration_check(
         signing = "[red]✗ Disabled[/red]"
 
     if smbv1 == "none":
+        smbv1 = "[green]✓ Disabled[/green]"
+
+    elif smbv1 == "false":
         smbv1 = "[green]✓ Disabled[/green]"
 
     elif smbv1 == "true":
