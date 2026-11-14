@@ -21,6 +21,7 @@ PRIVILEGED_GROUPS = (
     "Schema Admins",
     "Administrators",
     "DNSAdmins",
+    "Account Operators",
     "Backup Operators",
     "Server Operators",
     "Cert Publishers",
