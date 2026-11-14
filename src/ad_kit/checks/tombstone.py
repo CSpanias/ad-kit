@@ -11,6 +11,7 @@ from ad_kit.core.checks import run_check
 class TombstoneResult(TypedDict):
     dc_hostname: str
     deleted_objects: int | None
+    sam_account_names: list[str]
     status: str
 
 
@@ -38,6 +39,15 @@ def tombstone_check(
     lower_output = output.lower()
     hostname_match = re.search(r"\(name:([^)]+)\)", output, re.IGNORECASE)
     dc_hostname = hostname_match.group(1).strip() if hostname_match else dc_ip
+    sam_account_names = [
+        value.strip()
+        for value in re.findall(
+            r"\bsAMAccountName[ \t]*:[ \t]*([^\r\n]*)",
+            output,
+            re.IGNORECASE,
+        )
+        if value.strip()
+    ]
 
     if "could not find the deleted objects container" in lower_output:
         deleted_objects = None
@@ -68,10 +78,10 @@ def tombstone_check(
                 re.IGNORECASE,
             )
         )
-        deleted_objects = (
-            int(count_match.group(1))
-            if count_match
-            else detail_count
+        deleted_objects = max(
+            int(count_match.group(1)) if count_match else 0,
+            detail_count,
+            len(sam_account_names),
         )
         if deleted_objects:
             status = "Enumerated"
@@ -90,5 +100,6 @@ def tombstone_check(
     return {
         "dc_hostname": dc_hostname,
         "deleted_objects": deleted_objects,
+        "sam_account_names": sam_account_names,
         "status": status,
     }
