@@ -193,16 +193,20 @@ def run_tombstone_checks(
         for result in accessible_objects:
             dc_hostname = result["dc_hostname"]
             deleted_objects = result["deleted_objects"]
-            finding.evidence.append(
+            evidence = (
                 f"Standard User '{standard_user}' enumerated "
                 f"{deleted_objects} deleted object(s) on '{dc_hostname}'."
             )
             sam_account_names = result["sam_account_names"]
             if sam_account_names:
-                finding.evidence.append(
-                    f"Deleted object sAMAccountName value(s) visible on "
-                    f"'{dc_hostname}': {', '.join(sam_account_names)}."
+                evidence += (
+                    " Their `sAMAccountName` values are the following:\n"
+                    + "\n".join(
+                        f"  - {name}"
+                        for name in sam_account_names
+                    )
                 )
+            finding.evidence.append(evidence)
             finding.affected_assets.append(dc_hostname)
 
         finding.affected_assets = sorted(set(finding.affected_assets))
