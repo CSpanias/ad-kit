@@ -123,8 +123,8 @@ def run_smb_checks() -> None:
     Execute SMB security checks against discovered hosts.
 
     This check evaluates SMB signing requirements and SMBv1 support across 
-    Domain Controllers and domain joined systems. Results are grouped by asset 
-    type and displayed in tabular format.
+    Domain Controllers and domain joined systems. It also checks for anonymous
+    SMB enumeration of shares and user accounts.
 
     Findings are intended to identify legacy SMB configurations and systems 
     vulnerable to common relay or downgrade attacks.
@@ -137,6 +137,7 @@ def run_smb_checks() -> None:
 
     smb_signing_disabled = []
     smbv1_enabled = []
+    anonymous_enumeration = []
 
     unknown_hosts = []
 
@@ -152,6 +153,7 @@ def run_smb_checks() -> None:
             if (
                 result["signing"] == "[yellow]⚠ Unknown[/yellow]"
                 and result["smbv1"] == "[yellow]⚠ Unknown[/yellow]"
+                and result["null_auth"] is None
             ):
                 unknown_hosts.append(result["host"])
                 continue
@@ -176,6 +178,9 @@ def run_smb_checks() -> None:
 
             smbv1_enabled.append(result["host"])
 
+        if result["anonymous_shares"] or result["anonymous_users"]:
+            anonymous_enumeration.append(result)
+
         host = result["host"].lower()
 
         if host in dcs:
@@ -190,6 +195,8 @@ def run_smb_checks() -> None:
     dc_table.add_column("Host", style="cyan")
     dc_table.add_column("Signing", style="green")
     dc_table.add_column("SMBv1", style="green")
+    dc_table.add_column("Anon Shares", style="yellow")
+    dc_table.add_column("Anon Users", style="yellow")
 
     for result in dc_results:
 
@@ -197,6 +204,16 @@ def run_smb_checks() -> None:
             result["host"],
             result["signing"],
             result["smbv1"],
+            (
+                str(result["anonymous_shares"])
+                if result["anonymous_shares"] is not None
+                else "N/A"
+            ),
+            (
+                str(result["anonymous_users"])
+                if result["anonymous_users"] is not None
+                else "N/A"
+            ),
         )
 
     console.print(dc_table)
@@ -208,6 +225,8 @@ def run_smb_checks() -> None:
     host_table.add_column("Host", style="cyan")
     host_table.add_column("Signing", style="green")
     host_table.add_column("SMBv1", style="green")
+    host_table.add_column("Anon Shares", style="yellow")
+    host_table.add_column("Anon Users", style="yellow")
 
     for result in host_results:
 
@@ -215,6 +234,16 @@ def run_smb_checks() -> None:
             result["host"],
             result["signing"],
             result["smbv1"],
+            (
+                str(result["anonymous_shares"])
+                if result["anonymous_shares"] is not None
+                else "N/A"
+            ),
+            (
+                str(result["anonymous_users"])
+                if result["anonymous_users"] is not None
+                else "N/A"
+            ),
         )
 
     console.print(host_table)
@@ -246,6 +275,33 @@ def run_smb_checks() -> None:
 
         finding = load_finding("smb", "SMB-002")
         finding.affected_assets.extend(sorted(set(smbv1_enabled)))
+        findings.append(finding)
+
+    if anonymous_enumeration:
+
+        finding = load_finding("smb", "SMB-003")
+
+        for result in anonymous_enumeration:
+
+            host = result["host"]
+            share_count = result["anonymous_shares"]
+            user_count = result["anonymous_users"]
+
+            if share_count:
+                finding.evidence.append(
+                    f"Unauthenticated SMB access on '{host}' enumerated "
+                    f"{share_count} share(s)."
+                )
+
+            if user_count:
+                finding.evidence.append(
+                    f"Unauthenticated SAMR access on '{host}' returned "
+                    f"{user_count} account(s), as reported by NetExec."
+                )
+
+            finding.affected_assets.append(host)
+
+        finding.affected_assets = sorted(set(finding.affected_assets))
         findings.append(finding)
 
     write_markdown_report(

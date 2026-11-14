@@ -212,14 +212,14 @@ def ldap() -> None:
 #-------------------------------------------------------------------------------
 @check_app.command(
     name="smb",
-    help="Execute SMB configuration checks."
+    help="Check SMB configuration and anonymous enumeration."
 )
 def smb() -> None:
     """
     Execute SMB security checks.
 
-    This command evaluates SMB signing requirements and SMBv1 support across 
-    discovered hosts and Domain Controllers.
+    This command evaluates SMB signing, SMBv1 support, and anonymous share or
+    account enumeration across discovered hosts and Domain Controllers.
     """
 
     check.run_smb_checks()

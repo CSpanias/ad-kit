@@ -1,8 +1,9 @@
 # ==============================================================================
 # SMB Configuration Findings
 #
-# This file contains finding definitions relating to SMB security controls 
-# within Active Directory environments, including SMB signing and SMBv1 support.
+# This file contains finding definitions relating to SMB security controls
+# within Active Directory environments, including signing, SMBv1, and
+# anonymous enumeration.
 #
 # Findings defined in this file are intended to identify weaknesses that may 
 # expose systems to relay attacks, authentication tampering, or vulnerabilities
@@ -67,3 +68,31 @@ SMB-002:
   references:
     - https://learn.microsoft.com/en-us/windows-server/storage/file-server/troubleshoot/detect-enable-and-disable-smbv1-v2-v3
     - https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-security
+
+SMB-003:
+  id: SMB-003
+  title: Anonymous SMB Enumeration Permitted
+
+  commentary: |
+    The assessment established an SMB session using empty credentials and
+    successfully enumerated share names and/or user account information.
+
+    Anonymous SMB session setup alone does not demonstrate access to share
+    contents. However, the ability to enumerate share or account information
+    may disclose details about the environment and assist further
+    reconnaissance.
+
+  remediation: |
+    Restrict anonymous SMB access and enumeration to the minimum required by
+    documented operational needs.
+
+    - Review the affected hosts' SMB share permissions and remove unnecessary
+      access for anonymous or guest sessions.
+    - Restrict anonymous access to named pipes and shares, and disable
+      anonymous account enumeration where it is not required.
+    - Disable or restrict Guest access where it is not operationally required.
+    - Re-test any required legacy services after policy changes.
+
+  references:
+    - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/network-access-restrict-anonymous-access-to-named-pipes-and-shares
+    - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/network-access-do-not-allow-anonymous-enumeration-of-sam-accounts-and-shares

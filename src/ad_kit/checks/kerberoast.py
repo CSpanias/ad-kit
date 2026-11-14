@@ -65,11 +65,9 @@ def kerberoast_check(
         [
             "GetUserSPNs.py",
             f"{domain}/{username}:{password}",
-            "-dc-ip",
-            dc_ip,
+            "-dc-ip", dc_ip,
             "-request",
-            "-outputfile",
-            str(output_file),
+            "-outputfile", str(output_file),
         ],
     )
 
