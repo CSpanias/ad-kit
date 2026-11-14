@@ -44,6 +44,7 @@ from ad_kit.checks.smb import (
     smb_configuration_check,
     smb_writable_share_check,
 )
+from ad_kit.checks.tombstone import tombstone_check
 from ad_kit.checks.kerberoast import kerberoast_check
 from ad_kit.checks.dns import dns_record_creation_check
 from ad_kit.checks.pre2k import pre2k_check
@@ -115,6 +116,95 @@ def run_ldap_checks() -> None:
     write_markdown_report(
         ldap_findings,
         get_artefacts_dir() / "findings-ldap.md",
+    )
+
+#-------------------------------------------------------------------------------
+# DELETED AD OBJECTS
+#-------------------------------------------------------------------------------
+
+def run_tombstone_checks(
+    std_pass: str | None = None,
+) -> None:
+    """
+    Check whether the Standard User can query deleted AD objects.
+
+    The check uses the tombstone module's query action only; it never restores
+    or deletes objects.
+    """
+
+    session_data = require_session()
+    standard_user = session_data.get("standard_user", "")
+    if not standard_user:
+        print_info(
+            "Skipping deleted-object checks: no Standard User is configured "
+            "for this session."
+        )
+        return
+
+    if std_pass is None:
+        std_pass = authenticate_standard_user()
+
+    dc_ips = sorted(set(session_data.get("dc_ips") or [session_data["dc_ip"]]))
+    results = []
+    findings = []
+
+    with progress("Checking Standard User access to deleted objects..."):
+
+        for dc_ip in dc_ips:
+            results.append(
+                tombstone_check(
+                    dc_ip,
+                    standard_user,
+                    std_pass,
+                )
+            )
+
+    print_section("Deleted AD Object Access")
+
+    table = Table()
+    table.add_column("Domain Controller", style="cyan")
+    table.add_column("Deleted Objects", style="yellow")
+    table.add_column("Standard User Access", style="green")
+
+    for result in results:
+        deleted_objects = result["deleted_objects"]
+        table.add_row(
+            result["dc_hostname"],
+            (
+                str(deleted_objects)
+                if deleted_objects is not None
+                else "N/A"
+            ),
+            result["status"],
+        )
+
+    console.print(table)
+
+    accessible_objects = [
+        result
+        for result in results
+        if result["deleted_objects"] is not None
+        and result["deleted_objects"] > 0
+    ]
+
+    if accessible_objects:
+        finding = load_finding("tombstone", "TOMB-001")
+
+        for result in accessible_objects:
+            dc_hostname = result["dc_hostname"]
+            deleted_objects = result["deleted_objects"]
+            finding.evidence.append(
+                f"Standard User '{standard_user}' enumerated "
+                f"{deleted_objects} deleted object(s) on '{dc_hostname}'."
+            )
+            finding.affected_assets.append(dc_hostname)
+
+        finding.affected_assets = sorted(set(finding.affected_assets))
+        findings.append(finding)
+
+    write_markdown_report(
+        findings,
+        get_artefacts_dir() / "findings-tombstone.md",
     )
 
 #-------------------------------------------------------------------------------
@@ -1701,6 +1791,7 @@ def run_coercion_checks(
 
 AVAILABLE_CHECKS = {
     "ldap": run_ldap_checks,
+    "tombstone": run_tombstone_checks,
     "smb": run_smb_checks,
     "asreproast": run_asreproast_checks,
     "pass-pol": run_password_policy_checks,
@@ -1748,6 +1839,7 @@ def run_selected_checks(
         "adcs",
         "ldap-info",
         "coercion",
+        "tombstone",
     }
 
     requires_authentication = any(
@@ -1767,6 +1859,9 @@ def run_selected_checks(
         if module == "ldap":
 
             run_ldap_checks()
+
+        elif module == "tombstone":
+            run_tombstone_checks(std_pass)
 
         elif module == "smb":
             run_smb_checks()
@@ -1812,6 +1907,7 @@ def run_selected_checks(
 
         elif module == "coercion":
             run_coercion_checks(std_pass)
+
 
         else:
             print_error(f"Unknown module: {module}")
@@ -1894,6 +1990,10 @@ def run_checks() -> None:
     console.print()
 
     run_ldap_info_checks(std_pass)
+
+    console.print()
+
+    run_tombstone_checks(std_pass)
 
     console.print()
 

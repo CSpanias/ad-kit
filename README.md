@@ -151,6 +151,7 @@ $ ad-kit check -h
 ╭─Commands────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ all         Execute all assessment checks.                                                                  │
 │ ldap        Execute LDAP security checks.                                                                   │
+│ tombstone   Check Standard User access to deleted AD objects.                                               │
 │ smb         Check SMB configuration, anonymous access, and writable shares.                                 │
 │ asreproast  Identify AS-REP roastable accounts; check privileged group membership.                          │
 │ pass-pol    Execute password policy checks.                                                                 │

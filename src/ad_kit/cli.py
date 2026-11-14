@@ -208,6 +208,22 @@ def ldap() -> None:
     check.run_ldap_checks()
 
 #-------------------------------------------------------------------------------
+# CHECK DELETED AD OBJECTS
+#-------------------------------------------------------------------------------
+@check_app.command(
+    name="tombstone",
+    help="Check Standard User access to deleted AD objects."
+)
+def tombstone() -> None:
+    """
+    Check whether the Standard User can query deleted AD objects.
+
+    This check uses a read-only query and never restores or deletes objects.
+    """
+
+    check.run_tombstone_checks()
+
+#-------------------------------------------------------------------------------
 # CHECK SMB MODULE
 #-------------------------------------------------------------------------------
 @check_app.command(
