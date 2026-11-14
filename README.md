@@ -152,7 +152,7 @@ $ ad-kit check -h
 │ all         Execute all assessment checks.                                                                  │
 │ ldap        Execute LDAP security checks.                                                                   │
 │ smb         Execute SMB security checks.                                                                    │
-│ asreproast  Identify accounts susceptible to AS-REP roasting.                                               │
+│ asreproast  Identify AS-REP roastable accounts; check privileged group membership.                          │
 │ pass-pol    Execute password policy checks.                                                                 │
 │ passwd-notreqd  Identify enabled accounts with PASSWD_NOTREQD set.                                         │
 │ maq         Execute Machine Account Quota check.                                                            │

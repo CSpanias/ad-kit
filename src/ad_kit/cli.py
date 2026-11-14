@@ -230,11 +230,15 @@ def smb() -> None:
 
 @check_app.command(
     name="asreproast",
-    help="Identify accounts susceptible to AS-REP roasting.",
+    help=(
+        "Identify AS-REP roastable accounts and check privileged group "
+        "membership."
+    ),
 )
 def asreproast() -> None:
     """
-    Execute AS-REP roasting assessment checks.
+    Identify AS-REP roastable accounts without authentication. If matches are
+    found, prompt for Standard User credentials to check privileged membership.
     """
 
     check.run_asreproast_checks()

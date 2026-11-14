@@ -24,7 +24,10 @@ from ad_kit.core.checks import (
     validate_credentials,
     cleanup_test_artifact
 )
-from ad_kit.checks.asreproast import asreproast_check
+from ad_kit.checks.asreproast import (
+    asreproast_check,
+    asreproast_privileged_check,
+)
 from ad_kit.checks.coercion import coercion_check
 from ad_kit.checks.delegations import delegation_check
 from ad_kit.checks.ldap import ldap_check
@@ -254,15 +257,15 @@ def run_smb_checks() -> None:
 # AS-REP ROASTING
 #-------------------------------------------------------------------------------
 
-def run_asreproast_checks() -> None:
+def run_asreproast_checks(
+    std_pass: str | None = None,
+) -> str | None:
     """
-    Execute AS-REP roasting assessment checks.
+    Execute AS-REP roasting checks and correlate matches with privileged groups.
 
-    This check identifies Active Directory accounts configured without Kerberos 
-    pre-authentication.
-
-    Findings are generated where accounts are susceptible to AS-REP roasting 
-    attacks.
+    AS-REP enumeration remains unauthenticated. Standard User credentials are
+    requested only when matching accounts need to be checked for privileged
+    group membership.
     """
 
     session_data = require_session()
@@ -278,6 +281,25 @@ def run_asreproast_checks() -> None:
             )
         )
 
+    privileged_accounts: list[str] = []
+    if asrep_results["accounts"]:
+        if std_pass is None:
+            std_pass = authenticate_standard_user()
+
+        with progress(
+            "Checking AS-REP roastable accounts for privileged group "
+            "membership..."
+        ):
+            privileged_accounts, privileged_findings = (
+                asreproast_privileged_check(
+                    session_data["dc_ip"],
+                    asrep_results["accounts"],
+                    session_data["standard_user"],
+                    std_pass,
+                )
+            )
+        findings.extend(privileged_findings)
+
     table = Table()
 
     table.add_column("Setting", style="cyan")
@@ -287,6 +309,10 @@ def run_asreproast_checks() -> None:
         "AS-REP Roastable Accounts",
         str(asrep_results["account_count"]),
     )
+    table.add_row(
+        "Privileged AS-REP Roastable Accounts",
+        str(len(privileged_accounts)),
+    )
 
     console.print(table)
 
@@ -295,6 +321,8 @@ def run_asreproast_checks() -> None:
         get_artefacts_dir()
         / "findings-asreproast.md",
     )
+
+    return std_pass
 
 #-------------------------------------------------------------------------------
 # AUTHENTICATED CHECKS
@@ -1646,7 +1674,7 @@ def run_selected_checks(
             run_delegation_checks(std_pass)
 
         elif module == "asreproast":
-            run_asreproast_checks()
+            run_asreproast_checks(std_pass)
 
         elif module == "kerberoast":
             run_kerberoast_checks(std_pass)
@@ -1686,12 +1714,13 @@ def run_checks() -> None:
 
     console.print()
 
-    run_asreproast_checks()
+    std_pass = run_asreproast_checks()
 
     console.print()
 
     # Authenticated checks
-    std_pass = authenticate_standard_user()
+    if std_pass is None:
+        std_pass = authenticate_standard_user()
 
     console.print()
 

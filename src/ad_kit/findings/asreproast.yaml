@@ -70,3 +70,39 @@ ASREP-001:
     - https://attack.mitre.org/techniques/T1558/004/
     - https://www.thehacker.recipes/ad/movement/kerberos/asreproast
     - https://itpeoplenetwork.com/blog/itsecurity/Understanding-AS-REP-Roasting-Threat-Analysis-and-Prevention-Strategies.html
+
+ASREP-002:
+  id: ASREP-002
+
+  title: Privileged Accounts Susceptible to AS-REP Roasting
+
+  commentary: |
+    One or more accounts configured without Kerberos pre-authentication were
+    also identified as members of a monitored privileged Active Directory
+    group.
+
+    This combination increases the potential impact of AS-REP roasting:
+    authentication material may be obtained without authenticating as the
+    affected account, and a recovered password could provide access to
+    permissions assigned through the account's group memberships. Membership
+    in a monitored group does not necessarily mean the account has domain-wide
+    administrative rights; the effective permissions should be reviewed.
+
+  remediation: |
+    In addition to addressing the AS-REP roasting exposure, review the affected
+    accounts' group memberships and effective permissions.
+
+    - Enable Kerberos pre-authentication for each account wherever possible.
+    - Remove unnecessary privileged group memberships and apply least
+      privilege, while validating operational requirements before making
+      changes.
+    - Ensure affected accounts use strong, unique passwords and appropriate
+      credential-management controls.
+    - Review service accounts for migration to Group Managed Service Accounts
+      (gMSAs) where supported.
+    - Investigate suspected credential compromise and reset affected
+      credentials promptly.
+
+  references:
+    - https://attack.mitre.org/techniques/T1558/004/
+    - https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/useraccountcontrol-manipulate-account-properties
