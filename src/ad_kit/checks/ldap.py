@@ -128,10 +128,11 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
             if identity.endswith("\\"):
                 anonymous_bind_permitted.add(dc_hostname)
 
-    for dc_hostname in anonymous_bind_rejected - anonymous_bind_permitted:
+    for dc_hostname in anonymous_bind_rejected:
         results[dc_hostname]["anonymous_bind"] = "[green]✓ Disabled[/green]"
 
-    for dc_hostname in anonymous_bind_permitted:
+    permitted_dc_hostnames = anonymous_bind_permitted - anonymous_bind_rejected
+    for dc_hostname in permitted_dc_hostnames:
         results[dc_hostname]["anonymous_bind"] = "[red]✗ Permitted[/red]"
 
     #-----------------------------------------------------------------------
@@ -155,9 +156,9 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
         findings.append(finding)
 
     # If any DC permits NULL binds, create finding
-    if anonymous_bind_permitted:
+    if permitted_dc_hostnames:
         finding = load_finding("ldap", "LDAP-003")
-        finding.affected_assets.extend(sorted(anonymous_bind_permitted))
+        finding.affected_assets.extend(sorted(permitted_dc_hostnames))
         findings.append(finding)
 
 

@@ -12,8 +12,8 @@ from ad_kit.checks import ldap
             "completed on the connection.\n"
             "LDAP 192.168.239.130 389 MOLLYSEC-DC01 [+] "
             "molly.sec\\:********\n",
-            "[red]✗ Permitted[/red]",
-            "LDAP-003",
+            "[green]✓ Disabled[/green]",
+            None,
         ),
         (
             "LDAP 192.168.239.130 389 MOLLYSEC-DC01 [-] Error in "
@@ -21,6 +21,12 @@ from ad_kit.checks import ldap
             "completed on the connection.\n",
             "[green]✓ Disabled[/green]",
             None,
+        ),
+        (
+            "LDAP 192.168.239.130 389 MOLLYSEC-DC01 [+] "
+            "molly.sec\\:********\n",
+            "[red]✗ Permitted[/red]",
+            "LDAP-003",
         ),
     ],
 )
