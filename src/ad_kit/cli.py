@@ -280,6 +280,20 @@ def pass_pol() -> None:
     check.run_password_policy_checks()
 
 #-------------------------------------------------------------------------------
+# CHECK PASSWORD-NOT-REQUIRED ACCOUNTS
+#-------------------------------------------------------------------------------
+@check_app.command(
+    name="passwd-notreqd",
+    help="Identify enabled accounts with PASSWD_NOTREQD set.",
+)
+def passwd_notreqd() -> None:
+    """
+    Identify enabled accounts with the PASSWD_NOTREQD flag set.
+    """
+
+    check.run_passwd_notreqd_checks()
+
+#-------------------------------------------------------------------------------
 # CHECK MAQ
 #-------------------------------------------------------------------------------
 @check_app.command(
