@@ -10,14 +10,13 @@ privileges.
 """
 
 from ad_kit.core.checks import run_check
+from ad_kit.core.finding import Finding
+from ad_kit.core.findings import load_finding
 from ad_kit.core.privileged import (
     PRIVILEGED_GROUPS,
     get_privileged_group_members,
 )
-from ad_kit.core.finding import Finding
-from ad_kit.core.findings import load_finding
-from ad_kit.core.util import load_session, get_artefacts_dir
-
+from ad_kit.core.util import get_artefacts_dir, load_session
 
 PRIVILEGED_GROUP_THRESHOLD = 10.0
 ADMIN_COUNT_THRESHOLD = 25.0
@@ -113,13 +112,9 @@ def privileged_excessive_check(
         users_output = run_check(
             "privileged-users",
             [
-                "nxc",
-                "ldap",
-                dc_ip,
-                "-u",
-                username,
-                "-p",
-                password,
+                "nxc", "ldap", dc_ip,
+                "-u", username,
+                "-p", password,
                 "--users",
             ],
         )
@@ -206,13 +201,9 @@ def privileged_excessive_check(
     admin_count_output = run_check(
         "privileged-admin-count",
         [
-            "nxc",
-            "ldap",
-            dc_ip,
-            "-u",
-            username,
-            "-p",
-            password,
+            "nxc", "ldap", dc_ip,
+            "-u", username,
+            "-p", password,
             "--admin-count",
         ],
         sensitive_values=[password],
@@ -264,10 +255,6 @@ def privileged_excessive_check(
             f"representing {admin_count_percentage}% of the enabled user "
             "population. This attribute can be stale and does not by itself "
             "confirm current privileged access."
-        )
-        finding.evidence.extend(
-            f"Account with `adminCount=1`: {member}"
-            for member in sorted(admin_count_members)
         )
         findings.append(finding)
 

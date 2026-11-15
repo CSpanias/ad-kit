@@ -88,7 +88,7 @@ PRIV-002:
   title: Large Population of Accounts Marked as Protected
 
   commentary: |
-    A large proportion of domain accounts were returned by the adminCount=1
+    A large proportion of domain accounts were returned by the `adminCount=1`
     query. This attribute is associated with accounts protected by privileged
     group protections, but it can remain set after an account is no longer a
     member of a protected group. It is not, by itself, proof of current
@@ -96,16 +96,17 @@ PRIV-002:
 
     A large population can indicate that privileged access or account
     protection has been assigned more broadly than intended, or that stale
-    adminCount values have not been reviewed.
+    `adminCount` values have not been reviewed.
 
   remediation: |
-    Review each account with adminCount=1 against current privileged group
-    membership and the organisation's administrative model. Remove
-    unnecessary privileged group membership and investigate stale attribute
-    values through the normal Active Directory administration process.
+    Review each account with `adminCount=1` against current privileged group
+    membership and the organisation's administrative model. Remove unnecessary
+    privileged group membership and investigate stale attribute values through
+    the normal Active Directory administration process.
 
   references:
-    - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/appendix-h--protected-users-and-groups-in-ad-ds
+    - https://learn.microsoft.com/en-us/windows/win32/adschema/a-admincount
+    - https://www.techtarget.com/news/Learn-to-adjust-the-AdminCount-attribute-in-protected-accounts/861519/
 
 PRIV-003:
   id: PRIV-003
@@ -113,14 +114,15 @@ PRIV-003:
   title: Built-in Guest Account Enabled
 
   commentary: |
-    The built-in Guest account is enabled. This account is a well-known
+    The built-in Guest account was enabled. This account is a well-known
     identity and should normally remain disabled to reduce the risk of
     unauthorised access.
 
   remediation: |
-    Disable the built-in Guest account unless a documented business
-    requirement requires it. If it must remain enabled, restrict its
-    permissions and monitor its use.
+    Disable the built-in Guest account unless a documented business requirement
+    requires it. If it must remain enabled, restrict its permissions and
+    monitor its use.
 
   references:
-    - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/appendix-h--protected-users-and-groups-in-ad-ds
+    - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-default-user-accounts#guest-account
+    - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/accounts-guest-account-status
