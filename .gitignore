@@ -51,4 +51,3 @@ loot/
 reports/
 evidence/
 tests/*
-!tests/test_check_password_reuse.py

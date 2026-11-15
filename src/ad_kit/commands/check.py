@@ -2138,7 +2138,6 @@ def run_selected_checks(
     if requires_authentication:
 
         std_pass = authenticate_standard_user()
-        console.print()
 
     for module in modules:
 
@@ -2204,8 +2203,6 @@ def run_selected_checks(
         else:
             print_error(f"Unknown module: {module}")
 
-        console.print()
-
 #-------------------------------------------------------------------------------
 # MAIN FUNCTION
 #-------------------------------------------------------------------------------
@@ -2221,80 +2218,42 @@ def run_checks() -> None:
     # Unauthenticated checks
     run_ldap_checks()
 
-    console.print()
-
     std_pass = run_smb_checks()
 
-    console.print()
-
     std_pass = run_asreproast_checks(std_pass)
-
-    console.print()
 
     # Authenticated checks
     if std_pass is None:
         std_pass = authenticate_standard_user()
 
-    console.print()
-
     run_local_admin_checks(std_pass)
-
-    console.print()
 
     run_password_policy_checks(std_pass)
 
-    console.print()
-
     run_password_not_required_checks(std_pass)
-
-    console.print()
 
     run_password_never_expires_checks(std_pass)
 
-    console.print()
-
     run_maq_checks(std_pass)
-
-    console.print()
 
     run_dns_checks(std_pass)
 
-    console.print()
-
     run_pre2k_checks(std_pass)
-
-    console.print()
 
     run_nopac_checks(std_pass)
 
-    console.print()
-
     run_scriptpath_checks(std_pass)
-
-    console.print()
 
     run_privileged_group_checks(std_pass)
 
-    console.print()
-
     run_delegation_checks(std_pass)
-
-    console.print()
 
     run_kerberoast_checks(std_pass)
 
-    console.print()
-
     run_adcs_checks(std_pass)
-
-    console.print()
 
     run_ldap_info_checks(std_pass)
 
-    console.print()
-
     run_tombstone_checks(std_pass)
-
-    console.print()
 
     run_coercion_checks(std_pass)
