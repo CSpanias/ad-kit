@@ -164,3 +164,33 @@ PRIV-004:
 
   references:
     - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-default-user-accounts#administrator-account
+
+PRIV-005:
+  id: PRIV-005
+
+  title: Unexpected DCSync-Related Replication Rights
+
+  commentary: |
+    One or more non-default principals were granted DCSync-related replication
+    control rights on the domain naming context. A principal with both
+    Replicating Directory Changes and Replicating Directory Changes All can
+    replicate sensitive directory data, including credential material.
+    Replicating Directory Changes In Filtered Set is an additional right for
+    filtered attributes.
+
+    Some reported principals may have only a subset of the core rights; this
+    does not by itself confirm that they can perform a complete DCSync
+    operation. Review the trustee's direct and group-derived permissions.
+
+  remediation: |
+    Review each identified trustee and remove replication rights that are not
+    required for an approved directory replication service. Preserve the
+    permissions required by Domain Controllers and other documented default
+    administrative principals. Also review nested group membership and
+    inherited permissions when validating effective access.
+
+  references:
+    - https://www.alteredsecurity.com/post/a-primer-on-dcsync-attack-and-detection
+    - https://learn.microsoft.com/en-us/windows/win32/adschema/r-ds-replication-get-changes
+    - https://learn.microsoft.com/en-us/windows/win32/adschema/r-ds-replication-get-changes-all
+    - https://learn.microsoft.com/en-us/windows/win32/adschema/r-ds-replication-get-changes-in-filtered-set

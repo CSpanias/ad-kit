@@ -30,6 +30,7 @@ from ad_kit.checks.asreproast import (
 )
 from ad_kit.checks.builtin_accounts import builtin_accounts_check
 from ad_kit.checks.coercion import coercion_check
+from ad_kit.checks.dcsync import dcsync_check
 from ad_kit.checks.delegations import delegation_check
 from ad_kit.checks.ldap import ldap_check
 from ad_kit.checks.ldap_info import ldap_info_check, is_sensitive_value
@@ -1364,11 +1365,10 @@ def run_privileged_group_checks(
     std_pass: str | None = None,
 ) -> None:
     """
-    Execute privileged group membership assessment checks.
+    Execute privileged group, DCSync-right, and built-in account checks.
 
-    This check evaluates membership of selected privileged Active Directory 
-    groups and compares membership levels against the number of enabled user 
-    accounts within the domain.
+    This check evaluates membership of selected privileged Active Directory
+    groups, built-in account status, and non-default DCSync replication rights.
 
     Findings are generated where privileged group membership exceeds the 
     assessment threshold.
@@ -1397,6 +1397,29 @@ def run_privileged_group_checks(
             std_pass,
         )
         findings.extend(builtin_account_findings)
+        administrative_accounts = {
+            member
+            for group_name in ("Domain Admins", "Enterprise Admins")
+            for member in privileged_results["groups"][group_name]["members"]
+        }
+        try:
+            dc_hostnames = load_dc_hostnames()
+        except FileNotFoundError:
+            dc_hostnames = []
+            print_info(
+                "Domain Controller hostname inventory is unavailable; "
+                "excluding default controller groups only."
+            )
+
+        dcsync_trustees, dcsync_findings = dcsync_check(
+            session_data["dc_ip"],
+            session_data["domain"],
+            session_data["standard_user"],
+            std_pass,
+            administrative_accounts,
+            dc_hostnames,
+        )
+        findings.extend(dcsync_findings)
 
     table = Table()
 
@@ -1455,6 +1478,25 @@ def run_privileged_group_checks(
         account_table.add_row(label, account["account_name"], status)
 
     console.print(account_table)
+
+    dcsync_table = Table(title="Unexpected DCSync Principals")
+    dcsync_table.add_column("Trustee", style="cyan")
+    dcsync_table.add_column("SID", style="green")
+    dcsync_table.add_column("Replication Rights", style="yellow")
+    dcsync_table.add_column("Core Right Set", style="red")
+
+    if dcsync_trustees:
+        for trustee in dcsync_trustees:
+            dcsync_table.add_row(
+                trustee["name"],
+                trustee["sid"],
+                ", ".join(trustee["rights"]),
+                "Complete" if trustee["complete"] else "Partial",
+            )
+    else:
+        dcsync_table.add_row("No unexpected trustees found", "", "", "")
+
+    console.print(dcsync_table)
 
     write_markdown_report(
         findings,

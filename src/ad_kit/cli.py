@@ -383,11 +383,13 @@ def pre2k() -> None:
 #-------------------------------------------------------------------------------
 @check_app.command(
     name="privileged",
-    help="Review privileged Active Directory group membership.",
+    help=(
+        "Review privileged groups, DCSync rights, and built-in account status."
+    ),
 )
 def privileged() -> None:
     """
-    Review privileged group membership and built-in account status.
+    Review privileged group membership, DCSync rights, and built-in account status.
     """
 
     check.run_privileged_group_checks()
