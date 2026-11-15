@@ -404,9 +404,16 @@ def run_maq_checks(
     table.add_column("Setting", style="cyan")
     table.add_column("Value", style="green")
 
+    maq_value = maq_results["machine_account_quota"]
+    maq_color = (
+        "red"
+        if str(maq_value).isdecimal() and int(maq_value) > 0
+        else "green"
+    )
+
     table.add_row(
         "Machine Account Quota",
-        maq_results["machine_account_quota"],
+        f"[{maq_color}]{maq_value}[/{maq_color}]",
     )
 
     table.add_row(
@@ -431,15 +438,10 @@ def run_maq_checks(
             cleanup_test_artifact(
                 "maq-delete-machine-da",
                 [
-                    "nxc",
-                    "smb",
-                    session_data["dc_ip"],
-                    "-u",
-                    da_user,
-                    "-p",
-                    da_pass,
-                    "-M",
-                    "add-computer",
+                    "nxc", "smb", session_data["dc_ip"],
+                    "-u", da_user,
+                    "-p", da_pass,
+                    "-M", "add-computer",
                     "-o",
                     f"NAME={maq_results['machine_name']}",
                     f"PASSWORD={maq_results['machine_password']}",

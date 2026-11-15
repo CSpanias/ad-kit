@@ -40,15 +40,10 @@ def maq_check(
     output = run_check(
         "maq",
         [
-            "nxc",
-            "ldap",
-            dc_ip,
-            "-u",
-            username,
-            "-p",
-            password,
-            "-M",
-            "maq",
+            "nxc", "ldap", dc_ip,
+            "-u", username,
+            "-p", password,
+            "-M", "maq",
         ],
     )
 
@@ -95,15 +90,10 @@ def maq_check(
         create_output = run_check(
             "maq-create-machine",
             [
-                "nxc",
-                "smb",
-                dc_ip,
-                "-u",
-                username,
-                "-p",
-                password,
-                "-M",
-                "add-computer",
+                "nxc", "smb", dc_ip,
+                "-u", username,
+                "-p", password,
+                "-M", "add-computer",
                 "-o",
                 f"NAME={machine_name}",
                 f"PASSWORD={machine_password}",
@@ -118,13 +108,9 @@ def maq_check(
             auth_output = run_check(
                 "maq-auth-machine",
                 [
-                    "nxc",
-                    "smb",
-                    dc_ip,
-                    "-u",
-                    f"{machine_name}$",
-                    "-p",
-                    machine_password,
+                    "nxc", "smb", dc_ip,
+                    "-u", f"{machine_name}$",
+                    "-p", machine_password,
                 ],
             )
 
@@ -136,15 +122,10 @@ def maq_check(
             delete_output = run_check(
                 "maq-delete-machine",
                 [
-                    "nxc",
-                    "smb",
-                    dc_ip,
-                    "-u",
-                    username,
-                    "-p",
-                    password,
-                    "-M",
-                    "add-computer",
+                    "nxc", "smb", dc_ip,
+                    "-u", username,
+                    "-p", password,
+                    "-M", "add-computer",
                     "-o",
                     f"NAME={machine_name}",
                     f"PASSWORD={machine_password}",
