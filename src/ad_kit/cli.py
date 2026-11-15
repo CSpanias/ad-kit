@@ -396,17 +396,6 @@ def nopac() -> None:
 # CHECK USER LOGON SCRIPT PATHS
 #-------------------------------------------------------------------------------
 @check_app.command(
-    name="scriptpath",
-    help="Review user logon script paths and Standard User write access.",
-)
-def scriptpath() -> None:
-    """
-    Review user logon script paths and Standard User write access.
-    """
-
-    check.run_scriptpath_checks()
-
-@check_app.command(
     name="scriptPath",
     help="Review user logon script paths and Standard User write access.",
 )

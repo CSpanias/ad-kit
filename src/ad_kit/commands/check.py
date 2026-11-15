@@ -2070,7 +2070,6 @@ AVAILABLE_CHECKS = {
     "dns": run_dns_checks,
     "pre2k": run_pre2k_checks,
     "nopac": run_nopac_checks,
-    "scriptpath": run_scriptpath_checks,
     "scriptPath": run_scriptpath_checks,
     "privileged": run_privileged_group_checks,
     "delegation": run_delegation_checks,
@@ -2106,7 +2105,6 @@ def run_selected_checks(
         "dns",
         "pre2k",
         "nopac",
-        "scriptpath",
         "scriptPath",
         "privileged",
         "delegation",
@@ -2165,7 +2163,7 @@ def run_selected_checks(
         elif module == "nopac":
             run_nopac_checks(std_pass)
 
-        elif module in {"scriptpath", "scriptPath"}:
+        elif module == "scriptPath":
             run_scriptpath_checks(std_pass)
 
         elif module == "privileged":
