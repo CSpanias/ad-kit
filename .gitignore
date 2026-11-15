@@ -50,4 +50,5 @@ output/
 loot/
 reports/
 evidence/
-tests/
+tests/*
+!tests/test_check_password_reuse.py

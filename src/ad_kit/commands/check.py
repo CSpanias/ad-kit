@@ -230,7 +230,9 @@ def run_tombstone_checks(
 # SMB SIGNING & SMBv1
 #-------------------------------------------------------------------------------
 
-def run_smb_checks() -> None:
+def run_smb_checks(
+    std_pass: str | None = None,
+) -> str | None:
     """
     Execute SMB security checks against discovered hosts.
 
@@ -239,6 +241,14 @@ def run_smb_checks() -> None:
 
     Findings are intended to identify legacy SMB configurations and systems 
     vulnerable to common relay or downgrade attacks.
+
+    Args:
+        std_pass:
+            Previously validated Standard User password, if already available.
+
+    Returns:
+        The password used for SMB checks, or None if authentication was not
+        needed.
     """
 
     session_data = require_session()
@@ -366,7 +376,8 @@ def run_smb_checks() -> None:
     writable_checks_run = False
     if hosts:
         if standard_user:
-            standard_password = authenticate_standard_user()
+            if std_pass is None:
+                std_pass = authenticate_standard_user()
             writable_checks_run = True
 
             with progress("Checking writable SMB shares..."):
@@ -377,7 +388,7 @@ def run_smb_checks() -> None:
                         host,
                         session_data["dc_ip"],
                         standard_user,
-                        standard_password,
+                        std_pass,
                     )
 
                     if shares:
@@ -486,6 +497,8 @@ def run_smb_checks() -> None:
         findings,
         get_artefacts_dir() / "findings-smb.md",
     )
+
+    return std_pass
 
 #-------------------------------------------------------------------------------
 # AS-REP ROASTING
@@ -2137,7 +2150,7 @@ def run_selected_checks(
             run_tombstone_checks(std_pass)
 
         elif module == "smb":
-            run_smb_checks()
+            std_pass = run_smb_checks(std_pass)
 
         elif module == "local-admin":
             run_local_admin_checks(std_pass)
@@ -2173,7 +2186,7 @@ def run_selected_checks(
             run_delegation_checks(std_pass)
 
         elif module == "asreproast":
-            run_asreproast_checks(std_pass)
+            std_pass = run_asreproast_checks(std_pass)
 
         elif module == "kerberoast":
             run_kerberoast_checks(std_pass)
@@ -2210,11 +2223,11 @@ def run_checks() -> None:
 
     console.print()
 
-    run_smb_checks()
+    std_pass = run_smb_checks()
 
     console.print()
 
-    std_pass = run_asreproast_checks()
+    std_pass = run_asreproast_checks(std_pass)
 
     console.print()
 
