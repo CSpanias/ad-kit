@@ -4,8 +4,9 @@ RustHound collection command.
 
 import subprocess
 
-from ad_kit.core.console import print_error, print_info, print_success, console
+from ad_kit.core.console import console, print_error, print_info, print_success
 from ad_kit.core.util import get_artefacts_dir
+
 
 def run_rusthound(
     domain: str,
@@ -79,9 +80,17 @@ def run_rusthound(
         )
 
         if result.stderr:
-            print_error(result.stderr.strip())
+            print_error(
+                result.stderr.replace(password, "[REDACTED]").strip()
+                if password
+                else result.stderr.strip()
+            )
         elif result.stdout:
-            print_error(result.stdout.strip())
+            print_error(
+                result.stdout.replace(password, "[REDACTED]").strip()
+                if password
+                else result.stdout.strip()
+            )
 
         return False
 

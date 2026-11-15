@@ -7,7 +7,6 @@ helper functions for loading enumerated Active Directory assets.
 """
 
 import subprocess
-
 from pathlib import Path
 
 from ad_kit.core.util import get_artefacts_dir, progress
@@ -250,7 +249,8 @@ def run_check(
     The supplied command is executed, its output is written to the assessment 
     evidence directory, and the command stdout is returned to the caller for
     parsing. Sensitive values are redacted from progress output, saved
-    evidence, and returned stdout.
+    evidence, and returned stdout. Values supplied with `-p`, `--password`,
+    `--password=...`, or `PASSWORD=...` are redacted automatically.
 
     Args:
         name:
@@ -275,10 +275,30 @@ def run_check(
         for value in (sensitive_values or [])
         if value
     ]
-    display_command = [
-        "[REDACTED]" if argument in secrets else argument
-        for argument in command
-    ]
+
+    for index, argument in enumerate(command):
+        if argument in {"-p", "--password"} and index + 1 < len(command):
+            password = command[index + 1]
+        elif argument.casefold().startswith(("--password=", "password=")):
+            password = argument.partition("=")[2]
+        else:
+            continue
+
+        if password and password not in secrets:
+            secrets.append(password)
+
+    display_command = []
+
+    for argument in command:
+        if argument in secrets:
+            display_command.append("[REDACTED]")
+        elif argument.casefold().startswith(("--password=", "password=")):
+            option, _, value = argument.partition("=")
+            display_command.append(
+                f"{option}=[REDACTED]" if value in secrets else argument
+            )
+        else:
+            display_command.append(argument)
 
     with progress(f"Running {' '.join(display_command)}"):
         result = subprocess.run(command, capture_output=True, text=True)

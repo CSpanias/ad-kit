@@ -70,17 +70,11 @@ def builtin_accounts_check(
         output = run_check(
             f"builtin-account-rid-{rid}",
             [
-                "nxc",
-                "ldap",
-                dc_ip,
-                "-u",
-                username,
-                "-p",
-                password,
-                "-M",
-                "whoami",
-                "-o",
-                f"USER={account_name}",
+                "nxc", "ldap", dc_ip,
+                "-u", username,
+                "-p", password,
+                "-M", "whoami",
+                "-o", f"USER={account_name}",
             ],
             sensitive_values=[password],
         )
