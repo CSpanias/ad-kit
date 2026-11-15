@@ -87,7 +87,16 @@ def builtin_accounts_check(
         }
 
     findings: list[Finding] = []
+    administrator = accounts["administrator"]
     guest = accounts["guest"]
+
+    if administrator["enabled"]:
+        finding = load_finding("privileged_excessive", "PRIV-004")
+        finding.evidence.append(
+            f"The built-in Administrator account (RID 500), named "
+            f"`{administrator['account_name']}`, is enabled."
+        )
+        findings.append(finding)
 
     if guest["enabled"]:
         finding = load_finding("privileged_excessive", "PRIV-003")

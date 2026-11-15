@@ -137,3 +137,30 @@ PRIV-003:
     - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-default-user-accounts#guest-account
     - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/accounts-guest-account-status
     - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/network-access-sharing-and-security-model-for-local-accounts
+
+PRIV-004:
+  id: PRIV-004
+
+  title: Built-in Administrator Account Enabled
+
+  commentary: |
+    The built-in Administrator account was enabled. This is a well-known,
+    high-privilege account that can be renamed or disabled but cannot be
+    deleted or locked out. On a Domain Controller, it provides extensive
+    domain-level administrative access.
+
+    An enabled status alone does not establish a security misconfiguration;
+    the account may be required for administration or recovery. It is
+    included as an informational observation because compromise of this
+    account could have significant impact.
+
+  remediation: |
+    Ensure the account has a long, unique password and protect its use with
+    appropriate administrative logon controls and monitoring. Consider
+    renaming or disabling it only when operational and recovery requirements
+    have been reviewed. On Domain Controllers, disabling the account does not
+    remove every recovery-mode access path, so it should not replace strong
+    credential protection.
+
+  references:
+    - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-default-user-accounts#administrator-account
