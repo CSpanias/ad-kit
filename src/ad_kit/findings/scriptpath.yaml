@@ -1,0 +1,23 @@
+SCRIPT-001:
+  id: SCRIPT-001
+  title: Logon Script Writable by Standard User
+
+  commentary: |
+    The Standard User was able to open a configured user logon script with
+    write or append access. A user who can modify a logon script may alter
+    commands that run when the associated account signs in.
+
+    The check requested write-capable file handles and closed them without
+    writing data. No script contents or permissions were changed.
+
+  remediation: |
+    Restrict write and append access to logon scripts to authorized
+    administrators or deployment identities. Review both the file and
+    containing directory permissions, as well as the share permissions.
+    Validate that users who execute the script cannot modify it.
+
+  references:
+    - https://offsec.blog/hidden-menace-how-to-identify-misconfigured-and-dangerous-logon-scripts/
+    - https://www.semperis.com/blog/gpo-logon-script-security/
+    - https://learn.microsoft.com/en-us/windows/win32/adschema/a-scriptpath
+    - https://learn.microsoft.com/en-us/windows/win32/secauthz/access-control-lists

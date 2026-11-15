@@ -19,6 +19,7 @@ from rich.table import Table
 
 from ad_kit.checks.adcs import adcs_check, SUPPORTED_ESC_CLASSES
 from ad_kit.core.checks import (
+    get_evidence_dir,
     load_domain_computers,
     load_dc_hostnames,
     validate_credentials,
@@ -43,6 +44,7 @@ from ad_kit.checks.passwords import (
     password_policy_check, 
     password_policy_assessment
 )
+from ad_kit.checks.scriptpath import scriptpath_check
 from ad_kit.checks.smb import (
     smb_configuration_check,
     smb_writable_share_check,
@@ -1428,6 +1430,106 @@ def run_nopac_checks(
     )
 
 #-------------------------------------------------------------------------------
+# USER LOGON SCRIPT PATHS
+#-------------------------------------------------------------------------------
+
+def run_scriptpath_checks(
+    std_pass: str | None = None,
+) -> None:
+    """Review user logon script paths and Standard User write access."""
+
+    session_data = require_session()
+    standard_user = session_data.get("standard_user", "")
+    if not standard_user:
+        print_info(
+            "Skipping script-path checks: no Standard User is configured "
+            "for this session."
+        )
+        return
+
+    if std_pass is None:
+        std_pass = authenticate_standard_user()
+
+    dc_ips = sorted(set(session_data.get("dc_ips") or [session_data["dc_ip"]]))
+    dc_hostnames = session_data.get("dc_hostnames", [])
+
+    print_section("User Logon Script Paths")
+
+    with progress("Enumerating user logon script paths and permissions..."):
+        results, findings = scriptpath_check(
+            session_data["dc_ip"],
+            dc_ips,
+            dc_hostnames,
+            session_data["domain"],
+            standard_user,
+            std_pass,
+        )
+
+    table = Table(title="User Logon Script Paths")
+    table.add_column("User", style="cyan")
+    table.add_column("ScriptPath", style="green")
+    table.add_column("Resolved Path", style="yellow")
+    table.add_column("Standard User Write", style="red")
+    table.add_column("NTFS ACL Entries", style="white")
+
+    if results:
+        for result in results:
+            acl_text = "; ".join(result["acl_entries"]) or "Unavailable"
+            if result["error"]:
+                acl_text = f"{acl_text}; {result['error']}"
+            write_access = result["standard_user_writable"]
+            status_style = (
+                "red"
+                if write_access == "Yes"
+                else "green"
+                if write_access == "No"
+                else "yellow"
+            )
+            table.add_row(
+                result["username"],
+                result["script_path"],
+                result["resolved_path"],
+                f"[{status_style}]{write_access}[/{status_style}]",
+                acl_text,
+            )
+    else:
+        table.add_row(
+            "No scriptPath values found",
+            "",
+            "",
+            "N/A",
+            "",
+        )
+
+    console.print(table)
+
+    evidence_lines: list[str] = []
+    for result in results:
+        evidence_lines.extend(
+            [
+                f"User: {result['username']}",
+                f"ScriptPath: {result['script_path']}",
+                f"Resolved Path: {result['resolved_path']}",
+                (
+                    "Standard User Write Access: "
+                    f"{result['standard_user_writable']}"
+                ),
+                f"ACL Entries: {'; '.join(result['acl_entries']) or 'Unavailable'}",
+                f"Notes: {result['error'] or 'None'}",
+                "",
+            ]
+        )
+    (get_evidence_dir() / "scriptpath-permissions.txt").write_text(
+        "\n".join(evidence_lines),
+        encoding="utf-8",
+    )
+
+    write_markdown_report(
+        findings,
+        get_artefacts_dir() / "findings-scriptpath.md",
+    )
+
+#-------------------------------------------------------------------------------
 # PRIVILEGED GROUP MEMBERSHIP
 #-------------------------------------------------------------------------------
 
@@ -1968,6 +2070,7 @@ AVAILABLE_CHECKS = {
     "dns": run_dns_checks,
     "pre2k": run_pre2k_checks,
     "nopac": run_nopac_checks,
+    "scriptpath": run_scriptpath_checks,
     "privileged": run_privileged_group_checks,
     "delegation": run_delegation_checks,
     "kerberoast": run_kerberoast_checks,
@@ -2002,6 +2105,7 @@ def run_selected_checks(
         "dns",
         "pre2k",
         "nopac",
+        "scriptpath",
         "privileged",
         "delegation",
         "kerberoast",
@@ -2058,6 +2162,9 @@ def run_selected_checks(
 
         elif module == "nopac":
             run_nopac_checks(std_pass)
+
+        elif module == "scriptpath":
+            run_scriptpath_checks(std_pass)
 
         elif module == "privileged":
             run_privileged_group_checks(std_pass)
@@ -2146,6 +2253,10 @@ def run_checks() -> None:
     console.print()
 
     run_nopac_checks(std_pass)
+
+    console.print()
+
+    run_scriptpath_checks(std_pass)
 
     console.print()
 

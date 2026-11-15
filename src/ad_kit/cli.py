@@ -393,6 +393,20 @@ def nopac() -> None:
     check.run_nopac_checks()
 
 #-------------------------------------------------------------------------------
+# CHECK USER LOGON SCRIPT PATHS
+#-------------------------------------------------------------------------------
+@check_app.command(
+    name="scriptpath",
+    help="Review user logon script paths and Standard User write access.",
+)
+def scriptpath() -> None:
+    """
+    Review user logon script paths and Standard User write access.
+    """
+
+    check.run_scriptpath_checks()
+
+#-------------------------------------------------------------------------------
 # CHECK PRIVILEGED GROUPS
 #-------------------------------------------------------------------------------
 @check_app.command(
