@@ -307,8 +307,14 @@ def run_check(
     for secret in secrets:
         output = output.replace(secret, "[REDACTED]")
 
+    error_output = result.stderr
+    for secret in secrets:
+        error_output = error_output.replace(secret, "[REDACTED]")
+
     evidence_file = (get_evidence_dir() / f"{name}.txt")
     evidence = (f"$ {' '.join(display_command)}\n\n {output}")
+    if error_output:
+        evidence += f"\n\n[stderr]\n{error_output}"
     evidence_file.write_text(evidence, encoding="utf-8")
 
     if result.returncode != 0:
