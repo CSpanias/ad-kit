@@ -8,11 +8,32 @@ NOPAC-001:
     returned with a PAC. This response pattern is associated with the NoPAC
     vulnerabilities CVE-2021-42278 and CVE-2021-42287.
 
+    NoPAC chains two issues. CVE-2021-42278 allows sAMAccountName spoofing
+    when an attacker can create or modify a suitable machine account. The
+    account can be made to resemble a Domain Controller account. CVE-2021-42287
+    is a Key Distribution Center (KDC) account-lookup flaw that can cause a
+    service ticket request for a nonexistent account to be associated with
+    the matching machine account. The resulting ticket behavior can enable
+    privilege escalation, potentially to Domain Administrator.
+
+    The check only compares PAC and non-PAC TGT response sizes; it does not
+    attempt sAMAccountName spoofing or verify that the authenticated user can
+    create or modify machine accounts. A Machine Account Quota of zero can
+    prevent ordinary users without delegated permissions from creating
+    machine accounts, but it does not patch either vulnerability or prevent
+    exploitation by principals that already have the required permissions.
+
   remediation: |
     Apply the Microsoft security updates addressing CVE-2021-42278 and
-    CVE-2021-42287 to all Domain Controllers. Verify that updates are installed
-    and review Microsoft's deployment guidance for any required enforcement
-    settings.
+    CVE-2021-42287 to all Domain Controllers and ensure PAC validation
+    enforcement is active. Microsoft states that updates dated November 9,
+    2021 or later enforce PAC validation for domain accounts; verify every
+    Domain Controller is updated and follow Microsoft's deployment guidance.
+
+    Where appropriate, set ms-DS-MachineAccountQuota to zero and review
+    delegated rights to create computer accounts or modify sAMAccountName.
+    This reduces opportunities to complete the attack chain, but is not a
+    substitute for patching and enforcing PAC validation.
 
   references:
     - https://www.fortinet.com/blog/threat-research/cve-2021-42278-cve-2021-42287-from-user-to-domain-admin-60-seconds
