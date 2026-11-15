@@ -114,15 +114,26 @@ PRIV-003:
   title: Built-in Guest Account Enabled
 
   commentary: |
-    The built-in Guest account was enabled. This account is a well-known
-    identity and should normally remain disabled to reduce the risk of
-    unauthorised access.
+    The built-in Guest account was enabled. Although it has limited default
+    permissions, it is a shared, well-known identity with a well-known SID.
+    Depending on its password and the surrounding access-control settings,
+    enabling it can allow access without an individually authenticated account
+    and make activity harder to attribute. Keep it disabled unless there is a
+    documented business need.
 
   remediation: |
-    Disable the built-in Guest account unless a documented business requirement
-    requires it. If it must remain enabled, restrict its permissions and
-    monitor its use.
+    Set the `Accounts: Guest account status` policy to Disabled unless a
+    documented business need requires Guest access. Before changing the
+    setting, review the `Network access: Sharing and security model for local
+    accounts` policy: when it is set to Guest only, disabling Guest can cause
+    SMB and other network logons to fail.
+
+    If Guest access is temporarily required, use a strong password, limit its
+    permissions and exposure, and monitor its activity. Avoid using it on
+    systems with external network access or access to other computers. Disable
+    the account and change or remove its password when the need ends.
 
   references:
     - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-default-user-accounts#guest-account
     - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/accounts-guest-account-status
+    - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/network-access-sharing-and-security-model-for-local-accounts
