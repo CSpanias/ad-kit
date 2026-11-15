@@ -2071,6 +2071,7 @@ AVAILABLE_CHECKS = {
     "pre2k": run_pre2k_checks,
     "nopac": run_nopac_checks,
     "scriptpath": run_scriptpath_checks,
+    "scriptPath": run_scriptpath_checks,
     "privileged": run_privileged_group_checks,
     "delegation": run_delegation_checks,
     "kerberoast": run_kerberoast_checks,
@@ -2106,6 +2107,7 @@ def run_selected_checks(
         "pre2k",
         "nopac",
         "scriptpath",
+        "scriptPath",
         "privileged",
         "delegation",
         "kerberoast",
@@ -2163,7 +2165,7 @@ def run_selected_checks(
         elif module == "nopac":
             run_nopac_checks(std_pass)
 
-        elif module == "scriptpath":
+        elif module in {"scriptpath", "scriptPath"}:
             run_scriptpath_checks(std_pass)
 
         elif module == "privileged":

@@ -406,6 +406,15 @@ def scriptpath() -> None:
 
     check.run_scriptpath_checks()
 
+@check_app.command(
+    name="scriptPath",
+    help="Review user logon script paths and Standard User write access.",
+)
+def script_path_camel_case() -> None:
+    """Alias for the script-path check."""
+
+    check.run_scriptpath_checks()
+
 #-------------------------------------------------------------------------------
 # CHECK PRIVILEGED GROUPS
 #-------------------------------------------------------------------------------

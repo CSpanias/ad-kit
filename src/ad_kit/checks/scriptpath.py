@@ -34,6 +34,12 @@ SCRIPT_PATH_PATTERN = re.compile(
     re.IGNORECASE,
 )
 STATUS_ACCESS_DENIED = 0xC0000022
+STATUS_OBJECT_NAME_NOT_FOUND = 0xC0000034
+STATUS_OBJECT_PATH_NOT_FOUND = 0xC000003A
+MISSING_PATH_STATUSES = {
+    STATUS_OBJECT_NAME_NOT_FOUND,
+    STATUS_OBJECT_PATH_NOT_FOUND,
+}
 
 WRITE_RIGHTS = (
     (0x10000000, "GENERIC_ALL"),
@@ -260,13 +266,20 @@ def _probe_write_access(
                 creationDisposition=FILE_OPEN,
             )
         except SessionError as error:
-            if error.get_error_code() == STATUS_ACCESS_DENIED:
+            error_code = error.getErrorCode()
+            if error_code == STATUS_ACCESS_DENIED:
                 denied_count += 1
                 continue
+            if error_code in MISSING_PATH_STATUSES:
+                return (
+                    "Unknown",
+                    f"Script file not found on the queried SMB share "
+                    f"(NTSTATUS 0x{error_code:08X}).",
+                )
             return (
                 "Unknown",
                 f"SMB write-access probe failed (NTSTATUS "
-                f"0x{error.get_error_code():08X}).",
+                f"0x{error_code:08X}).",
             )
 
         try:
@@ -275,7 +288,7 @@ def _probe_write_access(
             return (
                 "Yes",
                 f"Write access was granted, but closing the SMB handle failed "
-                f"(NTSTATUS 0x{error.get_error_code():08X}).",
+                f"(NTSTATUS 0x{error.getErrorCode():08X}).",
             )
 
         return "Yes", None
@@ -296,6 +309,7 @@ def _inspect_resolved_path(
     acl_entries: list[str] = []
     writable: Literal["Yes", "No", "Unknown"] = "Unknown"
     errors: list[str] = []
+    path_missing = False
     account = username
     account_domain = domain
     if "\\" in account:
@@ -311,17 +325,26 @@ def _inspect_resolved_path(
         try:
             acl_entries = _read_file_acl(connection, tree_id, path)
         except SessionError as error:
-            errors.append(
-                f"ACL query failed (NTSTATUS 0x{error.get_error_code():08X})."
-            )
+            error_code = error.getErrorCode()
+            if error_code in MISSING_PATH_STATUSES:
+                errors.append(
+                    f"Script file not found on the queried SMB share "
+                    f"(NTSTATUS 0x{error_code:08X})."
+                )
+                path_missing = True
+            else:
+                errors.append(
+                    f"ACL query failed (NTSTATUS 0x{error_code:08X})."
+                )
 
-        writable, probe_error = _probe_write_access(
-            connection,
-            tree_id,
-            path,
-        )
-        if probe_error:
-            errors.append(probe_error)
+        if not path_missing:
+            writable, probe_error = _probe_write_access(
+                connection,
+                tree_id,
+                path,
+            )
+            if probe_error:
+                errors.append(probe_error)
     except (OSError, SessionError) as error:
         errors.append(str(error))
     finally:
