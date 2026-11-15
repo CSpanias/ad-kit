@@ -387,7 +387,7 @@ def pre2k() -> None:
 )
 def privileged() -> None:
     """
-    Execute privileged group membership assessment checks.
+    Review privileged group membership and built-in account status.
     """
 
     check.run_privileged_group_checks()

@@ -28,6 +28,7 @@ from ad_kit.checks.asreproast import (
     asreproast_check,
     asreproast_privileged_check,
 )
+from ad_kit.checks.builtin_accounts import builtin_accounts_check
 from ad_kit.checks.coercion import coercion_check
 from ad_kit.checks.delegations import delegation_check
 from ad_kit.checks.ldap import ldap_check
@@ -48,7 +49,11 @@ from ad_kit.checks.tombstone import tombstone_check
 from ad_kit.checks.kerberoast import kerberoast_check
 from ad_kit.checks.dns import dns_record_creation_check
 from ad_kit.checks.pre2k import pre2k_check
-from ad_kit.checks.privileged_excessive import privileged_excessive_check
+from ad_kit.checks.privileged_excessive import (
+    ADMIN_COUNT_THRESHOLD,
+    PRIVILEGED_GROUP_THRESHOLD,
+    privileged_excessive_check,
+)
 from ad_kit.core.console import (
     console, 
     print_section, 
@@ -1386,10 +1391,16 @@ def run_privileged_group_checks(
                 std_pass,
             )
         )
+        builtin_accounts, builtin_account_findings = builtin_accounts_check(
+            session_data["dc_ip"],
+            session_data["standard_user"],
+            std_pass,
+        )
+        findings.extend(builtin_account_findings)
 
     table = Table()
 
-    table.add_column("Group", style="cyan")
+    table.add_column("Group / Indicator", style="cyan")
     table.add_column("Members", style="green")
     table.add_column("% Enabled Users", style="yellow")
     table.add_column("Assessment", style="red")
@@ -1404,12 +1415,46 @@ def run_privileged_group_checks(
             f"{percentage:.1f}%",
             (
                 "[red]✗ Excessive[/red]"
-                if percentage >= 10.0
+                if percentage >= PRIVILEGED_GROUP_THRESHOLD
                 else "[green]✓ Normal[/green]"
             ),
         )
 
+    admin_count = privileged_results["admin_count"]
+    table.add_row(
+        "adminCount=1 accounts",
+        str(admin_count["member_count"]),
+        f"{admin_count['percentage']:.1f}%",
+        (
+            "[yellow]Review[/yellow]"
+            if admin_count["percentage"] >= ADMIN_COUNT_THRESHOLD
+            else "[green]✓ Normal[/green]"
+        ),
+    )
+
     console.print(table)
+
+    account_table = Table(title="Built-in Account Status")
+    account_table.add_column("Account", style="cyan")
+    account_table.add_column("sAMAccountName", style="green")
+    account_table.add_column("Status", style="yellow")
+
+    for account_key, label in (
+        ("administrator", "Administrator (RID 500)"),
+        ("guest", "Guest (RID 501)"),
+    ):
+        account = builtin_accounts[account_key]
+        enabled = account["enabled"]
+        status = (
+            "[yellow]Enabled[/yellow]"
+            if enabled and account_key == "administrator"
+            else "[red]Enabled[/red]"
+            if enabled
+            else "[green]Disabled[/green]"
+        )
+        account_table.add_row(label, account["account_name"], status)
+
+    console.print(account_table)
 
     write_markdown_report(
         findings,

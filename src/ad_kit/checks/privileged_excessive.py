@@ -20,6 +20,7 @@ from ad_kit.core.util import load_session, get_artefacts_dir
 
 
 PRIVILEGED_GROUP_THRESHOLD = 10.0
+ADMIN_COUNT_THRESHOLD = 25.0
 
 
 def privileged_excessive_check(
@@ -56,6 +57,11 @@ def privileged_excessive_check(
     results = {
         "enabled_users": 0,
         "groups": {},
+        "admin_count": {
+            "member_count": 0,
+            "percentage": 0.0,
+            "members": [],
+        },
     }
 
     findings: list[Finding] = []
@@ -195,6 +201,74 @@ def privileged_excessive_check(
                 f"represented {percentage}% of the enabled user population."
             )
 
+        findings.append(finding)
+
+    admin_count_output = run_check(
+        "privileged-admin-count",
+        [
+            "nxc",
+            "ldap",
+            dc_ip,
+            "-u",
+            username,
+            "-p",
+            password,
+            "--admin-count",
+        ],
+        sensitive_values=[password],
+    )
+
+    admin_count_members = set()
+
+    for line in admin_count_output.splitlines():
+
+        if (
+            not line.startswith("LDAP")
+            or any(marker in line for marker in ("[+]", "[*]", "[-]", "[!]"))
+        ):
+            continue
+
+        parts = line.split()
+
+        if len(parts) < 5:
+            continue
+
+        member = parts[-1].strip()
+
+        if member and member.lower() not in excluded_users:
+            admin_count_members.add(member)
+
+    admin_count = len(admin_count_members)
+    admin_count_percentage = (
+        round((admin_count / enabled_users) * 100, 1)
+        if enabled_users
+        else 0
+    )
+
+    results["admin_count"] = {
+        "member_count": admin_count,
+        "percentage": admin_count_percentage,
+        "members": sorted(admin_count_members),
+    }
+
+    if admin_count_percentage >= ADMIN_COUNT_THRESHOLD:
+
+        finding = load_finding("privileged_excessive", "PRIV-002")
+        finding.evidence.append(
+            f"The domain contained {enabled_users} enabled user accounts "
+            "following exclusion of testing accounts used during the "
+            "assessment."
+        )
+        finding.evidence.append(
+            f"The `adminCount=1` query returned {admin_count} account(s), "
+            f"representing {admin_count_percentage}% of the enabled user "
+            "population. This attribute can be stale and does not by itself "
+            "confirm current privileged access."
+        )
+        finding.evidence.extend(
+            f"Account with `adminCount=1`: {member}"
+            for member in sorted(admin_count_members)
+        )
         findings.append(finding)
 
     return results, findings

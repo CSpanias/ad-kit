@@ -159,7 +159,7 @@ $ ad-kit check -h
 │ maq         Execute Machine Account Quota check.                                                            │
 │ dns         Execute DNS permission check.                                                                   │
 │ pre2k       Identify pre-created computer accounts susceptible to the pre-Windows 2000 password convention. │
-│ privileged  Review privileged Active Directory group membership.                                            │
+│ privileged  Review privileged group membership and built-in account status.                                  │
 │ delegation  Review Active Directory delegation configuration.                                               │
 │ kerberoast  Identify Kerberoastable accounts.                                                               │
 │ adcs        Review Active Directory Certificate Services (AD CS) configuration.                             │
