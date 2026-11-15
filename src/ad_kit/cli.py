@@ -379,6 +379,20 @@ def pre2k() -> None:
     check.run_pre2k_checks()
 
 #-------------------------------------------------------------------------------
+# CHECK NOPAC
+#-------------------------------------------------------------------------------
+@check_app.command(
+    name="nopac",
+    help="Check discovered Domain Controllers for NoPAC vulnerability indicators.",
+)
+def nopac() -> None:
+    """
+    Check discovered Domain Controllers for NoPAC vulnerability indicators.
+    """
+
+    check.run_nopac_checks()
+
+#-------------------------------------------------------------------------------
 # CHECK PRIVILEGED GROUPS
 #-------------------------------------------------------------------------------
 @check_app.command(

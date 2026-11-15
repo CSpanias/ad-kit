@@ -36,6 +36,7 @@ from ad_kit.checks.ldap import ldap_check
 from ad_kit.checks.ldap_info import ldap_info_check, is_sensitive_value
 from ad_kit.checks.local_admin import local_admin_check
 from ad_kit.checks.maq import maq_check
+from ad_kit.checks.nopac import nopac_check
 from ad_kit.checks.password_not_required import password_not_required_check
 from ad_kit.checks.password_never_expires import password_never_expires_check
 from ad_kit.checks.passwords import (
@@ -1358,6 +1359,75 @@ def run_pre2k_checks(
     )
 
 #-------------------------------------------------------------------------------
+# NOPAC
+#-------------------------------------------------------------------------------
+
+def run_nopac_checks(
+    std_pass: str | None = None,
+) -> None:
+    """
+    Assess discovered Domain Controllers for NoPAC vulnerability indicators.
+    """
+
+    session_data = require_session()
+    standard_user = session_data.get("standard_user", "")
+    if not standard_user:
+        print_info(
+            "Skipping NoPAC check: no Standard User is configured for this "
+            "session."
+        )
+        return
+
+    if std_pass is None:
+        std_pass = authenticate_standard_user()
+
+    dc_ips = sorted(set(session_data.get("dc_ips") or [session_data["dc_ip"]]))
+
+    print_section("NoPAC Check")
+
+    with progress("Checking discovered Domain Controllers for NoPAC..."):
+        results, findings = nopac_check(
+            dc_ips,
+            standard_user,
+            std_pass,
+        )
+
+    table = Table(title="NoPAC Assessment")
+    table.add_column("Domain Controller", style="cyan")
+    table.add_column("TGT with PAC (bytes)", style="green")
+    table.add_column("TGT without PAC (bytes)", style="green")
+    table.add_column("Assessment", style="yellow")
+
+    for result in results:
+        status_style = (
+            "red"
+            if result["status"] == "Vulnerable"
+            else "green"
+            if result["status"] == "Not vulnerable"
+            else "yellow"
+        )
+        table.add_row(
+            result["dc_ip"],
+            (
+                str(result["with_pac_size"])
+                if result["with_pac_size"] is not None
+                else "N/A"
+            ),
+            (
+                str(result["without_pac_size"])
+                if result["without_pac_size"] is not None
+                else "N/A"
+            ),
+            f"[{status_style}]{result['status']}[/{status_style}]",
+        )
+
+    console.print(table)
+    write_markdown_report(
+        findings,
+        get_artefacts_dir() / "findings-nopac.md",
+    )
+
+#-------------------------------------------------------------------------------
 # PRIVILEGED GROUP MEMBERSHIP
 #-------------------------------------------------------------------------------
 
@@ -1897,6 +1967,7 @@ AVAILABLE_CHECKS = {
     "maq": run_maq_checks,
     "dns": run_dns_checks,
     "pre2k": run_pre2k_checks,
+    "nopac": run_nopac_checks,
     "privileged": run_privileged_group_checks,
     "delegation": run_delegation_checks,
     "kerberoast": run_kerberoast_checks,
@@ -1930,6 +2001,7 @@ def run_selected_checks(
         "maq",
         "dns",
         "pre2k",
+        "nopac",
         "privileged",
         "delegation",
         "kerberoast",
@@ -1983,6 +2055,9 @@ def run_selected_checks(
 
         elif module == "pre2k":
             run_pre2k_checks(std_pass)
+
+        elif module == "nopac":
+            run_nopac_checks(std_pass)
 
         elif module == "privileged":
             run_privileged_group_checks(std_pass)
@@ -2067,6 +2142,10 @@ def run_checks() -> None:
     console.print()
 
     run_pre2k_checks(std_pass)
+
+    console.print()
+
+    run_nopac_checks(std_pass)
 
     console.print()
 

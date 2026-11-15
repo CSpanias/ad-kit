@@ -159,6 +159,7 @@ $ ad-kit check -h
 │ maq         Execute Machine Account Quota check.                                                            │
 │ dns         Execute DNS permission check.                                                                   │
 │ pre2k       Identify pre-created computer accounts susceptible to the pre-Windows 2000 password convention. │
+│ nopac       Check discovered Domain Controllers for NoPAC vulnerability indicators.                         │
 │ privileged  Review privileged groups, DCSync rights, and built-in accounts.                                    │
 │ delegation  Review Active Directory delegation configuration.                                               │
 │ kerberoast  Identify Kerberoastable accounts.                                                               │

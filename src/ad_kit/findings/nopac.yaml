@@ -1,0 +1,20 @@
+NOPAC-001:
+  id: NOPAC-001
+  title: NoPAC Vulnerability Detected
+
+  commentary: |
+    The Domain Controller returned a Ticket Granting Ticket (TGT) without a
+    Privilege Attribute Certificate (PAC) that was smaller than the TGT
+    returned with a PAC. This response pattern is associated with the NoPAC
+    vulnerabilities CVE-2021-42278 and CVE-2021-42287.
+
+  remediation: |
+    Apply the Microsoft security updates addressing CVE-2021-42278 and
+    CVE-2021-42287 to all Domain Controllers. Verify that updates are installed
+    and review Microsoft's deployment guidance for any required enforcement
+    settings.
+
+  references:
+    - https://www.fortinet.com/blog/threat-research/cve-2021-42278-cve-2021-42287-from-user-to-domain-admin-60-seconds
+    - https://msrc.microsoft.com/update-guide/vulnerability/CVE-2021-42278
+    - https://msrc.microsoft.com/update-guide/vulnerability/CVE-2021-42287
