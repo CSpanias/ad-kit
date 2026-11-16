@@ -21,6 +21,11 @@ dependencies = [
 [project.scripts]
 ad-kit = "ad_kit.cli:app"
 
+[project.optional-dependencies]
+docs = [
+    "mkdocs-material",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
