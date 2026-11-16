@@ -6,15 +6,15 @@ the uv tool management system.
 """
 
 import subprocess
-
-from rich.console import Console
 from pathlib import Path
 from shutil import which
 
+from rich.console import Console
+
 from ad_kit.core.console import print_info, print_success
-from ad_kit.models import Tool
-from ad_kit.installers.base import Installer
 from ad_kit.core.exceptions import InstallationError
+from ad_kit.installers.base import Installer
+from ad_kit.models import Tool
 
 console = Console()
 

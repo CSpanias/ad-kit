@@ -3,16 +3,15 @@ Main AD-Kit command-line interface.
 """
 
 import typer
-
 from rich.console import Console
 from rich.table import Table
 
 from ad_kit.commands import check
+from ad_kit.commands.check import AVAILABLE_CHECKS
 from ad_kit.commands.enum import run_enumeration
 from ad_kit.commands.tools.install import install_tool
 from ad_kit.commands.tools.status import show_status
 from ad_kit.registry import ToolRegistry
-
 
 app = typer.Typer(
     add_completion=False,
@@ -191,314 +190,30 @@ def check_all() -> None:
     check.run_checks()
 
 #-------------------------------------------------------------------------------
-# CHECK LDAP MODULE
-#-------------------------------------------------------------------------------
-@check_app.command(
-    name="ldap",
-    help="Execute LDAP configuration checks."
-)
-def ldap() -> None:
-    """
-    Execute LDAP security checks.
-
-    This command evaluates LDAP signing, channel binding enforcement, and
-    anonymous LDAP bind configuration across all discovered Domain Controllers.
-    """
-
-    check.run_ldap_checks()
-
-#-------------------------------------------------------------------------------
-# CHECK DELETED AD OBJECTS
-#-------------------------------------------------------------------------------
-@check_app.command(
-    name="tombstone",
-    help="Check Standard User access to deleted AD objects."
-)
-def tombstone() -> None:
-    """
-    Check whether the Standard User can query deleted AD objects.
-
-    This check uses a read-only query and never restores or deletes objects.
-    """
-
-    check.run_tombstone_checks()
-
-#-------------------------------------------------------------------------------
-# CHECK SMB MODULE
-#-------------------------------------------------------------------------------
-@check_app.command(
-    name="smb",
-    help="Check SMB configuration, anonymous access, and writable shares."
-)
-def smb() -> None:
-    """
-    Execute SMB security checks.
-
-    This command evaluates SMB signing, SMBv1 support, anonymous enumeration,
-    and Standard User write access to shares across discovered systems.
-    """
-
-    check.run_smb_checks()
-
-#-------------------------------------------------------------------------------
-# CHECK AS-REP ROASTING
+# CHECK COMMANDS (generated dynamically from AVAILABLE_CHECKS)
 #-------------------------------------------------------------------------------
 
-@check_app.command(
-    name="asreproast",
-    help=(
-        "Identify AS-REP roastable accounts and check privileged group "
-        "membership."
-    ),
-)
-def asreproast() -> None:
-    """
-    Identify AS-REP roastable accounts without authentication. If matches are
-    found, prompt for Standard User credentials to check privileged membership.
-    """
 
-    check.run_asreproast_checks()
+def _make_check_command(module_name: str):
+    """Factory that creates a check command for the given module name."""
 
-#-------------------------------------------------------------------------------
-# CHECK LOCAL ADMINISTRATOR ACCESS
-#-------------------------------------------------------------------------------
+    def run_check() -> None:
+        check.run_selected_checks([module_name])
 
-@check_app.command(
-    name="local-admin",
-    help="Identify systems where the Standard User has local administrator "
-        "access.",
-)
-def local_admin() -> None:
-    """
-    Execute local administrator access assessment checks.
+    run_check.__name__ = (
+        f"check_{module_name.replace('-', '_').replace('.', '_')}"
+    )
+    run_check.__doc__ = f"Execute {module_name} assessment checks."
+    return run_check
 
-    This command determines whether the configured Standard User account has
-    local administrator privileges on domain-joined systems and Domain
-    Controllers.
 
-    Findings are generated where excessive local administrative privileges are
-    identified.
-    """
+for _module_name in AVAILABLE_CHECKS:
 
-    check.run_local_admin_checks()
+    check_app.command(
+        name=_module_name,
+        help=f"Execute {_module_name} assessment checks.",
+    )(_make_check_command(_module_name))
 
-#-------------------------------------------------------------------------------
-# CHECK PASSWORD POLICY MODULE
-#-------------------------------------------------------------------------------
-@check_app.command(
-    name="pass-pol",
-    help="Execute password policy checks."
-)
-def pass_pol() -> None:
-    """
-    Execute domain password policy checks.
-
-    This command retrieves and assesses the effective Active Directory password 
-    policy against common security best practices.
-    """
-
-    check.run_password_policy_checks()
-
-#-------------------------------------------------------------------------------
-# CHECK PASSWORD-NOT-REQUIRED ACCOUNTS
-#-------------------------------------------------------------------------------
-@check_app.command(
-    name="password-not-required",
-    help="Identify enabled accounts with PASSWD_NOTREQD set.",
-)
-def password_not_required() -> None:
-    """
-    Identify enabled accounts with the PASSWD_NOTREQD flag set.
-    """
-
-    check.run_password_not_required_checks()
-
-#-------------------------------------------------------------------------------
-# CHECK PASSWORDS THAT NEVER EXPIRE
-#-------------------------------------------------------------------------------
-@check_app.command(
-    name="password-never-expires",
-    help="Identify enabled accounts with passwords configured to never expire.",
-)
-def password_never_expires() -> None:
-    """
-    Identify enabled accounts configured with non-expiring passwords.
-    """
-
-    check.run_password_never_expires_checks()
-
-#-------------------------------------------------------------------------------
-# CHECK MAQ
-#-------------------------------------------------------------------------------
-@check_app.command(
-    name="maq",
-    help="Execute Machine Account Quota check."
-)
-def run_maq_checks() -> None:
-    """
-    Execute Machine Account Quota assessment checks.
-
-    This check retrieves the Active Directory Machine Account Quota 
-    configuration and determines whether authenticated users are permitted to 
-    create machine accounts within the domain.
-
-    Findings are generated when a non-zero Machine Account Quota is identified.
-    """
-
-    check.run_maq_checks()
-
-#-------------------------------------------------------------------------------
-# CHECK DNS
-#-------------------------------------------------------------------------------
-@check_app.command(
-    name="dns",
-    help="Execute DNS permission check.",
-)
-def dns() -> None:
-    """
-    Execute DNS permission assessment checks.
-    """
-
-    check.run_dns_checks()
-
-#-------------------------------------------------------------------------------
-# CHECK PRE-WINDOWS 2000 COMPUTER ACCOUNTS
-#-------------------------------------------------------------------------------
-@check_app.command(
-    name="pre2k",
-    help=(
-        "Identify pre-created computer accounts susceptible to the pre-Windows "
-        "2000 password convention."
-    ),
-)
-def pre2k() -> None:
-    """
-    Execute pre-Windows 2000 computer account assessment checks.
-    """
-
-    check.run_pre2k_checks()
-
-#-------------------------------------------------------------------------------
-# CHECK NOPAC
-#-------------------------------------------------------------------------------
-@check_app.command(
-    name="nopac",
-    help="Check discovered Domain Controllers for NoPAC vulnerability indicators.",
-)
-def nopac() -> None:
-    """
-    Check discovered Domain Controllers for NoPAC vulnerability indicators.
-    """
-
-    check.run_nopac_checks()
-
-#-------------------------------------------------------------------------------
-# CHECK USER LOGON SCRIPT PATHS
-#-------------------------------------------------------------------------------
-@check_app.command(
-    name="scriptPath",
-    help="Review user logon script paths and Standard User write access.",
-)
-def script_path_camel_case() -> None:
-    """Alias for the script-path check."""
-
-    check.run_scriptpath_checks()
-
-#-------------------------------------------------------------------------------
-# CHECK PRIVILEGED GROUPS
-#-------------------------------------------------------------------------------
-@check_app.command(
-    name="privileged",
-    help=(
-        "Review privileged groups, DCSync rights, and built-in account status."
-    ),
-)
-def privileged() -> None:
-    """
-    Review privileged group membership, DCSync rights, and built-in account status.
-    """
-
-    check.run_privileged_group_checks()
-
-#-------------------------------------------------------------------------------
-# CHECK DELEGATION
-#-------------------------------------------------------------------------------
-
-@check_app.command(
-    name="delegation",
-    help="Review Active Directory delegation configuration.",
-)
-def delegation() -> None:
-    """
-    Execute Active Directory delegation assessment checks.
-    """
-
-    check.run_delegation_checks()
-
-#-------------------------------------------------------------------------------
-# CHECK KERBEROASTING
-#-------------------------------------------------------------------------------
-
-@check_app.command(
-    name="kerberoast",
-    help="Identify Kerberoastable accounts.",
-)
-def kerberoast() -> None:
-    """
-    Execute Kerberoasting assessment checks.
-    """
-
-    check.run_kerberoast_checks()
-
-#-------------------------------------------------------------------------------
-# CHECK ACTIVE DIRECTORY CERTIFICATE SERVICES
-#-------------------------------------------------------------------------------
-
-@check_app.command(
-    name="adcs",
-    help=("Review Active Directory Certificate Services (AD CS) configuration."
-    ),
-)
-def adcs() -> None:
-    """
-    Execute Active Directory Certificate Services (AD CS) assessment checks.
-    """
-
-    check.run_adcs_checks()
-
-#-------------------------------------------------------------------------------
-# CHECK LDAP INFORMATION EXPOSURE
-#-------------------------------------------------------------------------------
-
-@check_app.command(
-    name="ldap-info",
-    help="Review LDAP attributes for sensitive information exposure.",
-)
-def ldap_info() -> None:
-    """
-    Execute LDAP information exposure assessment checks.
-    """
-
-    check.run_ldap_info_checks()
-
-#-------------------------------------------------------------------------------
-# CHECK AUTHENTICATION COERCION
-#-------------------------------------------------------------------------------
-
-@check_app.command(
-    name="coercion",
-    help="Review hosts for authentication coercion attack paths.",
-)
-def coercion() -> None:
-    """
-    Execute authentication coercion assessment checks.
-
-    This command identifies hosts exposing authentication coercion techniques 
-    such as PrinterBug, PetitPotam, DFSCoerce, and MSEven, and reviews Domain 
-    Controllers for Print Spooler exposure.
-    """
-
-    check.run_coercion_checks()
 
 #-------------------------------------------------------------------------------
 # CHECK SELECTED

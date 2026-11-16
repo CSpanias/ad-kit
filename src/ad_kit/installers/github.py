@@ -2,15 +2,15 @@
 GitHub release installer.
 """
 
-import requests
 import shutil
 import stat
 import subprocess
 import tarfile
 import tempfile
-
 from pathlib import Path
 from shutil import which
+
+import requests
 
 from ad_kit.config import INSTALL_DIR
 from ad_kit.core.console import print_info, print_success

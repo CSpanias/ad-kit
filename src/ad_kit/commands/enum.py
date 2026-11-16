@@ -3,27 +3,15 @@ Initial engagement enumeration functionality.
 """
 
 import re
-import socket
 import subprocess
-import typer
-
 from pathlib import Path
+
+import typer
 from rich.table import Table
 
-from ad_kit.core.console import (
-    print_error, 
-    print_info, 
-    print_success, 
-    print_section, 
-    console
-)
-from ad_kit.core.util import (
-    get_artefacts_dir, 
-    save_session, 
-    generate_scp_command,
-    progress
-)
 from ad_kit.commands.rusthound import run_rusthound
+from ad_kit.core.console import console, print_error, print_info, print_section, print_success
+from ad_kit.core.util import generate_scp_command, get_artefacts_dir, progress, save_session
 
 
 # TODO: Automate domain and DC resolution

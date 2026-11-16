@@ -14,7 +14,6 @@ from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
 from ad_kit.core.privileged import get_privileged_users
 
-
 IGNORED_DELEGATION_ACCOUNTS = {
         "azureadkerberos$",
     }

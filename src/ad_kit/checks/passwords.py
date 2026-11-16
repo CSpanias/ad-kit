@@ -2,11 +2,7 @@
 Password-related assessment checks.
 """
 
-from ad_kit.core.checks import (
-    run_check, 
-    PASSWORD_POLICY_BASELINE, 
-    duration_to_minutes
-)
+from ad_kit.core.checks import PASSWORD_POLICY_BASELINE, duration_to_minutes, run_check
 
 
 def password_policy_check(

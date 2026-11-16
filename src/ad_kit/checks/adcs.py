@@ -14,7 +14,6 @@ from ad_kit.core.checks import run_check
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
 
-
 SUPPORTED_ESC_FINDINGS = {
     "ESC1": "ADCS-ESC1",
     "ESC8": "ADCS-ESC8",

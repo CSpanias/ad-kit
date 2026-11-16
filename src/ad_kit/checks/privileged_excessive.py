@@ -16,7 +16,7 @@ from ad_kit.core.privileged import (
     PRIVILEGED_GROUPS,
     get_privileged_group_members,
 )
-from ad_kit.core.util import get_artefacts_dir, load_session
+from ad_kit.core.util import get_artefacts_dir, require_session
 
 PRIVILEGED_GROUP_THRESHOLD = 10.0
 ADMIN_COUNT_THRESHOLD = 25.0
@@ -67,13 +67,7 @@ def privileged_excessive_check(
 
     excessive_groups = []
 
-    try:
-
-        session_data = load_session()
-
-    except RuntimeError:
-
-        session_data = {}
+    session_data = require_session()
 
     excluded_users = {
         user.lower()

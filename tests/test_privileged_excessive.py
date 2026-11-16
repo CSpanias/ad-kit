@@ -5,7 +5,7 @@ from ad_kit.core.privileged import PRIVILEGED_GROUPS
 def test_admin_count_uses_its_own_threshold(monkeypatch, tmp_path):
     monkeypatch.setattr(
         privileged_excessive,
-        "load_session",
+        "require_session",
         lambda: {"domain_users_filtered_count": 100},
     )
     monkeypatch.setattr(
@@ -51,7 +51,7 @@ def test_admin_count_below_threshold_does_not_create_finding(
 ):
     monkeypatch.setattr(
         privileged_excessive,
-        "load_session",
+        "require_session",
         lambda: {"domain_users_filtered_count": 100},
     )
     monkeypatch.setattr(

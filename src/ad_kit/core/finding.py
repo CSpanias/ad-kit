@@ -7,7 +7,6 @@ checks, and consumed by reporting modules.
 """
 
 from dataclasses import dataclass, field
-from copy import deepcopy
 
 
 @dataclass

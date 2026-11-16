@@ -2,10 +2,8 @@
 Local Administrator access assessment checks.
 """
 
-from pathlib import Path
-
-from ad_kit.core.checks import run_check, load_dc_hostnames
-from ad_kit.core.finding import Finding
+from ad_kit.core.checks import load_dc_hostnames, run_check
+from ad_kit.core.util import get_artefacts_dir
 
 
 def local_admin_check(
@@ -36,7 +34,7 @@ def local_admin_check(
         was detected.
     """
 
-    hosts_file = Path("ad-kit/domain-computers.txt")
+    hosts_file = get_artefacts_dir() / "domain-computers.txt"
 
     if not hosts_file.exists():
 

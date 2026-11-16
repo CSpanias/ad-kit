@@ -4,7 +4,6 @@ LDAP information exposure assessment checks.
 
 from ad_kit.core.checks import run_check
 
-
 LDAP_SENSITIVE_KEYWORDS = (
     "password",
     "passwd",

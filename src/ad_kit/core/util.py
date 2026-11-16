@@ -1,10 +1,10 @@
 import json
-import typer
-
 from contextlib import contextmanager
 from pathlib import Path
 
-from ad_kit.core.console import console, print_section, print_info
+import typer
+
+from ad_kit.core.console import console, print_info, print_section
 
 ARTEFACTS_DIR = Path("ad-kit")
 

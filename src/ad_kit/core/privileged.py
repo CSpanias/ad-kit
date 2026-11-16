@@ -12,8 +12,7 @@ other privilege-related security assessments.
 
 
 from ad_kit.core.checks import run_check
-from ad_kit.core.util import load_session
-
+from ad_kit.core.util import require_session
 
 PRIVILEGED_GROUPS = (
     "Domain Admins",
@@ -41,13 +40,7 @@ def get_privileged_group_members(
         Dictionary containing privileged groups and their members.
     """
 
-    try:
-
-        session_data = load_session()
-
-    except RuntimeError:
-
-        session_data = {}
+    session_data = require_session()
 
     excluded_users = {
         user.lower()

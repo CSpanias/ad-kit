@@ -2,7 +2,7 @@
 LDAP-related assessment checks.
 """
 
-from ad_kit.core.checks import run_check, load_dc_hostnames
+from ad_kit.core.checks import load_dc_hostnames, run_check
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
 
