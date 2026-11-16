@@ -145,26 +145,26 @@ $ ad-kit check -h
 
  Execute assessment checks.
 
-╭─Options──────────────────────────────────────────────────────────────────────────────────────╮
-│ --help  -h      <bool>  Show this message and exit.                                          │
-╰──────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─Commands─────────────────────────────────────────────────────────────────────────────────────╮
-│ all         Execute all assessment checks.                                                   │
-│ ldap        Execute LDAP security checks.                                                    │
-│ tombstone   Check Standard User access to deleted AD objects.                                │
-│ smb         Check SMB configuration, anonymous access, and writable shares.                  │
-│ asreproast  Identify AS-REP roastable accounts\; check privileged group membership.          │
-│ pass-pol    Execute password policy checks.                                                  │
-│ password-not-required  Identify enabled accounts with PASSWD_NOTREQD set.                    │
-│ maq         Execute Machine Account Quota check.                                             │
-│ dns         Execute DNS permission check.                                                    │
+╭─Options─────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help  -h      <bool>  Show this message and exit.                                                         │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─Commands────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ all         Execute all assessment checks.                                                                  │
+│ ldap        Execute LDAP security checks.                                                                   │
+│ tombstone   Check Standard User access to deleted AD objects.                                               │
+│ smb         Check SMB configuration, anonymous access, and writable shares.                                 │
+│ asreproast  Identify AS-REP roastable accounts\; check privileged group membership.                         │
+│ pass-pol    Execute password policy checks.                                                                 │
+│ password-not-required  Identify enabled accounts with PASSWD_NOTREQD set.                                   │
+│ maq         Execute Machine Account Quota check.                                                            │
+│ dns         Execute DNS permission check.                                                                   │
 │ pre2k       Identify pre-created computer accounts susceptible to the pre-Windows 2000 password convention. │
-│ nopac       Check discovered Domain Controllers for NoPAC vulnerability indicators.          │
-│ scriptPath  Review user logon script paths and Standard User write access.                   │
-│ privileged  Review privileged groups, DCSync rights, and built-in accounts.                  │
-│ delegation  Review Active Directory delegation configuration.                                │
-│ kerberoast  Identify Kerberoastable accounts.                                                │
-│ adcs        Review Active Directory Certificate Services (AD CS) configuration.              │
-│ run         Execute selected assessment modules.                                             │
-╰──────────────────────────────────────────────────────────────────────────────────────────────╯
+│ nopac       Check discovered Domain Controllers for NoPAC vulnerability indicators.                         │
+│ scriptPath  Review user logon script paths and Standard User write access.                                  │
+│ privileged  Review privileged groups, DCSync rights, and built-in accounts.                                 │
+│ delegation  Review Active Directory delegation configuration.                                               │
+│ kerberoast  Identify Kerberoastable accounts.                                                               │
+│ adcs        Review Active Directory Certificate Services (AD CS) configuration.                             │
+│ run         Execute selected assessment modules.                                                            │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
