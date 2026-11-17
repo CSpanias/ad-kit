@@ -186,7 +186,7 @@ def privileged_excessive_check(
         for group, member_count, percentage in excessive_groups:
 
             finding.evidence.append(
-                f"The `{group}` group contained {member_count} member(s) which "
+                f"The {group} group contained {member_count} member(s) which "
                 f"represented {percentage}% of the enabled user population."
             )
 

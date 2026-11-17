@@ -18,13 +18,11 @@ PRIV-001:
   commentary: |
     A review of privileged Active Directory (AD) group membership identified an 
     excessive proportion of enabled user accounts holding elevated 
-    administrative privileges.
-
-    Privileged groups provide extensive access to domain resources, 
-    administrative configurations, security settings, and critical 
-    infrastructure components. Membership of such groups should be limited to a 
-    small number of dedicated administrative accounts with a clearly defined 
-    operational requirement.
+    administrative privileges. Privileged groups provide extensive access to 
+    domain resources, administrative configurations, security settings, and 
+    critical infrastructure components. Membership of such groups should be 
+    limited to a small number of dedicated administrative accounts with a 
+    clearly defined operational requirement.
 
     The level of privileged access identified suggests that administrative 
     permissions may have been assigned more broadly than necessary. This 
@@ -41,11 +39,10 @@ PRIV-001:
     In the event of credential theft through phishing, malware, password 
     spraying, credential reuse, or other attack techniques, compromise of any 
     privileged account may provide an attacker with immediate access to 
-    critical systems and services across the estate.
-
-    This may facilitate privilege escalation, lateral movement, unauthorised 
-    access to sensitive information, disruption of business operations, and 
-    ultimately compromise of the wider Active Directory environment.
+    critical systems and services across the estate. This may facilitate 
+    privilege escalation, lateral movement, unauthorised access to sensitive 
+    information, disruption of business operations, and ultimately compromise 
+    of the wider AD environment.
 
   remediation: |
     To reduce the risks associated with excessive privileged access, the

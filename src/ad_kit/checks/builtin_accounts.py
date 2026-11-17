@@ -94,7 +94,7 @@ def builtin_accounts_check(
         finding = load_finding("privileged_excessive", "PRIV-004")
         finding.evidence.append(
             f"The built-in Administrator account (RID 500), named "
-            f"`{administrator['account_name']}`, is enabled."
+            f"`{administrator['account_name']}`, was enabled."
         )
         findings.append(finding)
 
@@ -102,7 +102,7 @@ def builtin_accounts_check(
         finding = load_finding("privileged_excessive", "PRIV-003")
         finding.evidence.append(
             f"The built-in Guest account (RID 501), named "
-            f"`{guest['account_name']}`, is enabled."
+            f"`{guest['account_name']}`, was enabled."
         )
         findings.append(finding)
 

@@ -16,28 +16,24 @@ MAQ-001:
   title: Machine Account Quota Permits Machine Creation
 
   commentary: |
-    The assessment identified that the Active Directory Machine Account Quota 
-    (MAQ) was configured to allow standard domain users to create computer 
-    accounts.
-
-    By default, Active Directory permits authenticated users to create up to 
-    ten computer accounts within the domain. While this behaviour is intended 
+    The assessment identified that the Active Directory (AD) Machine Account 
+    Quota (MAQ) was configured to allow standard domain users to create 
+    computer accounts. By default, AD permits authenticated users to create up 
+    to 10 computer accounts within the domain. While this behaviour is intended 
     to simplify workstation provisioning, it is frequently unnecessary within 
     mature enterprise environments.
 
     For example, a threat actor may combine machine account creation with 
     authentication coercion, NTLM relay, or Kerberos delegation attacks to 
     establish a foothold within the environment, facilitate further 
-    enumeration, or escalate privileges.
+    enumeration, or escalate privileges. Machine accounts may also be abused in 
+    Resource-Based Constrained Delegation (RBCD) attacks and other 
+    Kerberos-based techniques when combined with additional weaknesses or 
+    misconfigurations.
 
-    Machine accounts may also be abused in Resource-Based Constrained 
-    Delegation (RBCD) attacks and other Kerberos-based techniques when combined
-    with additional weaknesses or misconfigurations.
-
-    The presence of a non-zero Machine Account Quota represents a deviation 
-    from the Principle of Least Privilege (PoLP), as it grants domain-wide 
-    machine account creation capabilities to all authenticated users without 
-    explicit delegation.
+    The presence of a non-zero MAQ represents a deviation from the Principle of 
+    Least Privilege (PoLP), as it grants domain-wide machine account creation 
+    capabilities to all authenticated users without  explicit delegation.
 
   remediation: |
     Configure the domain Machine Account Quota to zero unless there is a 

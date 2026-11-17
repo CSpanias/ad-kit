@@ -42,7 +42,7 @@ wsuks:
 
 conpass:
   installer: uv
-  source: git+https://github.com/login-securite/conpass
+  source: git+https://github.com/CSpanias/conpass
   check_command: conpass
   description: Domain policy-based password-spray tool
 
