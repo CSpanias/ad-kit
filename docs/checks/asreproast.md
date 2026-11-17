@@ -1,9 +1,9 @@
 # AS-REP Roasting Check
 
-Identifies user accounts configured **without Kerberos pre-authentication**
-(`UF_DONT_REQUIRE_PREAUTH`), which makes them susceptible to offline password
-cracking via AS-REP roasting — and flags any of those accounts that also belong
-to a monitored privileged group.
+Identifies user accounts configured without Kerberos pre-authentication. Such
+accounts are susceptible to AS-REP roasting, which allows an unauthenticated
+attacker to request encrypted material that can be cracked offline to recover
+the account password.
 
 ```bash
 ad-kit check asreproast
@@ -14,31 +14,52 @@ ad-kit check asreproast
 
 ## What it checks
 
-Kerberos pre-authentication normally requires a client to prove knowledge of
-its password before the KDC issues a Ticket Granting Ticket (TGT). When an
-account has **"Do not require Kerberos pre-authentication"** set, an
-unauthenticated client can request an AS-REP for it, and the response contains
-password-derived material suitable for offline cracking.
+ad-kit scans the domain user list for accounts with the
+[`UF_DONT_REQUIRE_PREAUTH`](https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/useraccountcontrol-manipulate-account-properties)
+flag set (the "Do not require Kerberos pre-authentication" option).
 
-ad-kit runs Impacket `GetNPUsers.py` in unauthenticated mode against that user
-list, extracts the affected account names from the returned Hashcat-format
-hashes, and then (only if matches are found) prompts for a Standard User
-password to check whether any roastable account is privileged.
+It runs Impacket's
+[`GetNPUsers.py`](https://github.com/fortra/impacket/blob/master/examples/GetNPUsers.py)
+in unauthenticated mode against that list (using `-no-pass` and `-usersfile`),
+extracts the affected account names from the returned AS-REP hashes, and, when
+a Standard User password is available, checks whether any affected account
+belongs to a monitored privileged group.
+
+## How it works
+
+Kerberos pre-authentication normally requires a client to prove knowledge of
+the account password before the Key Distribution Centre (KDC) issues a Ticket
+Granting Ticket (TGT). The client encrypts a timestamp with a key derived from
+the password and sends it with the authentication request (AS-REQ). If the KDC
+can decrypt and validate the timestamp, it knows the client holds the password.
+
+When "Do not require Kerberos pre-authentication" is enabled, the KDC skips
+this step. Any client with network access to the KDC can then request an AS-REP
+for that account, and the response contains material encrypted with a key
+derived from the account password. The attacker cracks this offline.
+
+The requested AS-REP contains two parts:
+
+- A Ticket Granting Ticket (TGT), encrypted with the KDC's secret key.
+- A session key, encrypted with the account's secret. This is the part AS-REP
+  roasting targets.
+
+Accounts usually end up in this state because a legacy or third-party
+application required pre-authentication to be disabled, or because an attacker
+with
+[`GenericAll`](https://x7331.gitbook.io/boxes/tl-dr/active-directory/permissions/genericall)
+or
+[`GenericWrite`](https://x7331.gitbook.io/boxes/tl-dr/active-directory/permissions/genericwrite)
+over the account modified its `userAccountControl` value (targeted AS-REP
+roasting). ad-kit's permission and delegation checks surface the write rights
+that make this possible.
 
 ## Why it matters
 
-AS-REP roasting lets an attacker obtain and crack account credentials **without
-ever authenticating**. Because cracking happens offline, it generates almost no
-authentication traffic and is hard to spot through account-lockout or logon
-monitoring. A recovered password is a valid domain credential useful for
-enumeration, lateral movement, and privilege escalation.
-
-!!! warning "Only weak passwords crack"
-    AS-REP exposure enables offline cracking, but the attack only pays off
-    against weak or guessable passwords.
-
-For attack mechanics and manual tooling, see
-[AS-REPRoasting](https://x7331.gitbook.io/boxes/tl-dr/active-directory/attacks/as-reproasting).
+AS-REP roasting provides an unauthenticated route to password material. If a
+weak or guessable password is recovered, the attacker gains a valid domain
+credential that can be used for further access. Impact is greatest when the
+affected account also holds privileged group membership (see ASREP-002).
 
 ## Findings
 
@@ -49,13 +70,16 @@ For attack mechanics and manual tooling, see
 
 ## Tooling
 
-- **Enumeration** — Impacket `GetNPUsers.py` (`-no-pass -usersfile`)
-- **Manual alternatives** — Rubeus `asreproast`, NetExec `--asreproast`, Kerbrute
-- **Cracking** — `hashcat -m 18200`, `john --format=krb5asrep`
+- [`GetNPUsers.py`](https://github.com/fortra/impacket/blob/master/examples/GetNPUsers.py) (Impacket): used by this check.
+- [NetExec](https://github.com/Pennyw0rth/NetExec): `nxc ldap <dc> -u users.txt -p '' --asreproast <outfile>`.
+- [Rubeus](https://github.com/GhostPack/Rubeus): `Rubeus.exe asreproast /format:hashcat`.
+- [Kerbrute](https://github.com/ropnop/kerbrute): user enumeration.
+- [hashcat](https://github.com/hashcat/hashcat): `hashcat -m 18200`.
+- [John the Ripper](https://github.com/openwall/john): `john --format=krb5asrep`.
 
 ## References
 
-- [Pentest Journeys — AS-REPRoasting](https://x7331.gitbook.io/boxes/tl-dr/active-directory/attacks/as-reproasting)
-- [MITRE ATT&CK T1558.004 — AS-REP Roasting](https://attack.mitre.org/techniques/T1558/004/)
-- [The Hacker Recipes — ASREProast](https://www.thehacker.recipes/ad/movement/kerberos/asreproast)
-- [Understanding AS-REP Roasting (IT People Network)](https://itpeoplenetwork.com/blog/itsecurity/Understanding-AS-REP-Roasting-Threat-Analysis-and-Prevention-Strategies.html)
+- [MITRE ATT&CK T1558.004: AS-REP Roasting](https://attack.mitre.org/techniques/T1558/004/)
+- [The Hacker Recipes: ASREProast](https://www.thehacker.recipes/ad/movement/kerberos/asreproast)
+- [Microsoft: UserAccountControl attribute manipulation](https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/useraccountcontrol-manipulate-account-properties)
+- [Pentest Journeys: AS-REPRoasting](https://x7331.gitbook.io/boxes/tl-dr/active-directory/attacks/as-reproasting)
