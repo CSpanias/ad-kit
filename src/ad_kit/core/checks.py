@@ -9,6 +9,7 @@ helper functions for loading enumerated Active Directory assets.
 import subprocess
 from pathlib import Path
 
+from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.util import get_artefacts_dir, progress
 
 #-------------------------------------------------------------------------------
@@ -266,8 +267,9 @@ def run_check(
         Command standard output.
 
     Raises:
-        RuntimeError:
-            If the command exits with a non-zero return code.
+        CheckExecutionError:
+            If the command binary cannot be found, or the command exits with a
+            non-zero return code.
     """
 
     secrets = [
@@ -301,7 +303,14 @@ def run_check(
             display_command.append(argument)
 
     with progress(f"Running {' '.join(display_command)}"):
-        result = subprocess.run(command, capture_output=True, text=True)
+        try:
+            result = subprocess.run(command, capture_output=True, text=True)
+        except FileNotFoundError as exc:
+            raise CheckExecutionError(
+                name=name,
+                command=display_command,
+                stderr=f"command not found: {command[0]}",
+            ) from exc
 
     output = result.stdout
     for secret in secrets:
@@ -318,6 +327,11 @@ def run_check(
     evidence_file.write_text(evidence, encoding="utf-8")
 
     if result.returncode != 0:
-        raise RuntimeError(f"Check failed: {name}")
+        raise CheckExecutionError(
+            name=name,
+            command=display_command,
+            returncode=result.returncode,
+            stderr=error_output,
+        )
 
     return output

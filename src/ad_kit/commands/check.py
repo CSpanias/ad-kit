@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from ad_kit.core.console import console as console
 from ad_kit.core.console import print_error
+from ad_kit.core.exceptions import ADKitError
 
 from .checks.credentials import authenticate_standard_user
 from .checks.hosts import run_nopac_checks, run_scriptpath_checks
@@ -54,6 +55,53 @@ def _with_password(check: Callable[[str | None], None]) -> CheckRunner:
         return std_pass
 
     return run
+
+
+def _run_step(
+    module: str,
+    runnable: Callable[[], str | None],
+    std_pass: str | None,
+) -> str | None:
+    """
+    Execute a single check step, skipping it gracefully if it fails.
+
+    Args:
+        module:
+            Assessment module name, used for the skip notice.
+
+        runnable:
+            Zero-argument callable that executes the check.
+
+        std_pass:
+            Standard User password to reuse across checks.
+
+    Returns:
+        The password returned by the check, or the previously supplied
+        password when the check returned none or was skipped.
+    """
+
+    try:
+        result = runnable()
+    except ADKitError as exc:
+        print_error(f"Skipped '{module}': {exc}")
+        result = None
+
+    return result if result is not None else std_pass
+
+
+def _run_authed(
+    module: str,
+    check: CheckRunner,
+    std_pass: str | None,
+) -> str | None:
+    """
+    Execute an authenticated check step, skipping it if it fails.
+
+    The supplied password is passed through to the check and propagated
+    unchanged on success or skip.
+    """
+
+    return _run_step(module, lambda: check(std_pass), std_pass)
 
 
 AVAILABLE_CHECKS: dict[str, CheckDefinition] = {
@@ -122,31 +170,39 @@ def run_selected_checks(modules: list[str]) -> None:
         if check is None:
             print_error(f"Unknown module: {module}")
             continue
-        std_pass = check.runner(std_pass)
+        std_pass = _run_step(
+            module,
+            lambda: check.runner(std_pass),
+            std_pass,
+        )
 
 
 def run_checks() -> None:
     """Execute all assessment checks in the established workflow order."""
-    run_ldap_checks()
-    std_pass = run_smb_checks()
-    std_pass = run_asreproast_checks(std_pass)
+    _run_step("ldap", lambda: run_ldap_checks(), None)
+    std_pass = _run_step("smb", lambda: run_smb_checks(), None)
+    std_pass = _run_authed("asreproast", run_asreproast_checks, std_pass)
 
     if std_pass is None:
         std_pass = authenticate_standard_user()
 
-    run_local_admin_checks(std_pass)
-    run_password_policy_checks(std_pass)
-    run_password_not_required_checks(std_pass)
-    run_password_never_expires_checks(std_pass)
-    run_maq_checks(std_pass)
-    run_dns_checks(std_pass)
-    run_pre2k_checks(std_pass)
-    run_nopac_checks(std_pass)
-    run_scriptpath_checks(std_pass)
-    run_privileged_group_checks(std_pass)
-    run_delegation_checks(std_pass)
-    run_kerberoast_checks(std_pass)
-    run_adcs_checks(std_pass)
-    run_ldap_info_checks(std_pass)
-    run_tombstone_checks(std_pass)
-    run_coercion_checks(std_pass)
+    std_pass = _run_authed("local-admin", run_local_admin_checks, std_pass)
+    std_pass = _run_authed("pass-pol", run_password_policy_checks, std_pass)
+    std_pass = _run_authed(
+        "password-not-required", run_password_not_required_checks, std_pass
+    )
+    std_pass = _run_authed(
+        "password-never-expires", run_password_never_expires_checks, std_pass
+    )
+    std_pass = _run_authed("maq", run_maq_checks, std_pass)
+    std_pass = _run_authed("dns", run_dns_checks, std_pass)
+    std_pass = _run_authed("pre2k", run_pre2k_checks, std_pass)
+    std_pass = _run_authed("nopac", run_nopac_checks, std_pass)
+    std_pass = _run_authed("scriptPath", run_scriptpath_checks, std_pass)
+    std_pass = _run_authed("privileged", run_privileged_group_checks, std_pass)
+    std_pass = _run_authed("delegation", run_delegation_checks, std_pass)
+    std_pass = _run_authed("kerberoast", run_kerberoast_checks, std_pass)
+    std_pass = _run_authed("adcs", run_adcs_checks, std_pass)
+    std_pass = _run_authed("ldap-info", run_ldap_info_checks, std_pass)
+    std_pass = _run_authed("tombstone", run_tombstone_checks, std_pass)
+    std_pass = _run_authed("coercion", run_coercion_checks, std_pass)
