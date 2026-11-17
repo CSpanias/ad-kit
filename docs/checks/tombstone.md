@@ -1,19 +1,45 @@
 # Tombstone Check
 
-Check whether the Standard User can query deleted AD objects.
+Checks whether the Standard User can query deleted Active Directory objects.
 
 ```bash
 ad-kit check tombstone
 ```
 
-## What it does
+!!! info "Prerequisite"
+    Requires a valid Standard User account (authenticated).
 
-Queries the deleted objects container on each Domain Controller using a read-only action. Never restores or deletes objects.
+## What it checks
 
-## Output
+ad-kit runs the NetExec `tombstone` module with a read-only query action
+against each Domain Controller to retrieve objects in the Deleted Objects
+container. The query never restores or deletes anything.
 
-Per-DC table showing:
-- Deleted objects count
-- Status (Enumerated, Access denied, No deleted objects, Unknown, Container not found)
+## How it works
 
-Requires a Standard User account from `ad-kit enum`.
+When objects are deleted in Active Directory, they enter a tombstone state and
+remain in the Deleted Objects container until the tombstone lifetime expires.
+These objects can retain directory attributes that disclose information about
+the environment. Read access to the container should be limited to
+administrative roles.
+
+## Why it matters
+
+A standard user who can read deleted objects may recover information about
+former accounts, groups, and configuration that assists reconnaissance or
+further attack planning.
+
+## Findings
+
+| Finding ID | Title |
+|------------|-------|
+| TOMB-001 | Deleted AD Objects Readable by Standard User |
+
+## Tooling
+
+- [NetExec](https://github.com/Pennyw0rth/NetExec): used by this check (`-M tombstone`).
+
+## References
+
+- [Microsoft: Active Directory Recycle Bin](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/get-started/adac/active-directory-recycle-bin-step-by-step)
+- [Microsoft: Active Directory Domain Services](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/)

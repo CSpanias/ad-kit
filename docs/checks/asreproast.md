@@ -44,15 +44,46 @@ The requested AS-REP contains two parts:
 - A session key, encrypted with the account's secret. This is the part AS-REP
   roasting targets.
 
-Accounts usually end up in this state because a legacy or third-party
-application required pre-authentication to be disabled, or because an attacker
-with
+Accounts usually end up roastable because a legacy or third-party application
+required pre-authentication to be disabled. An attacker with
 [`GenericAll`](https://x7331.gitbook.io/boxes/tl-dr/active-directory/permissions/genericall)
 or
 [`GenericWrite`](https://x7331.gitbook.io/boxes/tl-dr/active-directory/permissions/genericwrite)
-over the account modified its `userAccountControl` value (targeted AS-REP
-roasting). ad-kit's permission and delegation checks surface the write rights
-that make this possible.
+over an account can also set the flag deliberately, which is known as targeted
+AS-REP roasting. ad-kit identifies the resulting roastable accounts but does
+not currently enumerate those write rights.
+
+## AS-REP via ARP spoofing
+
+There is also a network-level variant that captures AS-REP material for
+accounts that authenticate normally, without any directory modification.
+
+When a user signs in to a domain-joined workstation, the client sends an AS-REQ
+and the DC responds with an AS-REP. On a local network, the Address Resolution
+Protocol (ARP) maps IP addresses to MAC addresses and provides no
+authentication. An attacker on the same VLAN can send forged ARP responses to
+impersonate the client or the DC, placing themselves between the two and
+intercepting Kerberos traffic (TCP/88).
+
+[ASRepCatcher](https://github.com/Yaxxine7/ASRepCatcher) automates this and
+offers two modes:
+
+- **Relay mode**: intercepts AS-REQ messages and forwards them to the DC,
+  attempting to force RC4 where supported to simplify cracking.
+- **Listen mode**: poisons the gateway's ARP cache to capture AS-REP responses
+  passively.
+
+!!! note "Not checked by ad-kit"
+    ad-kit does not perform ARP spoofing or capture AS-REP traffic. This
+    section is provided for reference.
+
+```bash
+# Relay mode
+ASRepCatcher relay -dc 192.168.1.100
+
+# Listen mode
+ASRepCatcher listen
+```
 
 ## Why it matters
 

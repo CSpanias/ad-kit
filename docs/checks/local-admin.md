@@ -1,20 +1,50 @@
 # Local Administrator Check
 
-Review systems where the Standard User has local administrator access.
+Determines whether the configured Standard User has local administrator access
+on any domain-joined systems, including Domain Controllers.
 
 ```bash
 ad-kit check local-admin
 ```
 
-## What it does
+!!! info "Prerequisite"
+    Requires a valid Standard User account (authenticated).
 
-Determines whether the configured Standard User account has local administrator privileges on domain-joined systems and Domain Controllers.
+## What it checks
 
-## Output
+ad-kit first builds a host list with `nxc ldap ... --computers`, then attempts
+an SMB login with the Standard User against each host and detects success
+(`Pwn3d!`). Results are split into member systems and Domain Controllers.
 
-- Number of hosts where the user has local admin access
-- Number of Domain Controllers where the user has local admin access
+## How it works
+
+Local administrator access grants control of a system: installing software,
+modifying services, reading sensitive local data, and interacting with other
+sessions. An account with local admin on one host can be used to harvest
+credentials and move further through the environment. Administrative access to
+a Domain Controller is far more significant because it provides direct access
+to Active Directory data.
+
+## Why it matters
+
+Over-provisioned local administration is a common enabler of privilege
+escalation and lateral movement. Restricting it to dedicated administrative
+accounts reduces the impact of a compromised Standard User.
 
 ## Findings
 
-Uses PRIV-004 (built-in Administrator enabled) and PRIV-003 (built-in Guest enabled) findings from the privileged check category.
+| Finding ID | Title |
+|------------|-------|
+| LA-001 | Standard User Has Local Administrator Access |
+| LA-002 | Standard User Has Administrative Access to Domain Controller |
+
+## Tooling
+
+- [NetExec](https://github.com/Pennyw0rth/NetExec): used by this check.
+
+## References
+
+- [Microsoft: local accounts](https://learn.microsoft.com/en-us/windows/security/identity-protection/access-control/local-accounts)
+- [Microsoft: privileged access model](https://learn.microsoft.com/en-us/security/privileged-access-workstations/privileged-access-access-model)
+- [Microsoft: securing Domain Controllers](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/securing-domain-controllers-against-attack)
+- [MITRE ATT&CK TA0004: Privilege Escalation](https://attack.mitre.org/tactics/TA0004/)

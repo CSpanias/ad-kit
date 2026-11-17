@@ -1,17 +1,50 @@
 # Password Never Expires Check
 
-Identify enabled accounts configured with non-expiring passwords.
+Identifies enabled user accounts configured with a non-expiring password
+(`DONT_EXPIRE_PASSWD`).
 
 ```bash
 ad-kit check password-never-expires
 ```
 
-## What it does
+!!! info "Prerequisite"
+    Requires a valid Standard User account (authenticated).
 
-Identifies enabled accounts where the password is configured to never expire.
+## What it checks
+
+ad-kit runs `nxc ldap ... --password-never-expires` to list accounts with the
+`DONT_EXPIRE_PASSWD` flag set and reports enabled user accounts. Machine
+accounts (names ending in `$`) are excluded because their secrets rotate
+independently of this flag.
+
+## How it works
+
+The
+[`DONT_EXPIRE_PASSWD`](https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/useraccountcontrol-manipulate-account-properties)
+flag exempts an account's password from password-expiration policy. It does not
+by itself mean the password is weak or compromised, but a password that never
+expires remains valid for longer, increasing its exposure window if it is
+disclosed. Service accounts may legitimately need the setting, but should use
+managed credentials where practical.
+
+## Why it matters
+
+A non-expiring password that is disclosed or guessed remains usable
+indefinitely. Reviewing these accounts confirms whether the setting is
+justified.
 
 ## Findings
 
-| Finding ID | Description |
-|------------|-------------|
-| PASS-003 | Enabled accounts with non-expiring passwords |
+| Finding ID | Title |
+|------------|-------|
+| PASS-003 | Accounts Configured with Non-Expiring Passwords |
+
+## Tooling
+
+- [NetExec](https://github.com/Pennyw0rth/NetExec): used by this check (`--password-never-expires`).
+
+## References
+
+- [ldapwiki: DONT_EXPIRE_PASSWORD](https://ldapwiki.com/wiki/Wiki.jsp?page=DONT_EXPIRE_PASSWORD)
+- [Microsoft: UserAccountControl attribute manipulation](https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/useraccountcontrol-manipulate-account-properties)
+- [Microsoft: Group Managed Service Accounts overview](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/group-managed-service-accounts/group-managed-service-accounts/group-managed-service-accounts-overview)
