@@ -24,7 +24,7 @@ def test_collect_and_write_mapped_findings(tmp_path):
         ]
     )
 
-    output = tmp_path / "findings.json"
+    output = tmp_path / "ad-kit_findings.json"
     json_report.write_findings(output)
 
     data = json.loads(output.read_text(encoding="utf-8"))
@@ -33,10 +33,7 @@ def test_collect_and_write_mapped_findings(tmp_path):
         "findings": [
             {
                 "id": "smb-signing-not-enforced",
-                "description": (
-                    "SMB signing is not enforced on one or more hosts, "
-                    "permitting SMB relay attacks."
-                ),
+                "description": "SMB signing was not enforced on one or more hosts.",
             }
         ]
     }

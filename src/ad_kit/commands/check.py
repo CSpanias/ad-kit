@@ -180,7 +180,7 @@ def run_selected_checks(modules: list[str]) -> None:
             std_pass,
         )
 
-    json_report.write_findings(get_artefacts_dir() / "findings.json")
+    json_report.write_findings(get_artefacts_dir() / "ad-kit_findings.json")
 
 
 def run_checks() -> None:
@@ -215,4 +215,4 @@ def run_checks() -> None:
     std_pass = _run_authed("tombstone", run_tombstone_checks, std_pass)
     std_pass = _run_authed("coercion", run_coercion_checks, std_pass)
 
-    json_report.write_findings(get_artefacts_dir() / "findings.json")
+    json_report.write_findings(get_artefacts_dir() / "ad-kit_findings.json")
