@@ -11,6 +11,11 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
     """
     Execute LDAP configuration checks.
 
+    Each enumerated Domain Controller is targeted by its fully-qualified
+    hostname (as recorded in ``dc-hostnames.txt`` during enumeration) so that
+    NetExec can resolve the controller even when the assessment host has no
+    domain search suffix configured.
+
     Returns:
         A tuple containing:
 
@@ -21,24 +26,12 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
 
     dc_hostnames = load_dc_hostnames()
 
-    outputs = []
-    for dc_hostname in dc_hostnames:
-        dc_short_name = dc_hostname.split(".", 1)[0]
-        outputs.append(
-            run_check(
-                f"ldap-{dc_short_name}",
-                ["nxc", "ldap", dc_short_name, "-u", "", "-p", ""],
-            )
-        )
+    results: dict[str, dict] = {}
 
-    hostname_map = {}
-
-    for hostname in dc_hostnames:
-        normalized_hostname = hostname.rstrip(".").casefold()
-        hostname_map[normalized_hostname] = hostname
-        hostname_map[normalized_hostname.split(".", 1)[0]] = hostname
-
-    results = {}
+    signing_not_enforced: list[str] = []
+    channel_binding_not_enforced: list[str] = []
+    anonymous_bind_permitted: set[str] = set()
+    anonymous_bind_rejected: set[str] = set()
 
     for dc_hostname in dc_hostnames:
 
@@ -49,118 +42,90 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
             "anonymous_bind": "[yellow]⚠ Unknown[/yellow]",
         }
 
-    signing_not_enforced: list[str] = []
-    channel_binding_not_enforced: list[str] = []
-    anonymous_bind_permitted: set[str] = set()
-    anonymous_bind_rejected: set[str] = set()
-
-    for line in "\n".join(outputs).splitlines():
-
-        if not line.startswith("LDAP"):
-            continue
-
-        parts = line.split()
-
-        if len(parts) < 2:
-            continue
-
-        dc_hostname = next(
-            (
-                hostname_map.get(part.strip("[](),:").rstrip(".").casefold())
-                for part in parts
-                if part.strip("[](),:").rstrip(".").casefold() in hostname_map
-            ),
-            None,
+        # Target the fully-qualified hostname. NetExec performs the DNS
+        # resolution itself, so a short name that may not resolve without a
+        # domain search suffix is never relied upon.
+        output = run_check(
+            f"ldap-{dc_hostname}",
+            ["nxc", "ldap", dc_hostname, "-u", "", "-p", ""],
         )
 
-        if dc_hostname is None:
-            continue
+        for line in output.splitlines():
 
-        lower = line.lower()
+            lower = line.lower()
 
-        #-----------------------------------------------------------------------
-        # LDAP SIGNING
-        #-----------------------------------------------------------------------
-        if "signing:" in lower:
+            # LDAP Signing
+            if "signing:" in lower:
 
-            start = lower.find("signing:")
-            end = lower.find(")", start)
+                start = lower.find("signing:")
+                end = lower.find(")", start)
 
-            if start != -1 and end != -1:
+                if start != -1 and end != -1:
 
-                signing = lower[start + 8:end].strip()
+                    signing = lower[start + 8:end].strip()
 
-                if signing == "none":
+                    if signing == "none":
 
-                    signing = "[red]✗ Not Required[/red]"
-                    signing_not_enforced.append(dc_hostname)
+                        signing = "[red]✗ Not Required[/red]"
+                        signing_not_enforced.append(dc_hostname)
 
-                results[dc_hostname]["signing"] = signing
+                    results[dc_hostname]["signing"] = signing
 
-        #-----------------------------------------------------------------------
-        # CHANNEL BINDING
-        #-----------------------------------------------------------------------
-        if "channel binding:" in lower:
+            # Channel Binding
+            if "channel binding:" in lower:
 
-            start = lower.find("channel binding:")
-            end = lower.find(")", start)
+                start = lower.find("channel binding:")
+                end = lower.find(")", start)
 
-            if start != -1 and end != -1:
+                if start != -1 and end != -1:
 
-                channel_binding = (lower[start + 16:end].strip())
+                    channel_binding = lower[start + 16:end].strip()
 
-                if channel_binding in {"never", "no tls cert"}:
+                    if channel_binding in {"never", "no tls cert"}:
 
-                    channel_binding = ("[red]✗ Not Enforced[/red]")
-                    channel_binding_not_enforced.append(dc_hostname)
+                        channel_binding = "[red]✗ Not Enforced[/red]"
+                        channel_binding_not_enforced.append(dc_hostname)
 
-                results[dc_hostname]["channel_binding"] = channel_binding
+                    results[dc_hostname]["channel_binding"] = channel_binding
 
-        #-----------------------------------------------------------------------
-        # NULL BIND
-        #-----------------------------------------------------------------------
-        if "successful bind must be completed" in lower:
-            anonymous_bind_rejected.add(dc_hostname)
+            # Anonymous (Null) Bind
+            if "successful bind must be completed" in lower:
+                anonymous_bind_rejected.add(dc_hostname)
 
-        if "[+]" in line:
-            success_message = line.split("[+]", 1)[1].strip()
-            identity = success_message.split(":", 1)[0].strip()
-            if identity.endswith("\\"):
-                anonymous_bind_permitted.add(dc_hostname)
+            if "[+]" in line:
+                success_message = line.split("[+]", 1)[1].strip()
+                identity = success_message.split(":", 1)[0].strip()
+
+                # A successful empty-username login ("DOMAIN\\" with no account
+                # following the backslash) indicates anonymous bind is allowed.
+                if identity.endswith(chr(92)):
+                    anonymous_bind_permitted.add(dc_hostname)
 
     for dc_hostname in anonymous_bind_rejected:
         results[dc_hostname]["anonymous_bind"] = "[green]✓ Disabled[/green]"
 
     permitted_dc_hostnames = anonymous_bind_permitted - anonymous_bind_rejected
+
     for dc_hostname in permitted_dc_hostnames:
         results[dc_hostname]["anonymous_bind"] = "[red]✗ Permitted[/red]"
 
-    #-----------------------------------------------------------------------
-    # FINDINGS GENERATION
-    #-----------------------------------------------------------------------
-    
-    # If any DC have LDAP signing not enforced, create finding
     if signing_not_enforced:
 
         finding = load_finding("ldap", "LDAP-001")
         finding.affected_assets.extend(sorted(set(signing_not_enforced)))
         findings.append(finding)
 
-    # If any DC have LDAP channel binding not enforced, create finding
     if channel_binding_not_enforced:
 
         finding = load_finding("ldap", "LDAP-002")
-        finding.affected_assets.extend(
-            sorted(set(channel_binding_not_enforced))
-        )
+        finding.affected_assets.extend(sorted(set(channel_binding_not_enforced)))
         findings.append(finding)
 
-    # If any DC permits NULL binds, create finding
     if permitted_dc_hostnames:
+
         finding = load_finding("ldap", "LDAP-003")
         finding.affected_assets.extend(sorted(permitted_dc_hostnames))
         findings.append(finding)
-
 
     return (
         sorted(results.values(), key=lambda result: result["dc_hostname"]),
