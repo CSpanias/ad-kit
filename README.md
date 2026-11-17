@@ -145,26 +145,27 @@ $ ad-kit check -h
 
  Execute assessment checks.
 
-╭─Options─────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --help  -h      <bool>  Show this message and exit.                                                         │
-╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─Commands────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ all         Execute all assessment checks.                                                                  │
-│ ldap        Execute LDAP security checks.                                                                   │
-│ tombstone   Check Standard User access to deleted AD objects.                                               │
-│ smb         Check SMB configuration, anonymous access, and writable shares.                                 │
-│ asreproast  Identify AS-REP roastable accounts\; check privileged group membership.                         │
-│ pass-pol    Execute password policy checks.                                                                 │
-│ password-not-required  Identify enabled accounts with PASSWD_NOTREQD set.                                   │
-│ maq         Execute Machine Account Quota check.                                                            │
-│ dns         Execute DNS permission check.                                                                   │
-│ pre2k       Identify pre-created computer accounts susceptible to the pre-Windows 2000 password convention. │
-│ nopac       Check discovered Domain Controllers for NoPAC vulnerability indicators.                         │
-│ scriptPath  Review user logon script paths and Standard User write access.                                  │
-│ privileged  Review privileged groups, DCSync rights, and built-in accounts.                                 │
-│ delegation  Review Active Directory delegation configuration.                                               │
-│ kerberoast  Identify Kerberoastable accounts.                                                               │
-│ adcs        Review Active Directory Certificate Services (AD CS) configuration.                             │
-│ run         Execute selected assessment modules.                                                            │
-╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─Commands─────────────────────────────────────────────────────────────────────╮
+│ all                    Execute all assessment checks.                        │
+│ ldap                   Execute ldap assessment checks.                       │
+│ tombstone              Execute tombstone assessment checks.                  │
+│ smb                    Execute smb assessment checks.                        │
+│ asreproast             Execute asreproast assessment checks.                 │
+│ pass-pol               Execute pass-pol assessment checks.                   │
+│ password-not-required  Execute password-not-required assessment checks.      │
+│ password-never-expires Execute password-never-expires assessment checks.     │
+│ maq                    Execute maq assessment checks.                        │
+│ dns                    Execute dns assessment checks.                        │
+│ pre2k                  Execute pre2k assessment checks.                      │
+│ nopac                  Execute nopac assessment checks.                      │
+│ scriptPath             Execute scriptPath assessment checks.                 │
+│ privileged             Execute privileged assessment checks.                 │
+│ delegation             Execute delegation assessment checks.                 │
+│ kerberoast             Execute kerberoast assessment checks.                 │
+│ adcs                   Execute adcs assessment checks.                       │
+│ local-admin            Execute local-admin assessment checks.                │
+│ ldap-info              Execute ldap-info assessment checks.                  │
+│ coercion               Execute coercion assessment checks.                   │
+│ run                    Execute selected assessment modules.                  │
+╰─────────────────────────────────────────────────────────────────────────────╯
 ```

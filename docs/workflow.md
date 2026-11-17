@@ -44,16 +44,17 @@ ad-kit check run ldap pass-pol smb
 ```
 
 Each check generates:
+
 - Console output (Rich tables)
 - Markdown findings report (`ad-kit/findings-*.md`)
 - Evidence files (`ad-kit/evidence/`)
 
 ## Stage 4: Retrieve Artefacts
 
-Generate an SCP command to pull artefacts from your jumpbox:
+`ad-kit enum` can generate an SCP command to pull artefacts from your jumpbox:
 
 ```bash
-ad-kit check run  # (or after any check that triggers SCp generation)
+scp "user@host:/remote/dir/*.zip" "user@host:/remote/dir/*.ntds*" ./
 ```
 
 The BloodHound `.zip` and NTDS `.ntds` files can be processed using [password-audit](https://github.com/CSpanias/password-audit).

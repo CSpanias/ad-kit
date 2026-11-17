@@ -18,9 +18,6 @@ Execute one or more selected assessment modules.
 ```bash
 # Run specific checks
 ad-kit check run ldap smb pass-pol
-
-# Run all checks (same as `ad-kit check all`)
-ad-kit check run all
 ```
 
 Modules are executed in the order provided. Authentication is prompted once and reused across checks that require it.
@@ -51,4 +48,4 @@ Modules are executed in the order provided. Authentication is prompted once and 
 
 ## Authentication
 
-Checks requiring a Standard User account will prompt for credentials once and reuse them across subsequent checks. Some checks (e.g., NTDS dump, DNS cleanup) may prompt for Domain Admin credentials.
+Checks requiring a Standard User account will prompt for credentials once and reuse them across subsequent checks. Some checks (e.g., DNS cleanup) may prompt for Domain Administrator credentials.

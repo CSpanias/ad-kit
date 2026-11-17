@@ -19,6 +19,10 @@ Findings are generated during assessment checks and written to Markdown reports 
 | PASS | Password policy (PASS-001 to PASS-003) |
 | LDAPINFO | LDAP info exposure (LDAPINFO-001 to LDAPINFO-002) |
 | COERCE | Authentication coercion (COERCE-001 to COERCE-002) |
+| LA | Local administrator access (LA-001 to LA-002) |
+| MAQ | Machine Account Quota (MAQ-001) |
+| PRE2K | Pre-Windows 2000 computer accounts (PRE2K-001) |
+| TOMB | Deleted AD object access (TOMB-001) |
 
 ## Finding Structure
 
@@ -27,7 +31,7 @@ Each finding definition is stored in YAML under `src/ad_kit/findings/<category>.
 ```yaml
 LDAP-001:
   id: LDAP-001
-  title: LDAP Signing Not Required
+  title: LDAP Signing Not Enforced
   commentary: |
     LDAP signing is not required, allowing...
   remediation: |
