@@ -9,6 +9,7 @@ assessment.
 from pathlib import Path
 
 from ad_kit.core.finding import Finding
+from ad_kit.reporting import json as json_report
 
 
 def format_paragraphs(
@@ -73,6 +74,8 @@ def write_markdown_report(
         output_file:
             Report output path.
     """
+
+    json_report.collect(findings)
 
     if not findings:
 

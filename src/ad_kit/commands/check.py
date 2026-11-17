@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from ad_kit.core.console import console as console
 from ad_kit.core.console import print_error
 from ad_kit.core.exceptions import ADKitError
+from ad_kit.core.util import get_artefacts_dir
+from ad_kit.reporting import json as json_report
 
 from .checks.credentials import authenticate_standard_user
 from .checks.hosts import run_nopac_checks, run_scriptpath_checks
@@ -157,6 +159,8 @@ AVAILABLE_CHECKS: dict[str, CheckDefinition] = {
 
 def run_selected_checks(modules: list[str]) -> None:
     """Execute selected checks, reusing one Standard User password."""
+    json_report.reset()
+
     requires_authentication = any(
         module in AVAILABLE_CHECKS
         and AVAILABLE_CHECKS[module].requires_authentication
@@ -176,9 +180,13 @@ def run_selected_checks(modules: list[str]) -> None:
             std_pass,
         )
 
+    json_report.write_findings(get_artefacts_dir() / "findings.json")
+
 
 def run_checks() -> None:
     """Execute all assessment checks in the established workflow order."""
+    json_report.reset()
+
     _run_step("ldap", lambda: run_ldap_checks(), None)
     std_pass = _run_step("smb", lambda: run_smb_checks(), None)
     std_pass = _run_authed("asreproast", run_asreproast_checks, std_pass)
@@ -206,3 +214,5 @@ def run_checks() -> None:
     std_pass = _run_authed("ldap-info", run_ldap_info_checks, std_pass)
     std_pass = _run_authed("tombstone", run_tombstone_checks, std_pass)
     std_pass = _run_authed("coercion", run_coercion_checks, std_pass)
+
+    json_report.write_findings(get_artefacts_dir() / "findings.json")
