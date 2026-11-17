@@ -489,7 +489,7 @@ def run_coercion_checks(
 
     console.print(table)
 
-    if coercion_results["coercion_dcs"]:
+    if coercion_results["coercion_dcs"] or coercion_results["spooler_dcs"]:
 
         finding = load_finding("coercion", "COERCE-001")
 
@@ -501,17 +501,11 @@ def run_coercion_checks(
                 f"{', '.join(techniques)}."
             )
 
-        findings.append(finding)
-
-    if coercion_results["spooler_dcs"]:
-
-        finding = load_finding("coercion", "COERCE-002")
-
         for dc in coercion_results["spooler_dcs"]:
 
             finding.evidence.append(
-                f"Domain Controller `{dc}` had the Print Spooler service "
-                "enabled."
+                f"The Print Spooler service was enabled on Domain Controller "
+                f"`{dc}`."
             )
 
         findings.append(finding)

@@ -18,7 +18,7 @@ Findings are generated during assessment checks and written to Markdown reports 
 | DELEG | Delegation (DELEG-001 to DELEG-003) |
 | PASS | Password policy (PASS-001 to PASS-003) |
 | LDAPINFO | LDAP info exposure (LDAPINFO-001 to LDAPINFO-002) |
-| COERCE | Authentication coercion (COERCE-001 to COERCE-002) |
+| COERCE | Authentication coercion (COERCE-001) |
 | LA | Local administrator access (LA-001 to LA-002) |
 | MAQ | Machine Account Quota (MAQ-001) |
 | PRE2K | Pre-Windows 2000 computer accounts (PRE2K-001) |

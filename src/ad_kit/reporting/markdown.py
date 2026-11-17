@@ -101,8 +101,8 @@ def write_markdown_report(
             lines.append("### Evidence")
             lines.append("")
 
-            for evidence in finding.evidence:
-                lines.append(f"- {evidence}")
+            for index, evidence in enumerate(finding.evidence, start=1):
+                lines.append(f"{index}. {evidence}")
 
             lines.append("")
 

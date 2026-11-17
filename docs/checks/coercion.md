@@ -39,16 +39,15 @@ A coercible Domain Controller is a source of authentication that can be turned
 into impersonation of its machine account through NTLM relay. When combined
 with a suitable relay target, this can lead to privilege escalation; for
 example, relaying a Domain Controller machine account to an unsecured AD CS
-endpoint can lead to domain compromise. A Domain Controller with the Print
-Spooler service enabled also exposes a well-known attack surface that
-Microsoft recommends disabling.
+endpoint can lead to domain compromise. Where the Print Spooler service is
+enabled, the PrinterBug technique is reported and Microsoft recommends
+disabling it on Domain Controllers.
 
 ## Findings
 
 | Finding ID | Title |
 |------------|-------|
 | COERCE-001 | Domain Controllers Susceptible to Authentication Coercion |
-| COERCE-002 | Print Spooler Enabled on Domain Controllers |
 
 ## Tooling
 

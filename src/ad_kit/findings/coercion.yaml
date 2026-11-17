@@ -29,7 +29,9 @@ COERCE-001:
 
     Techniques such as PrinterBug, PetitPotam, DFSCoerce, MSEven, and WebDAV
     may be used to coerce DCs into performing outbound authentication to 
-    attacker-controlled endpoints.
+    attacker-controlled endpoints. PrinterBug depends on the Print Spooler
+    service, so Domain Controllers with that service enabled are reported as
+    part of this finding.
 
     Whilst authentication coercion does not itself provide direct access to the 
     affected host, coerced authentication may facilitate NTLM relay attacks, 
@@ -55,6 +57,8 @@ COERCE-001:
       operationally necessary.
     - Disable or restrict unnecessary RPC services and functionality where
       business requirements permit.
+    - Disable the Print Spooler service on Domain Controllers where it is not
+      operationally required.
     - Ensure NTLM relay protections are implemented throughout the environment, 
       including SMB signing and Extended Protection for Authentication (EPA) 
       where appropriate.
@@ -70,41 +74,4 @@ COERCE-001:
     - https://github.com/topotam/PetitPotam
     - https://learn.microsoft.com/en-us/windows/security/identity-protection/access-control/ntlm-overview
     - https://attack.mitre.org/techniques/T1187/
-
-
-COERCE-002:
-  id: COERCE-002
-
-  title: Print Spooler Enabled on Domain Controllers
-
-  commentary: |
-    A review of Domain Controller (DC) configurations identified one or more systems 
-    with the Windows Print Spooler service enabled.
-
-    The Print Spooler service is rarely required on DCs and has historically 
-    been associated with multiple security issues, including authentication 
-    coercion techniques such as PrinterBug.
-
-    Where enabled, the service may increase the attack surface available to
-    attackers and facilitate authentication relay attack paths involving
-    privileged systems.
-
-    Microsoft guidance generally recommends disabling the Print Spooler service 
-    on DCs unless a specific operational requirement exists.
-
-  remediation: |
-    To reduce the attack surface of DCs, the following actions are recommended:
-
-    - Review whether the Print Spooler service is required on affected DCs.
-    - Disable the Print Spooler service on DCs wherever operationally feasible.
-    - Review legacy printing workflows and dependencies before disabling the 
-      service.
-    - Implement monitoring to identify unauthorised re-enablement of the Print 
-      Spooler service.
-    - Periodically review DC configurations to ensure unnecessary services 
-      remain disabled.
-
-  references:
     - https://learn.microsoft.com/en-us/windows-server/security/windows-services/security-guidelines-for-disabling-system-services-in-windows-server#print-spooler
-    - https://support.microsoft.com/en-us/topic/managing-deployment-of-printer-rpc-binding-changes-for-cve-2021-1678-kb4599464-12a69652-30b9-3d61-d9f7-7201623a8b25
-    - https://attack.mitre.org/techniques/T1187/
