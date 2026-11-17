@@ -13,7 +13,7 @@ def password_not_required_check(
     password: str,
 ) -> tuple[dict, list[Finding]]:
     """
-    Identify enabled accounts with the PASSWD_NOTREQD flag set.
+    Identify enabled user accounts with the PASSWD_NOTREQD flag set.
 
     Args:
         dc_ip:
@@ -26,7 +26,7 @@ def password_not_required_check(
             Domain password.
 
     Returns:
-        A tuple containing the enabled account names and generated findings.
+        A tuple containing the enabled user account names and generated findings.
     """
 
     output = run_check(
@@ -50,7 +50,10 @@ def password_not_required_check(
 
         if status.strip().casefold() == "enabled":
             account = account.strip()
-            if account:
+            # Machine accounts (sAMAccountName ends with '$') are excluded:
+            # PASSWD_NOTREQD is expected on them and does not indicate a blank
+            # or weak interactive password.
+            if account and not account.endswith("$"):
                 accounts.add(account)
 
     enabled_accounts = sorted(accounts)
@@ -63,8 +66,8 @@ def password_not_required_check(
     if enabled_accounts:
         finding = load_finding("password_policy", "PASS-002")
         finding.evidence.append(
-            f"A total of {len(enabled_accounts)} enabled account(s) have the "
-            "PASSWD_NOTREQD flag set:"
+            f"A total of {len(enabled_accounts)} enabled user account(s) have "
+            "the PASSWD_NOTREQD flag set:"
         )
         finding.evidence.extend(
             f"`{account}`"

@@ -48,7 +48,7 @@ LDAP 192.168.239.130 389 MOLLYSEC-DC01 User: Guest Status: disabled
         "account_count": 3,
     }
     assert [finding.id for finding in findings] == ["PASS-002"]
-    assert findings[0].evidence[0].startswith("A total of 3 enabled account(s)")
+    assert findings[0].evidence[0].startswith("A total of 3 enabled user account(s)")
     assert loaded_findings == ["PASS-002"]
 
 
@@ -77,3 +77,37 @@ def test_passwd_notreqd_check_ignores_disabled_accounts(monkeypatch):
 
     assert results == {"accounts": [], "account_count": 0}
     assert findings == []
+
+
+def test_passwd_notreqd_check_ignores_machine_accounts(monkeypatch):
+    output = """LDAP 192.168.239.130 389 MOLLYSEC-DC01 User: KERBEROS.MICROSOFTONLINE.COM$ Status: enabled
+LDAP 192.168.239.130 389 MOLLYSEC-DC01 User: GAVIN_HEAD Status: enabled
+"""
+
+    monkeypatch.setattr(
+        password_not_required,
+        "run_check",
+        lambda *_args: output,
+    )
+
+    def fake_load_finding(category, finding_id):
+        return password_not_required.Finding(
+            id=finding_id,
+            title=finding_id,
+            commentary="",
+            remediation="",
+        )
+
+    monkeypatch.setattr(password_not_required, "load_finding", fake_load_finding)
+
+    results, findings = password_not_required.password_not_required_check(
+        "192.168.239.130",
+        "poppy",
+        "password",
+    )
+
+    assert results == {
+        "accounts": ["GAVIN_HEAD"],
+        "account_count": 1,
+    }
+    assert [finding.id for finding in findings] == ["PASS-002"]

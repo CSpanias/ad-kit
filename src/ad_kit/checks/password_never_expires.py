@@ -13,7 +13,7 @@ def password_never_expires_check(
     password: str,
 ) -> tuple[dict, list[Finding]]:
     """
-    Identify enabled accounts configured with non-expiring passwords.
+    Identify enabled user accounts configured with non-expiring passwords.
 
     Args:
         dc_ip:
@@ -26,7 +26,7 @@ def password_never_expires_check(
             Domain password.
 
     Returns:
-        A tuple containing the enabled account names and generated findings.
+        A tuple containing the enabled user account names and generated findings.
     """
 
     output = run_check(
@@ -50,7 +50,10 @@ def password_never_expires_check(
 
         if status.strip().casefold() == "enabled":
             account = account.strip()
-            if account:
+            # Machine accounts (sAMAccountName ends with '$') are excluded:
+            # DONT_EXPIRE_PASSWD is expected on them and their secret rotates
+            # independently of this flag.
+            if account and not account.endswith("$"):
                 accounts.add(account)
 
     enabled_accounts = sorted(accounts)
@@ -63,7 +66,7 @@ def password_never_expires_check(
     if enabled_accounts:
         finding = load_finding("password_policy", "PASS-003")
         finding.evidence.append(
-            f"A total of {len(enabled_accounts)} enabled account(s) have "
+            f"A total of {len(enabled_accounts)} enabled user account(s) have "
             "passwords configured to never expire:"
         )
         finding.evidence.extend(
