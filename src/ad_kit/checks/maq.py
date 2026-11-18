@@ -90,7 +90,7 @@ def maq_check(
         create_output = run_check(
             "maq-create-machine",
             [
-                "nxc", "smb", dc_ip,
+                "nxc", "ldap", dc_ip,
                 "-u", username,
                 "-p", password,
                 "-M", "add-computer",
@@ -122,7 +122,7 @@ def maq_check(
             delete_output = run_check(
                 "maq-delete-machine",
                 [
-                    "nxc", "smb", dc_ip,
+                    "nxc", "ldap", dc_ip,
                     "-u", username,
                     "-p", password,
                     "-M", "add-computer",
@@ -138,7 +138,10 @@ def maq_check(
                 results["machine_deleted"] = True
                 results["cleanup_method"] = "Standard User"
 
-            elif "does not have the right to delete" in delete_output.lower():
+            elif (
+                "insufficient" in delete_output.lower()
+                or "does not have the right to delete" in delete_output.lower()
+            ):
 
                 results["cleanup_method"] = "Domain Admin Required"
 
