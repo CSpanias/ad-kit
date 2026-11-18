@@ -14,12 +14,15 @@ class ReportParser(HTMLParser):
     def __init__(self):
         super().__init__()
         self.copy_texts = []
+        self.links = []
         self._in_copy_text = False
 
     def handle_starttag(self, tag, attrs):
         if tag == "textarea" and ("class", "copy-text") in attrs:
             self._in_copy_text = True
             self.copy_texts.append("")
+        if tag == "a":
+            self.links.append(dict(attrs))
 
     def handle_endtag(self, tag):
         if tag == "textarea":
@@ -51,6 +54,29 @@ def test_html_contains_complete_copyable_findings_and_escapes_data():
     assert "&lt;script&gt;" in report
     assert "host &lt;one&gt;" in report
     assert "https://example.com/?a=1&amp;b=2" in report
+    assert parser.links == [{
+        "href": "https://example.com/?a=1&b=2",
+        "target": "_blank",
+        "rel": "noopener noreferrer",
+    }]
+
+
+def test_html_references_only_link_http_urls_and_escape_attributes():
+    references = [
+        'https://example.com/?q="quoted"&x=1',
+        "http://example.org/path",
+        "javascript:alert(1)",
+        "https://example.com/\nunsafe",
+    ]
+    finding = Finding("TEST-002", "References", "", "", references=references)
+    parser = ReportParser()
+    report = html.render_html([finding])
+    parser.feed(report)
+
+    assert [link["href"] for link in parser.links] == references[:2]
+    assert all(link["target"] == "_blank" for link in parser.links)
+    assert "javascript:alert(1)" in report
+    assert parser.copy_texts == [markdown.format_findings([finding])]
 
 
 def test_run_exports_all_findings_without_markdown_files(monkeypatch, tmp_path):

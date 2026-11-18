@@ -1,5 +1,6 @@
 """Self-contained HTML findings report."""
 
+import re
 from html import escape
 from pathlib import Path
 
@@ -21,6 +22,18 @@ def _list_section(title: str, items: list[str], *, ordered: bool = False) -> str
     return f"<h3>{title}</h3><{tag}>{entries}</{tag}>"
 
 
+def _references_section(references: list[str]) -> str:
+    if not references:
+        return ""
+    entries = []
+    for reference in references:
+        text = escape(reference)
+        if re.fullmatch(r"https?://[^\s\x00-\x1f\x7f\\]+", reference, re.IGNORECASE):
+            text = f'<a href="{text}" target="_blank" rel="noopener noreferrer">{text}</a>'
+        entries.append(f"<li>{text}</li>")
+    return f"<h3>References</h3><ul>{''.join(entries)}</ul>"
+
+
 def render_html(findings: list[Finding]) -> str:
     """Render the complete report without external assets or network access."""
     cards = []
@@ -36,7 +49,7 @@ def render_html(findings: list[Finding]) -> str:
             + _list_section("Evidence", finding.evidence, ordered=True)
             + _text_section("Remediation", format_paragraphs(finding.remediation))
             + _list_section("Affected Assets", finding.affected_assets)
-            + _list_section("References", finding.references)
+            + _references_section(finding.references)
             + "</article>"
         )
     content = "\n".join(cards) or '<p class="empty">No findings were generated.</p>'
