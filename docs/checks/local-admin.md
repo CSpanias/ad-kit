@@ -24,9 +24,6 @@ Then it attempts an SMB login with the Standard User against each host:
 nxc smb <hosts_file> -u <username> -p <password>
 ```
 
-Replace `<dc_ip>`, `<hosts_file>`, `<username>`, and `<password>` with your
-values.
-
 ## What it checks
 
 ad-kit attempts an SMB login with the Standard User against each host and

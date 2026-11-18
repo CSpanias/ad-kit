@@ -20,9 +20,6 @@ bloodyAD -u <username> -p <password> -d <domain> --dc-ip <dc_ip> add dnsRecord <
 bloodyAD -u <username> -p <password> -d <domain> --dc-ip <dc_ip> remove dnsRecord <name> <ip>
 ```
 
-Replace `<dc_ip>`, `<domain>`, `<username>`, `<password>`, `<name>`, and `<ip>`
-with your values.
-
 ## What it checks
 
 ad-kit verifies whether a standard domain user can modify DNS data by adding a

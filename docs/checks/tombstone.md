@@ -17,9 +17,6 @@ ad-kit runs NetExec against each Domain Controller:
 nxc ldap <dc_ip> -u <username> -p <password> -M tombstone -o ACTION=query
 ```
 
-Replace `<dc_ip>`, `<username>`, and `<password>` with your Domain Controller IP
-and Standard User credentials.
-
 ## What it checks
 
 ad-kit retrieves objects in the Deleted Objects container with a read-only

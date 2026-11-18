@@ -22,8 +22,6 @@ nxc smb <targets> -u <username> -p <password> -M coerce_plus
 nxc smb <targets> -u <username> -p <password> -M webdav
 ```
 
-Replace `<targets>`, `<username>`, and `<password>` with your values.
-
 ## What it checks
 
 ad-kit reports whether the Print Spooler service is enabled (`spooler`), which

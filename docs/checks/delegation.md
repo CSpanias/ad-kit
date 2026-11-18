@@ -20,9 +20,6 @@ nxc ldap <dc_ip> -u <username> -p <password> --trusted-for-delegation
 nxc ldap <dc_ip> -u <username> -p <password> --find-delegation
 ```
 
-Replace `<dc_ip>`, `<username>`, and `<password>` with your Domain Controller IP
-and Standard User credentials.
-
 ## What it checks
 
 ad-kit finds accounts configured with unconstrained delegation

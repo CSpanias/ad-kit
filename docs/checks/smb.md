@@ -21,8 +21,7 @@ nxc smb <host> -u <username> -p <password> --shares WRITE --dns-server <dc_ip>
 ```
 
 The writable-share check uses the Standard User account and is prompted only
-when needed. Replace `<host>`, `<dc_ip>`, `<username>`, and `<password>` with
-your values.
+when needed.
 
 ## What it checks
 

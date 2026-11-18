@@ -18,9 +18,6 @@ ad-kit runs NetExec directly:
 nxc ldap <dc_ip> -u <username> -p <password> --password-never-expires
 ```
 
-Replace `<dc_ip>`, `<username>`, and `<password>` with your Domain Controller IP
-and Standard User credentials.
-
 ## What it checks
 
 ad-kit lists accounts with the `DONT_EXPIRE_PASSWD` flag set and reports enabled

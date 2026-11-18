@@ -19,8 +19,6 @@ ad-kit runs Certipy:
 certipy find -u <username>@<domain> -p <password> -dc-ip <dc_ip> -stdout -vuln
 ```
 
-Replace `<username>`, `<domain>`, `<password>`, and `<dc_ip>` with your values.
-
 ## What it checks
 
 ad-kit enumerates certificate templates and Certification Authorities and

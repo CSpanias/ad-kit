@@ -21,9 +21,6 @@ ad-kit runs NetExec against each Domain Controller:
 nxc smb <dc_ip> -u <username> -p <password> -M nopac
 ```
 
-Replace `<dc_ip>`, `<username>`, and `<password>` with your Domain Controller IP
-and Standard User credentials.
-
 ## What it checks
 
 ad-kit compares the size of a TGT returned with a Privilege Attribute

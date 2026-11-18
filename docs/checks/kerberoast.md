@@ -20,9 +20,6 @@ ad-kit runs Impacket
 GetUserSPNs.py <domain>/<username>:<password> -dc-ip <dc_ip> -request -outputfile <outfile>
 ```
 
-Replace `<domain>`, `<username>`, `<password>`, `<dc_ip>`, and `<outfile>` with
-your values.
-
 ## What it checks
 
 ad-kit enumerates SPN-associated accounts and requests their Kerberos service

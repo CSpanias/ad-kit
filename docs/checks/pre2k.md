@@ -18,9 +18,6 @@ ad-kit runs NetExec directly:
 nxc ldap <dc_ip> -u <username> -p <password> -M pre2k
 ```
 
-Replace `<dc_ip>`, `<username>`, and `<password>` with your Domain Controller IP
-and Standard User credentials.
-
 ## What it checks
 
 ad-kit finds pre-created computer accounts and attempts to request a Ticket

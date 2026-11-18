@@ -22,8 +22,6 @@ in unauthenticated mode against the filtered domain user list:
 GetNPUsers.py <domain>/ -dc-ip <dc_ip> -format hashcat -outputfile <outfile> -usersfile <users_file> -no-pass
 ```
 
-Replace `<domain>`, `<dc_ip>`, `<outfile>`, and `<users_file>` with your values.
-
 ## What it checks
 
 ad-kit scans the domain user list for accounts with the

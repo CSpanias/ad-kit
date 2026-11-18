@@ -19,9 +19,7 @@ nxc ldap <dc_ip> -u <username> -p <password> -M get-scriptpath
 ```
 
 The resolved SMB paths are then inspected using write-capable file handles
-(Impacket, in-process - no separate shell command). Replace `<dc_ip>`,
-`<username>`, and `<password>` with your Domain Controller IP and Standard User
-credentials.
+(Impacket, in-process - no separate shell command).
 
 ## What it checks
 

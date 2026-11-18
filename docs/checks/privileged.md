@@ -20,9 +20,7 @@ nxc ldap <dc_ip> -u <username> -p <password> --admin-count
 ```
 
 Privileged group membership and the domain DACL are read in-process using
-Impacket (`get_privileged_group_members` and `dacledit.py`). Replace
-`<dc_ip>`, `<username>`, and `<password>` with your Domain Controller IP and
-Standard User credentials.
+Impacket (`get_privileged_group_members` and `dacledit.py`).
 
 ## What it checks
 

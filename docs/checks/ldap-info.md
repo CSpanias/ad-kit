@@ -22,9 +22,6 @@ nxc ldap <dc_ip> -u <username> -p <password> -M get-userPassword
 nxc ldap <dc_ip> -u <username> -p <password> -M get-unixUserPassword
 ```
 
-Replace `<dc_ip>`, `<username>`, and `<password>` with your Domain Controller IP
-and Standard User credentials.
-
 ## What it checks
 
 ad-kit collects account attributes:

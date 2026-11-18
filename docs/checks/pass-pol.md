@@ -18,9 +18,6 @@ ad-kit reads the effective domain policy with NetExec:
 nxc ldap <dc_ip> -u <username> -p <password> --pass-pol
 ```
 
-Replace `<dc_ip>`, `<username>`, and `<password>` with your Domain Controller IP
-and Standard User credentials.
-
 ## What it checks
 
 ad-kit reads the effective domain policy and compares each setting against the
