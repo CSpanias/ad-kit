@@ -24,8 +24,7 @@ The `--users` flag corresponds to NetExec's
 module, and `--admin-count` to
 [admin count](https://www.netexec.wiki/ldap-protocol/admin-count).
 
-Privileged group membership and the domain DACL are read in-process using
-Impacket (`get_privileged_group_members` and `dacledit.py`).
+Privileged group membership and the domain DACL are read in-process using Impacket ([`get_privileged_group_members`](https://github.com/CSpanias/ad-kit/blob/main/src/ad_kit/core/privileged.py#L31) and [`dacledit.py`](https://github.com/fortra/impacket/blob/master/examples/dacledit.py)).
 
 ## What it checks
 

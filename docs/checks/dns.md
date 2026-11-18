@@ -22,6 +22,8 @@ bloodyAD -u <username> -p <password> -d <domain> --dc-ip <dc_ip> remove dnsRecor
 
 The [`add dnsRecord`](https://github.com/CravateRouge/bloodyAD/wiki/User-Guide#add-dnsrecord) and [`remove dnsRecord`](https://github.com/CravateRouge/bloodyAD/wiki/User-Guide#remove-dnsrecord) commands come from the bloodyAD User Guide.
 
+## What it checks
+
 ad-kit verifies whether a standard domain user can modify DNS data by adding a
 temporary `dnsRecord` entry and then removing it again. The created record is
 always cleaned up (with a Domain Administrator account if the Standard User

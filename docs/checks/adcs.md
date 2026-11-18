@@ -21,6 +21,8 @@ certipy find -u <username>@<domain> -p <password> -dc-ip <dc_ip> -stdout -vuln
 
 The supported ESC classes (ESC1, ESC8, ESC15) are documented in Certipy's [Privilege Escalation guide](https://github.com/ly4k/Certipy/wiki/06-%E2%80%90-Privilege-Escalation), which covers ESC1 through ESC17.
 
+## What it checks
+
 ad-kit enumerates certificate templates and Certification Authorities and
 detects ESC classes. It detects the common ESC classes (ESC1, ESC2, ESC3, ESC4,
 ESC6, ESC8, ESC9, ESC10, ESC13, ESC15, ESC16, ESC17) and reports findings for
