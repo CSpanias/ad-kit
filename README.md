@@ -21,7 +21,7 @@ AD security reviews and generating consistent assessment output.
 - NTDS extraction via Impacket [`secretsdump`](https://github.com/fortra/impacket/blob/master/examples/secretsdump.py) 
 - SCP command generation for artefact retrieval
 - Automated Active Directory security assessment checks
-- Offline HTML and JSON findings reports, with optional Markdown and supporting evidence
+- Offline HTML and JSON findings reports with supporting evidence
 
 ## Installation
 
@@ -136,8 +136,7 @@ Perform basic domain enumeration:
 ```
 
 `check` executes one or more AD assessment modules and generates a local HTML
-findings report, a JSON integration export, and supporting evidence. Use
-`ad-kit check all --markdown` to also write per-check Markdown reports:
+findings report, a JSON integration export, and supporting evidence:
 
 ```bash
 $ ad-kit check -h

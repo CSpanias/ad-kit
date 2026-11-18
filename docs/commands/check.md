@@ -24,18 +24,9 @@ Modules are executed in the order provided. Authentication is prompted once and 
 
 The current run writes `ad-kit/ad-kit_findings.html` and
 `ad-kit/ad-kit_findings.json`. The HTML report is self-contained and has a
-Copy Markdown button for each finding. Use `--markdown` to also write per-check
-Markdown files:
-
-```bash
-ad-kit check --markdown
-ad-kit check all --markdown
-ad-kit check ldap --markdown
-ad-kit check run ldap smb --markdown
-```
-
-Previous Markdown files are not removed when the option is omitted. Each run
-replaces the HTML and JSON exports, including when running selected checks.
+Copy Markdown button for each finding. Each run replaces the HTML and JSON
+exports, including when running selected checks. Previously generated Markdown
+files are not removed.
 
 ## Available Checks
 

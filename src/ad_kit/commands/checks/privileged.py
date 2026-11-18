@@ -15,7 +15,7 @@ from ad_kit.checks.privileged_excessive import (
 from ad_kit.core.checks import load_dc_hostnames
 from ad_kit.core.console import console, print_info, print_section
 from ad_kit.core.findings import load_finding
-from ad_kit.core.util import get_artefacts_dir, progress, require_session
+from ad_kit.core.util import progress, require_session
 from ad_kit.reporting.results import record_findings
 
 from .credentials import authenticate_standard_user
@@ -158,11 +158,7 @@ def run_privileged_group_checks(
 
     console.print(dcsync_table)
 
-    record_findings(
-        findings,
-        get_artefacts_dir()
-        / "findings-privileged-groups.md",
-    )
+    record_findings(findings)
 
 def run_delegation_checks(
     std_pass: str | None = None,
@@ -213,11 +209,7 @@ def run_delegation_checks(
 
     console.print(table)
 
-    record_findings(
-        findings,
-        get_artefacts_dir()
-        / "findings-delegation.md",
-    )
+    record_findings(findings)
 
 def run_kerberoast_checks(
     std_pass: str | None = None,
@@ -263,11 +255,7 @@ def run_kerberoast_checks(
 
     console.print(table)
 
-    record_findings(
-        findings,
-        get_artefacts_dir()
-        / "findings-kerberoast.md",
-    )
+    record_findings(findings)
 
 def run_adcs_checks(
     std_pass: str | None = None,
@@ -322,11 +310,7 @@ def run_adcs_checks(
         "identified ESC classifications are reported for visibility only."
     )
 
-    record_findings(
-        findings,
-        get_artefacts_dir()
-        / "findings-adcs.md",
-    )
+    record_findings(findings)
 
 def run_ldap_info_checks(
     std_pass: str | None = None,
@@ -434,11 +418,7 @@ def run_ldap_info_checks(
 
         findings.append(finding)
 
-    record_findings(
-        findings,
-        get_artefacts_dir()
-        / "findings-ldap-info.md",
-    )
+    record_findings(findings)
 
 def run_coercion_checks(
     std_pass: str | None = None,
@@ -510,8 +490,4 @@ def run_coercion_checks(
 
         findings.append(finding)
 
-    record_findings(
-        findings,
-        get_artefacts_dir()
-        / "findings-coercion.md",
-    )
+    record_findings(findings)

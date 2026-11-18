@@ -47,13 +47,4 @@ as Markdown, and `ad-kit/ad-kit_findings.json` for integration. The exports
 contain findings from the current run only. The JSON is a filtered integration
 export, not a complete copy of the HTML report.
 
-Add `--markdown` to also write per-check Markdown reports:
-
-```
-ad-kit/findings-ldap.md
-ad-kit/findings-smb.md
-ad-kit/findings-asreproast.md
-...
-```
-
 Evidence is stored in `ad-kit/evidence/`.

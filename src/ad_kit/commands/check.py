@@ -157,9 +157,9 @@ AVAILABLE_CHECKS: dict[str, CheckDefinition] = {
 }
 
 
-def run_selected_checks(modules: list[str], *, markdown: bool = False) -> None:
+def run_selected_checks(modules: list[str]) -> None:
     """Execute selected checks, reusing one Standard User password."""
-    results.reset(markdown_enabled=markdown)
+    results.reset()
 
     requires_authentication = any(
         module in AVAILABLE_CHECKS
@@ -183,9 +183,9 @@ def run_selected_checks(modules: list[str], *, markdown: bool = False) -> None:
     results.write_reports(get_artefacts_dir())
 
 
-def run_checks(*, markdown: bool = False) -> None:
+def run_checks() -> None:
     """Execute all assessment checks in the established workflow order."""
-    results.reset(markdown_enabled=markdown)
+    results.reset()
 
     _run_step("ldap", lambda: run_ldap_checks(), None)
     std_pass = _run_step("smb", lambda: run_smb_checks(), None)

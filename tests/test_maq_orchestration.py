@@ -17,7 +17,6 @@ from ad_kit.commands.checks import policy
 )
 def test_maq_quota_value_color(
     monkeypatch,
-    tmp_path,
     quota,
     color_code,
 ):
@@ -48,7 +47,6 @@ def test_maq_quota_value_color(
     monkeypatch.setattr(policy, "maq_check", lambda *_args: results)
     monkeypatch.setattr(policy, "load_finding", lambda *_args: SimpleNamespace(evidence=[]))
     monkeypatch.setattr(policy, "record_findings", lambda *_args: None)
-    monkeypatch.setattr(policy, "get_artefacts_dir", lambda: tmp_path)
     monkeypatch.setattr(policy.console, "print", fake_print)
 
     policy.run_maq_checks("test-password")

@@ -59,10 +59,7 @@ def run_ldap_checks() -> None:
 
     console.print(table)
 
-    record_findings(
-        ldap_findings,
-        get_artefacts_dir() / "findings-ldap.md",
-    )
+    record_findings(ldap_findings)
 
 def run_tombstone_checks(
     std_pass: str | None = None,
@@ -154,10 +151,7 @@ def run_tombstone_checks(
         finding.affected_assets = sorted(set(finding.affected_assets))
         findings.append(finding)
 
-    record_findings(
-        findings,
-        get_artefacts_dir() / "findings-tombstone.md",
-    )
+    record_findings(findings)
 
 def run_smb_checks(
     std_pass: str | None = None,
@@ -422,10 +416,7 @@ def run_smb_checks(
         finding.affected_assets = sorted(set(finding.affected_assets))
         findings.append(finding)
 
-    record_findings(
-        findings,
-        get_artefacts_dir() / "findings-smb.md",
-    )
+    record_findings(findings)
 
     return std_pass
 
@@ -488,10 +479,6 @@ def run_asreproast_checks(
 
     console.print(table)
 
-    record_findings(
-        findings,
-        get_artefacts_dir()
-        / "findings-asreproast.md",
-    )
+    record_findings(findings)
 
     return std_pass

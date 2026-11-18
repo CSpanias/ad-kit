@@ -165,9 +165,6 @@ def enum() -> None:
 )
 def check_callback(
     ctx: typer.Context,
-    markdown: bool = typer.Option(
-        False, "--markdown", help="Also write per-check Markdown reports."
-    ),
 ) -> None:
     """
     Execute assessment checks.
@@ -175,9 +172,8 @@ def check_callback(
     If no specific check module is supplied, all assessment checks are executed.
     """
 
-    ctx.obj = markdown
     if ctx.invoked_subcommand is None:
-        check.run_checks(markdown=markdown)
+        check.run_checks()
 
 #-------------------------------------------------------------------------------
 # CHECK ALL MODULE
@@ -186,17 +182,12 @@ def check_callback(
     name="all",
     help="Execute all assessment checks."
 )
-def check_all(
-    ctx: typer.Context,
-    markdown: bool = typer.Option(
-        False, "--markdown", help="Also write per-check Markdown reports."
-    ),
-) -> None:
+def check_all() -> None:
     """
     Execute all assessment checks.
     """
 
-    check.run_checks(markdown=markdown or bool(ctx.parent and ctx.parent.obj))
+    check.run_checks()
 
 #-------------------------------------------------------------------------------
 # CHECK COMMANDS (generated dynamically from AVAILABLE_CHECKS)
@@ -206,15 +197,8 @@ def check_all(
 def _make_check_command(module_name: str):
     """Factory that creates a check command for the given module name."""
 
-    def run_check(
-        ctx: typer.Context,
-        markdown: bool = typer.Option(
-            False, "--markdown", help="Also write per-check Markdown reports."
-        ),
-    ) -> None:
-        check.run_selected_checks(
-            [module_name], markdown=markdown or bool(ctx.parent and ctx.parent.obj)
-        )
+    def run_check() -> None:
+        check.run_selected_checks([module_name])
 
     run_check.__name__ = (
         f"check_{module_name.replace('-', '_').replace('.', '_')}"
@@ -239,11 +223,7 @@ for _module_name in AVAILABLE_CHECKS:
     help="Execute selected assessment modules.",
 )
 def selected(
-    ctx: typer.Context,
     modules: list[str],
-    markdown: bool = typer.Option(
-        False, "--markdown", help="Also write per-check Markdown reports."
-    ),
 ) -> None:
     """
     Execute one or more specified assessment modules.
@@ -257,7 +237,7 @@ def selected(
             Assessment modules to execute.
     """
 
-    check.run_selected_checks(modules, markdown=markdown or bool(ctx.parent and ctx.parent.obj))
+    check.run_selected_checks(modules)
 
 
 if __name__ == "__main__":

@@ -3,26 +3,21 @@
 from pathlib import Path
 
 from ad_kit.core.finding import Finding
-from ad_kit.reporting import html, json, markdown
+from ad_kit.reporting import html, json
 
 _findings: list[Finding] = []
-_markdown_enabled = False
 
 
-def reset(*, markdown_enabled: bool = False) -> None:
+def reset() -> None:
     """Start a new reporting run."""
-    global _markdown_enabled
     _findings.clear()
     json.reset()
-    _markdown_enabled = markdown_enabled
 
 
-def record_findings(findings: list[Finding], output_file: Path) -> None:
-    """Collect all findings and optionally write the per-check Markdown."""
+def record_findings(findings: list[Finding]) -> None:
+    """Collect all findings for the HTML and JSON exports."""
     _findings.extend(findings)
     json.collect(findings)
-    if _markdown_enabled:
-        markdown.write_markdown_report(findings, output_file)
 
 
 def write_reports(directory: Path) -> None:

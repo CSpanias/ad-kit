@@ -50,8 +50,6 @@ Each assessment run generates:
 - JSON integration export (`ad-kit/ad-kit_findings.json`)
 - Evidence files (`ad-kit/evidence/`)
 
-Add `--markdown` to also generate per-check Markdown reports.
-
 ## Stage 4: Retrieve Artefacts
 
 `ad-kit enum` can generate an SCP command to pull artefacts from your jumpbox:

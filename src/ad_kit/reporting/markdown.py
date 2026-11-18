@@ -1,12 +1,8 @@
 """
-Markdown report generation.
+Markdown formatting for copyable findings.
 
-This module generates Markdown reports from a collection
-of findings identified during an Active Directory
-assessment.
+This module formats findings identified during an Active Directory assessment.
 """
-
-from pathlib import Path
 
 from ad_kit.core.finding import Finding
 
@@ -111,16 +107,3 @@ def format_findings(findings: list[Finding]) -> str:
             lines.append("")
 
     return "\n".join(lines)
-
-
-def write_markdown_report(findings: list[Finding], output_file: Path) -> None:
-    """Write the per-check Markdown report, removing it if no findings exist."""
-    if not findings:
-        if output_file.exists():
-            output_file.unlink()
-        return
-
-    output_file.write_text(
-        "# Active Directory Assessment Findings\n\n" + format_findings(findings),
-        encoding="utf-8",
-    )

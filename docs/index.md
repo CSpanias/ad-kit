@@ -17,7 +17,7 @@ The toolkit is intended to provide a repeatable methodology for conducting AD se
 - NTDS extraction via Impacket [secretsdump](https://github.com/fortra/impacket/blob/master/examples/secretsdump.py)
 - SCP command generation for artefact retrieval
 - Automated Active Directory security assessment checks
-- Offline HTML and JSON findings reports, with optional Markdown and supporting evidence
+- Offline HTML and JSON findings reports with supporting evidence
 
 ## Installation
 
