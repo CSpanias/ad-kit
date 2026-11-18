@@ -13,13 +13,13 @@ ad-kit check adcs
 
 ## Commands run
 
-ad-kit runs Certipy:
+ad-kit runs Certipy's [`find`](https://github.com/ly4k/Certipy/wiki/08-%E2%80%90-Command-Reference#find) command to enumerate AD CS and detect ESC attack paths:
 
 ```bash
 certipy find -u <username>@<domain> -p <password> -dc-ip <dc_ip> -stdout -vuln
 ```
 
-## What it checks
+The supported ESC classes (ESC1, ESC8, ESC15) are documented in Certipy's [Privilege Escalation guide](https://github.com/ly4k/Certipy/wiki/06-%E2%80%90-Privilege-Escalation), which covers ESC1 through ESC17.
 
 ad-kit enumerates certificate templates and Certification Authorities and
 detects ESC classes. It detects the common ESC classes (ESC1, ESC2, ESC3, ESC4,

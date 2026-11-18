@@ -12,7 +12,8 @@ ad-kit check pre2k
 
 ## Commands run
 
-ad-kit runs NetExec directly:
+ad-kit runs NetExec's [pre2k](https://www.netexec.wiki/ldap-protocol/pre2k)
+module:
 
 ```bash
 nxc ldap <dc_ip> -u <username> -p <password> -M pre2k

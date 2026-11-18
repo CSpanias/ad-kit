@@ -12,14 +12,15 @@ ad-kit check maq
 
 ## Commands run
 
-ad-kit runs NetExec directly:
+ad-kit runs NetExec's
+[maq](https://www.netexec.wiki/ldap-protocol/machine-account-quota) module:
 
 ```bash
 nxc ldap <dc_ip> -u <username> -p <password> -M maq
 ```
 
 If the Machine Account Quota is greater than zero, ad-kit attempts to create a
-test machine account:
+test machine account using NetExec's `add-computer` module:
 
 ```bash
 nxc ldap <dc_ip> -u <username> -p <password> -M add-computer -o NAME=<name> PASSWORD=<password>
@@ -31,7 +32,8 @@ It then authenticates as the machine account over SMB:
 nxc smb <dc_ip> -u <name>$ -p <password>
 ```
 
-And removes the test machine account:
+And removes the test machine account using NetExec's `add-computer` module with
+`DELETE=True`:
 
 ```bash
 nxc ldap <dc_ip> -u <username> -p <password> -M add-computer -o NAME=<name> PASSWORD=<password> DELETE=True

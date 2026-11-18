@@ -20,6 +20,11 @@ nxc ldap <dc_ip> -u <username> -p <password> --trusted-for-delegation
 nxc ldap <dc_ip> -u <username> -p <password> --find-delegation
 ```
 
+The `--trusted-for-delegation` flag corresponds to NetExec's
+[unconstrained delegation](https://www.netexec.wiki/ldap-protocol/unconstrained-delegation)
+module, and `--find-delegation` to
+[find misconfigured delegation](https://www.netexec.wiki/ldap-protocol/find-misconfigured-delegation).
+
 ## What it checks
 
 ad-kit finds accounts configured with unconstrained delegation

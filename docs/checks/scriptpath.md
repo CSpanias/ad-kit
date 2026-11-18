@@ -12,7 +12,9 @@ ad-kit check scriptPath
 
 ## Commands run
 
-ad-kit reads user logon script paths with NetExec:
+ad-kit reads user logon script paths with NetExec's
+[get-scriptpath](https://www.netexec.wiki/ldap-protocol/get-scriptpath)
+module:
 
 ```bash
 nxc ldap <dc_ip> -u <username> -p <password> -M get-scriptpath

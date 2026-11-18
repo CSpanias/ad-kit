@@ -12,7 +12,9 @@ ad-kit check password-never-expires
 
 ## Commands run
 
-ad-kit runs NetExec directly:
+ad-kit runs NetExec's
+[password-never-expires](https://www.netexec.wiki/ldap-protocol/password-never-expires)
+flag:
 
 ```bash
 nxc ldap <dc_ip> -u <username> -p <password> --password-never-expires

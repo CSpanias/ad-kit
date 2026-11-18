@@ -22,6 +22,10 @@ nxc ldap <dc_ip> -u <username> -p <password> -M get-userPassword
 nxc ldap <dc_ip> -u <username> -p <password> -M get-unixUserPassword
 ```
 
+The `get-desc-users` command maps to NetExec's
+[get user descriptions](https://www.netexec.wiki/ldap-protocol/get-user-descriptions)
+module.
+
 ## What it checks
 
 ad-kit collects account attributes:

@@ -13,14 +13,14 @@ ad-kit check dns
 
 ## Commands run
 
-ad-kit uses `bloodyAD` to add, then remove, a temporary `dnsRecord`:
+ad-kit uses bloodyAD to add, then remove, a temporary `dnsRecord`:
 
 ```bash
 bloodyAD -u <username> -p <password> -d <domain> --dc-ip <dc_ip> add dnsRecord <name> <ip>
 bloodyAD -u <username> -p <password> -d <domain> --dc-ip <dc_ip> remove dnsRecord <name> <ip>
 ```
 
-## What it checks
+The [`add dnsRecord`](https://github.com/CravateRouge/bloodyAD/wiki/User-Guide#add-dnsrecord) and [`remove dnsRecord`](https://github.com/CravateRouge/bloodyAD/wiki/User-Guide#remove-dnsrecord) commands come from the bloodyAD User Guide.
 
 ad-kit verifies whether a standard domain user can modify DNS data by adding a
 temporary `dnsRecord` entry and then removing it again. The created record is

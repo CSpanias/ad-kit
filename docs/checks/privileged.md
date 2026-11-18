@@ -12,12 +12,17 @@ ad-kit check privileged
 
 ## Commands run
 
-ad-kit runs NetExec and Impacket against the Domain Controller:
+ad-kit runs NetExec against the Domain Controller:
 
 ```bash
 nxc ldap <dc_ip> -u <username> -p <password> --users
 nxc ldap <dc_ip> -u <username> -p <password> --admin-count
 ```
+
+The `--users` flag corresponds to NetExec's
+[enumerate domain users](https://www.netexec.wiki/ldap-protocol/enumerate-users)
+module, and `--admin-count` to
+[admin count](https://www.netexec.wiki/ldap-protocol/admin-count).
 
 Privileged group membership and the domain DACL are read in-process using
 Impacket (`get_privileged_group_members` and `dacledit.py`).
