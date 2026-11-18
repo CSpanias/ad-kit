@@ -10,14 +10,43 @@ ad-kit check maq
 !!! info "Prerequisite"
     Requires a valid Standard User account (authenticated).
 
+## Commands run
+
+ad-kit runs NetExec directly:
+
+```bash
+nxc ldap <dc_ip> -u <username> -p <password> -M maq
+```
+
+If the Machine Account Quota is greater than zero, ad-kit attempts to create a
+test machine account:
+
+```bash
+nxc ldap <dc_ip> -u <username> -p <password> -M add-computer -o NAME=<name> PASSWORD=<password>
+```
+
+It then authenticates as the machine account over SMB:
+
+```bash
+nxc smb <dc_ip> -u <name>$ -p <password>
+```
+
+And removes the test machine account:
+
+```bash
+nxc ldap <dc_ip> -u <username> -p <password> -M add-computer -o NAME=<name> PASSWORD=<password> DELETE=True
+```
+
+Replace `<dc_ip>`, `<username>`, and `<password>` with your Domain Controller IP
+and Standard User credentials.
+
 ## What it checks
 
 ad-kit:
 
 1. Reads the [`ms-DS-MachineAccountQuota`](https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/default-workstation-numbers-join-domain)
    value and the group permitted to join machines.
-2. If the quota is greater than zero, attempts to create a test machine account
-   with `nxc smb ... -M add-computer`.
+2. If the quota is greater than zero, attempts to create a test machine account.
 3. Authenticates as the machine account, then deletes it and records the
    cleanup method.
 

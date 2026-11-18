@@ -11,10 +11,17 @@ ad-kit check ldap
     Requires the Domain Controller hostname inventory from `ad-kit enum`. The
     check itself is unauthenticated.
 
+## Commands run
+
+For each Domain Controller, ad-kit runs NetExec directly:
+
+```bash
+nxc ldap <controller> -u '' -p ''
+```
+
 ## What it checks
 
-For each Domain Controller, ad-kit runs
-`nxc ldap <controller> -u '' -p ''` and records:
+ad-kit records:
 
 - **LDAP signing** - whether the controller requires signed LDAP traffic.
 - **Channel binding** - whether LDAPS authentication is bound to the TLS

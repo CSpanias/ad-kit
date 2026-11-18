@@ -11,11 +11,21 @@ ad-kit check kerberoast
 !!! info "Prerequisite"
     Requires a valid Standard User account (authenticated).
 
-## What it checks
+## Commands run
 
 ad-kit runs Impacket
-[`GetUserSPNs.py -request`](https://github.com/fortra/impacket/blob/master/examples/GetUserSPNs.py)
-to enumerate SPN-associated accounts and request their Kerberos service
+[`GetUserSPNs.py -request`](https://github.com/fortra/impacket/blob/master/examples/GetUserSPNs.py):
+
+```bash
+GetUserSPNs.py <domain>/<username>:<password> -dc-ip <dc_ip> -request -outputfile <outfile>
+```
+
+Replace `<domain>`, `<username>`, `<password>`, `<dc_ip>`, and `<outfile>` with
+your values.
+
+## What it checks
+
+ad-kit enumerates SPN-associated accounts and requests their Kerberos service
 tickets, then cross-references the results against the monitored privileged
 groups.
 

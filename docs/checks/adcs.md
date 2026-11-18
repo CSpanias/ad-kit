@@ -11,12 +11,22 @@ ad-kit check adcs
     Requires a valid Standard User account (authenticated) and
     [Certipy](https://github.com/ly4k/Certipy) installed.
 
+## Commands run
+
+ad-kit runs Certipy:
+
+```bash
+certipy find -u <username>@<domain> -p <password> -dc-ip <dc_ip> -stdout -vuln
+```
+
+Replace `<username>`, `<domain>`, `<password>`, and `<dc_ip>` with your values.
+
 ## What it checks
 
-ad-kit runs `certipy find ... -vuln` to enumerate certificate templates and
-Certification Authorities and detect ESC classes. It detects the common ESC
-classes (ESC1, ESC2, ESC3, ESC4, ESC6, ESC8, ESC9, ESC10, ESC13, ESC15, ESC16,
-ESC17) and reports findings for the supported set of ESC1, ESC8, and ESC15.
+ad-kit enumerates certificate templates and Certification Authorities and
+detects ESC classes. It detects the common ESC classes (ESC1, ESC2, ESC3, ESC4,
+ESC6, ESC8, ESC9, ESC10, ESC13, ESC15, ESC16, ESC17) and reports findings for
+the supported set of ESC1, ESC8, and ESC15.
 
 ## How it works
 

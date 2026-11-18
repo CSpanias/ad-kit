@@ -10,12 +10,22 @@ ad-kit check password-not-required
 !!! info "Prerequisite"
     Requires a valid Standard User account (authenticated).
 
+## Commands run
+
+ad-kit runs NetExec directly:
+
+```bash
+nxc ldap <dc_ip> -u <username> -p <password> --password-not-required
+```
+
+Replace `<dc_ip>`, `<username>`, and `<password>` with your Domain Controller IP
+and Standard User credentials.
+
 ## What it checks
 
-ad-kit runs `nxc ldap ... --password-not-required` to list accounts with the
-`PASSWD_NOTREQD` flag set and reports enabled user accounts. Machine accounts
-(names ending in `$`) are excluded because this flag is expected on them and
-does not indicate a weak or blank password.
+ad-kit lists accounts with the `PASSWD_NOTREQD` flag set and reports enabled
+user accounts. Machine accounts (names ending in `$`) are excluded because this
+flag is expected on them and does not indicate a weak or blank password.
 
 ## How it works
 

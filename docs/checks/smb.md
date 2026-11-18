@@ -11,9 +11,22 @@ ad-kit check smb
     Requires the Domain Controller and domain computer inventories from
     `ad-kit enum`. The writable-share check uses a Standard User account.
 
+## Commands run
+
+ad-kit runs NetExec against the discovered hosts:
+
+```bash
+nxc smb <host> --dns-server <dc_ip>
+nxc smb <host> -u <username> -p <password> --shares WRITE --dns-server <dc_ip>
+```
+
+The writable-share check uses the Standard User account and is prompted only
+when needed. Replace `<host>`, `<dc_ip>`, `<username>`, and `<password>` with
+your values.
+
 ## What it checks
 
-ad-kit runs NetExec against the discovered hosts and records:
+ad-kit records:
 
 - **SMB signing** - required or not.
 - **SMBv1** - enabled or not.

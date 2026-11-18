@@ -12,18 +12,26 @@ ad-kit check asreproast
 !!! info "Prerequisite"
     Requires the filtered domain user list produced by `ad-kit enum`.
 
+## Commands run
+
+ad-kit runs Impacket's
+[`GetNPUsers.py`](https://github.com/fortra/impacket/blob/master/examples/GetNPUsers.py)
+in unauthenticated mode against the filtered domain user list:
+
+```bash
+GetNPUsers.py <domain>/ -dc-ip <dc_ip> -format hashcat -outputfile <outfile> -usersfile <users_file> -no-pass
+```
+
+Replace `<domain>`, `<dc_ip>`, `<outfile>`, and `<users_file>` with your values.
+
 ## What it checks
 
 ad-kit scans the domain user list for accounts with the
 [`UF_DONT_REQUIRE_PREAUTH`](https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/useraccountcontrol-manipulate-account-properties)
-flag set (the "Do not require Kerberos pre-authentication" option).
-
-It runs Impacket's
-[`GetNPUsers.py`](https://github.com/fortra/impacket/blob/master/examples/GetNPUsers.py)
-in unauthenticated mode against that list (using `-no-pass` and `-usersfile`),
-extracts the affected account names from the returned AS-REP hashes, and, when
-a Standard User password is available, checks whether any affected account
-belongs to a monitored privileged group.
+flag set (the "Do not require Kerberos pre-authentication" option), extracts the
+affected account names from the returned AS-REP hashes, and, when a Standard
+User password is available, checks whether any affected account belongs to a
+monitored privileged group.
 
 ## How it works
 

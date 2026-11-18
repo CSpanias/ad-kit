@@ -10,11 +10,28 @@ ad-kit check local-admin
 !!! info "Prerequisite"
     Requires a valid Standard User account (authenticated).
 
+## Commands run
+
+ad-kit first builds a host list with NetExec:
+
+```bash
+nxc ldap <dc_ip> -u <username> -p <password> --computers
+```
+
+Then it attempts an SMB login with the Standard User against each host:
+
+```bash
+nxc smb <hosts_file> -u <username> -p <password>
+```
+
+Replace `<dc_ip>`, `<hosts_file>`, `<username>`, and `<password>` with your
+values.
+
 ## What it checks
 
-ad-kit first builds a host list with `nxc ldap ... --computers`, then attempts
-an SMB login with the Standard User against each host and detects success
-(`Pwn3d!`). Results are split into member systems and Domain Controllers.
+ad-kit attempts an SMB login with the Standard User against each host and
+detects success (`Pwn3d!`). Results are split into member systems and Domain
+Controllers.
 
 ## How it works
 

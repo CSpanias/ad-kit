@@ -11,14 +11,25 @@ ad-kit check coercion
     Requires a valid Standard User account (authenticated) and the Domain
     Controller hostname inventory from `ad-kit enum`.
 
+## Commands run
+
+ad-kit runs several NetExec modules against the Domain Controller host list
+(`dc-hostnames.txt`):
+
+```bash
+nxc smb <targets> -u <username> -p <password> -M spooler
+nxc smb <targets> -u <username> -p <password> -M coerce_plus
+nxc smb <targets> -u <username> -p <password> -M webdav
+```
+
+Replace `<targets>`, `<username>`, and `<password>` with your values.
+
 ## What it checks
 
-ad-kit runs several NetExec modules against the Domain Controller list:
-
-- `spooler` - whether the Print Spooler service is enabled.
-- `coerce_plus` - which coercion techniques are exposed, such as PrinterBug,
-  PetitPotam, DFSCoerce, and MSEven.
-- `webdav` - whether the WebClient service is enabled (WebDAV coercion).
+ad-kit reports whether the Print Spooler service is enabled (`spooler`), which
+coercion techniques are exposed (`coerce_plus`, such as PrinterBug, PetitPotam,
+DFSCoerce, and MSEven), and whether the WebClient service is enabled
+(`webdav` - WebDAV coercion).
 
 ## How it works
 

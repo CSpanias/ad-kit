@@ -10,12 +10,22 @@ ad-kit check password-never-expires
 !!! info "Prerequisite"
     Requires a valid Standard User account (authenticated).
 
+## Commands run
+
+ad-kit runs NetExec directly:
+
+```bash
+nxc ldap <dc_ip> -u <username> -p <password> --password-never-expires
+```
+
+Replace `<dc_ip>`, `<username>`, and `<password>` with your Domain Controller IP
+and Standard User credentials.
+
 ## What it checks
 
-ad-kit runs `nxc ldap ... --password-never-expires` to list accounts with the
-`DONT_EXPIRE_PASSWD` flag set and reports enabled user accounts. Machine
-accounts (names ending in `$`) are excluded because their secrets rotate
-independently of this flag.
+ad-kit lists accounts with the `DONT_EXPIRE_PASSWD` flag set and reports enabled
+user accounts. Machine accounts (names ending in `$`) are excluded because their
+secrets rotate independently of this flag.
 
 ## How it works
 

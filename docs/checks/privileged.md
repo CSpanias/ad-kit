@@ -10,6 +10,20 @@ ad-kit check privileged
 !!! info "Prerequisite"
     Requires a valid Standard User account (authenticated).
 
+## Commands run
+
+ad-kit runs NetExec and Impacket against the Domain Controller:
+
+```bash
+nxc ldap <dc_ip> -u <username> -p <password> --users
+nxc ldap <dc_ip> -u <username> -p <password> --admin-count
+```
+
+Privileged group membership and the domain DACL are read in-process using
+Impacket (`get_privileged_group_members` and `dacledit.py`). Replace
+`<dc_ip>`, `<username>`, and `<password>` with your Domain Controller IP and
+Standard User credentials.
+
 ## What it checks
 
 ad-kit:

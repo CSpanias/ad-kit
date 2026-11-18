@@ -9,11 +9,21 @@ ad-kit check tombstone
 !!! info "Prerequisite"
     Requires a valid Standard User account (authenticated).
 
+## Commands run
+
+ad-kit runs NetExec against each Domain Controller:
+
+```bash
+nxc ldap <dc_ip> -u <username> -p <password> -M tombstone -o ACTION=query
+```
+
+Replace `<dc_ip>`, `<username>`, and `<password>` with your Domain Controller IP
+and Standard User credentials.
+
 ## What it checks
 
-ad-kit runs the NetExec `tombstone` module with a read-only query action
-against each Domain Controller to retrieve objects in the Deleted Objects
-container. The query never restores or deletes anything.
+ad-kit retrieves objects in the Deleted Objects container with a read-only
+query action. The query never restores or deletes anything.
 
 ## How it works
 

@@ -11,12 +11,24 @@ ad-kit check dns
     Requires a valid Standard User account (authenticated) and
     [bloodyAD](https://github.com/CravateRouge/bloodyAD) installed.
 
+## Commands run
+
+ad-kit uses `bloodyAD` to add, then remove, a temporary `dnsRecord`:
+
+```bash
+bloodyAD -u <username> -p <password> -d <domain> --dc-ip <dc_ip> add dnsRecord <name> <ip>
+bloodyAD -u <username> -p <password> -d <domain> --dc-ip <dc_ip> remove dnsRecord <name> <ip>
+```
+
+Replace `<dc_ip>`, `<domain>`, `<username>`, `<password>`, `<name>`, and `<ip>`
+with your values.
+
 ## What it checks
 
-ad-kit uses `bloodyAD` to add a temporary `dnsRecord` entry and then remove it
-again, verifying whether a standard domain user can modify DNS data. The
-created record is always cleaned up (with a Domain Administrator account if
-the Standard User cannot remove it).
+ad-kit verifies whether a standard domain user can modify DNS data by adding a
+temporary `dnsRecord` entry and then removing it again. The created record is
+always cleaned up (with a Domain Administrator account if the Standard User
+cannot remove it).
 
 ## How it works
 

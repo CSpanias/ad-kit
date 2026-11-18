@@ -10,10 +10,21 @@ ad-kit check pass-pol
 !!! info "Prerequisite"
     Requires a valid Standard User account (authenticated).
 
+## Commands run
+
+ad-kit reads the effective domain policy with NetExec:
+
+```bash
+nxc ldap <dc_ip> -u <username> -p <password> --pass-pol
+```
+
+Replace `<dc_ip>`, `<username>`, and `<password>` with your Domain Controller IP
+and Standard User credentials.
+
 ## What it checks
 
-ad-kit reads the effective domain policy with `nxc ldap ... --pass-pol` and
-compares each setting against the baseline:
+ad-kit reads the effective domain policy and compares each setting against the
+baseline:
 
 | Setting | Baseline |
 |---------|----------|

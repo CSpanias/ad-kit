@@ -13,12 +13,22 @@ ad-kit check nopac
 !!! info "Prerequisite"
     Requires a valid Standard User account (authenticated).
 
+## Commands run
+
+ad-kit runs NetExec against each Domain Controller:
+
+```bash
+nxc smb <dc_ip> -u <username> -p <password> -M nopac
+```
+
+Replace `<dc_ip>`, `<username>`, and `<password>` with your Domain Controller IP
+and Standard User credentials.
+
 ## What it checks
 
-ad-kit runs the NetExec `nopac` module against each Domain Controller and
-compares the size of a TGT returned with a Privilege Attribute Certificate
-(PAC) against one returned without it. A "without PAC" TGT smaller than the
-"with PAC" TGT indicates the controller is vulnerable.
+ad-kit compares the size of a TGT returned with a Privilege Attribute
+Certificate (PAC) against one returned without it. A "without PAC" TGT smaller
+than the "with PAC" TGT indicates the controller is vulnerable.
 
 ## How it works
 

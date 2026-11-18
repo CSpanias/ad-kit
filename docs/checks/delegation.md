@@ -11,18 +11,25 @@ ad-kit check delegation
 !!! info "Prerequisite"
     Requires a valid Standard User account (authenticated).
 
+## Commands run
+
+ad-kit runs NetExec against the Domain Controller:
+
+```bash
+nxc ldap <dc_ip> -u <username> -p <password> --trusted-for-delegation
+nxc ldap <dc_ip> -u <username> -p <password> --find-delegation
+```
+
+Replace `<dc_ip>`, `<username>`, and `<password>` with your Domain Controller IP
+and Standard User credentials.
+
 ## What it checks
 
-ad-kit runs:
-
-- `nxc ldap ... --trusted-for-delegation` to find accounts configured with
-  unconstrained delegation.
-- `nxc ldap ... --find-delegation` to find accounts with constrained delegation
-  and protocol transition.
-
-It excludes Domain Controller machine accounts and the Azure AD Kerberos trust
-object, then flags delegated accounts that are also members of a monitored
-privileged group.
+ad-kit finds accounts configured with unconstrained delegation
+(`--trusted-for-delegation`) and accounts with constrained delegation and
+protocol transition (`--find-delegation`). It excludes Domain Controller machine
+accounts and the Azure AD Kerberos trust object, then flags delegated accounts
+that are also members of a monitored privileged group.
 
 ## How it works
 

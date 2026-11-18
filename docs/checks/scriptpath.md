@@ -10,13 +10,26 @@ ad-kit check scriptPath
 !!! info "Prerequisite"
     Requires a valid Standard User account (authenticated).
 
+## Commands run
+
+ad-kit reads user logon script paths with NetExec:
+
+```bash
+nxc ldap <dc_ip> -u <username> -p <password> -M get-scriptpath
+```
+
+The resolved SMB paths are then inspected using write-capable file handles
+(Impacket, in-process - no separate shell command). Replace `<dc_ip>`,
+`<username>`, and `<password>` with your Domain Controller IP and Standard User
+credentials.
+
 ## What it checks
 
 ad-kit:
 
 1. Reads the
    [`scriptPath`](https://learn.microsoft.com/en-us/windows/win32/adschema/a-scriptpath)
-   attribute from user objects with `nxc ldap ... -M get-scriptpath`.
+   attribute from user objects.
 2. Resolves each path (relative paths are resolved against the NETLOGON share).
 3. Inspects the resolved SMB paths using write-capable file handles, without
    writing any data.

@@ -11,9 +11,23 @@ ad-kit check ldap-info
 !!! info "Prerequisite"
     Requires a valid Standard User account (authenticated).
 
-## What it checks
+## Commands run
 
 ad-kit runs several NetExec modules to collect account attributes:
+
+```bash
+nxc ldap <dc_ip> -u <username> -p <password> -M get-desc-users
+nxc ldap <dc_ip> -u <username> -p <password> -M get-info-users
+nxc ldap <dc_ip> -u <username> -p <password> -M get-userPassword
+nxc ldap <dc_ip> -u <username> -p <password> -M get-unixUserPassword
+```
+
+Replace `<dc_ip>`, `<username>`, and `<password>` with your Domain Controller IP
+and Standard User credentials.
+
+## What it checks
+
+ad-kit collects account attributes:
 
 - `get-desc-users` - the `description` attribute.
 - `get-info-users` - the informational fields on user objects.
