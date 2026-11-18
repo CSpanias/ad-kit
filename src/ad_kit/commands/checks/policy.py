@@ -14,7 +14,7 @@ from ad_kit.core.checks import cleanup_test_artifact
 from ad_kit.core.console import console, print_section
 from ad_kit.core.findings import load_finding
 from ad_kit.core.util import get_artefacts_dir, progress, require_session
-from ad_kit.reporting.markdown import write_markdown_report
+from ad_kit.reporting.results import record_findings
 
 from .credentials import authenticate_domain_admin, authenticate_standard_user
 
@@ -104,7 +104,7 @@ def run_local_admin_checks(
 
         findings.append(finding)
 
-    write_markdown_report(
+    record_findings(
         findings,
         get_artefacts_dir()
         / "findings-local-admin.md",
@@ -286,7 +286,7 @@ def run_password_policy_checks(
 
         findings.append(finding)
 
-    write_markdown_report(
+    record_findings(
         findings,
         get_artefacts_dir() / "findings-passwords.md",
     )
@@ -327,7 +327,7 @@ def run_password_not_required_checks(
 
     console.print(table)
 
-    write_markdown_report(
+    record_findings(
         findings,
         get_artefacts_dir() / "findings-password-not-required.md",
     )
@@ -365,7 +365,7 @@ def run_password_never_expires_checks(
 
     console.print(table)
 
-    write_markdown_report(
+    record_findings(
         findings,
         get_artefacts_dir() / "findings-password-never-expires.md",
     )
@@ -514,7 +514,7 @@ def run_maq_checks(
 
         generated_findings.append(finding)
 
-    write_markdown_report(
+    record_findings(
         generated_findings,
         get_artefacts_dir() / "findings-maq.md",
     )
@@ -613,7 +613,7 @@ def run_dns_checks(
 
     console.print(table)
 
-    write_markdown_report(
+    record_findings(
         findings,
         get_artefacts_dir() / "findings-dns.md",
     )
@@ -672,7 +672,7 @@ def run_pre2k_checks(
 
     console.print(table)
 
-    write_markdown_report(
+    record_findings(
         findings,
         get_artefacts_dir()
         / "findings-pre2k.md",

@@ -1,6 +1,6 @@
 # Findings Reference
 
-Findings are generated during assessment checks and written to Markdown reports in the `ad-kit/` directory. Each finding has a unique ID, title, commentary, remediation guidance, and evidence.
+Findings are generated during assessment checks and written to a self-contained HTML report in the `ad-kit/` directory. Each finding has a unique ID, title, commentary, remediation guidance, and evidence.
 
 ## Finding Categories
 
@@ -42,7 +42,12 @@ LDAP-001:
 
 ## Report Output
 
-Each check writes a Markdown findings report:
+Each run writes `ad-kit/ad-kit_findings.html`, where each finding can be copied
+as Markdown, and `ad-kit/ad-kit_findings.json` for integration. The exports
+contain findings from the current run only. The JSON is a filtered integration
+export, not a complete copy of the HTML report.
+
+Add `--markdown` to also write per-check Markdown reports:
 
 ```
 ad-kit/findings-ldap.md

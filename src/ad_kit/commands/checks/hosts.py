@@ -5,7 +5,7 @@ from ad_kit.checks.scriptpath import scriptpath_check
 from ad_kit.core.checks import get_evidence_dir
 from ad_kit.core.console import console, print_info, print_section
 from ad_kit.core.util import get_artefacts_dir, progress, require_session
-from ad_kit.reporting.markdown import write_markdown_report
+from ad_kit.reporting.results import record_findings
 
 from .credentials import authenticate_standard_user
 
@@ -70,7 +70,7 @@ def run_nopac_checks(
         )
 
     console.print(table)
-    write_markdown_report(
+    record_findings(
         findings,
         get_artefacts_dir() / "findings-nopac.md",
     )
@@ -166,7 +166,7 @@ def run_scriptpath_checks(
         encoding="utf-8",
     )
 
-    write_markdown_report(
+    record_findings(
         findings,
         get_artefacts_dir() / "findings-scriptpath.md",
     )

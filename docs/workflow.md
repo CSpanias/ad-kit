@@ -43,11 +43,14 @@ ad-kit check ldap
 ad-kit check run ldap pass-pol smb
 ```
 
-Each check generates:
+Each assessment run generates:
 
 - Console output (Rich tables)
-- Markdown findings report (`ad-kit/findings-*.md`)
+- Offline HTML findings report (`ad-kit/ad-kit_findings.html`)
+- JSON integration export (`ad-kit/ad-kit_findings.json`)
 - Evidence files (`ad-kit/evidence/`)
+
+Add `--markdown` to also generate per-check Markdown reports.
 
 ## Stage 4: Retrieve Artefacts
 

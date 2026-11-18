@@ -16,7 +16,7 @@ from ad_kit.core.checks import load_dc_hostnames
 from ad_kit.core.console import console, print_info, print_section
 from ad_kit.core.findings import load_finding
 from ad_kit.core.util import get_artefacts_dir, progress, require_session
-from ad_kit.reporting.markdown import write_markdown_report
+from ad_kit.reporting.results import record_findings
 
 from .credentials import authenticate_standard_user
 
@@ -158,7 +158,7 @@ def run_privileged_group_checks(
 
     console.print(dcsync_table)
 
-    write_markdown_report(
+    record_findings(
         findings,
         get_artefacts_dir()
         / "findings-privileged-groups.md",
@@ -213,7 +213,7 @@ def run_delegation_checks(
 
     console.print(table)
 
-    write_markdown_report(
+    record_findings(
         findings,
         get_artefacts_dir()
         / "findings-delegation.md",
@@ -263,7 +263,7 @@ def run_kerberoast_checks(
 
     console.print(table)
 
-    write_markdown_report(
+    record_findings(
         findings,
         get_artefacts_dir()
         / "findings-kerberoast.md",
@@ -322,7 +322,7 @@ def run_adcs_checks(
         "identified ESC classifications are reported for visibility only."
     )
 
-    write_markdown_report(
+    record_findings(
         findings,
         get_artefacts_dir()
         / "findings-adcs.md",
@@ -434,7 +434,7 @@ def run_ldap_info_checks(
 
         findings.append(finding)
 
-    write_markdown_report(
+    record_findings(
         findings,
         get_artefacts_dir()
         / "findings-ldap-info.md",
@@ -510,7 +510,7 @@ def run_coercion_checks(
 
         findings.append(finding)
 
-    write_markdown_report(
+    record_findings(
         findings,
         get_artefacts_dir()
         / "findings-coercion.md",

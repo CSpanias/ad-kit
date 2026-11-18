@@ -9,7 +9,6 @@ assessment.
 from pathlib import Path
 
 from ad_kit.core.finding import Finding
-from ad_kit.reporting import json as json_report
 
 
 def format_paragraphs(
@@ -60,34 +59,9 @@ def format_paragraphs(
     return "\n\n".join(paragraphs)
 
 
-def write_markdown_report(
-    findings: list[Finding],
-    output_file: Path,
-) -> None:
-    """
-    Generate a Markdown findings report.
-
-    Args:
-        findings:
-            Findings to include.
-
-        output_file:
-            Report output path.
-    """
-
-    json_report.collect(findings)
-
-    if not findings:
-
-        if output_file.exists():
-            output_file.unlink()
-            
-        return
-
+def format_findings(findings: list[Finding]) -> str:
+    """Format findings as Markdown without a report-level heading."""
     lines: list[str] = []
-    
-    lines.append("# Active Directory Assessment Findings")
-    lines.append("")
 
     for finding in findings:
 
@@ -136,7 +110,17 @@ def write_markdown_report(
 
             lines.append("")
 
+    return "\n".join(lines)
+
+
+def write_markdown_report(findings: list[Finding], output_file: Path) -> None:
+    """Write the per-check Markdown report, removing it if no findings exist."""
+    if not findings:
+        if output_file.exists():
+            output_file.unlink()
+        return
+
     output_file.write_text(
-        "\n".join(lines),
+        "# Active Directory Assessment Findings\n\n" + format_findings(findings),
         encoding="utf-8",
     )
