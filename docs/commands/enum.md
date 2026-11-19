@@ -17,6 +17,16 @@ ad-kit enum
 7. **Collect BloodHound data**: Runs RustHound-CE to collect AD graph data (optional).
 8. **Dump NTDS**: Extracts NTDS.dit using Impacket secretsdump (optional, requires Domain Admin).
 
+Credential validation uses NetExec LDAP and reports the protocol in the
+console. NetExec's `Pwn3d!` marker indicates membership in one of several
+privileged groups, not necessarily Domain Admin membership or permission to
+dump NTDS. The absence of that marker does not prove an account is
+unprivileged.
+
+If the Domain Admin account cannot be validated but the standard user was
+validated, enumeration continues using the standard account. A requested NTDS
+dump is skipped, and the session records that privileged validation failed.
+
 User and computer exports are checked before being accepted. If collection
 fails, existing files are not treated as this session's results; dependent
 checks require a successful export. A computer export with no parsed hosts is

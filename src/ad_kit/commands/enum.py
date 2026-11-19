@@ -11,7 +11,9 @@ import typer
 from rich.table import Table
 
 from ad_kit.commands.rusthound import run_rusthound
-from ad_kit.core.console import console, print_error, print_info, print_section, print_success
+from ad_kit.core.console import (
+    console, print_error, print_info, print_section, print_success, print_warning,
+)
 from ad_kit.core.util import generate_scp_command, get_artefacts_dir, progress, save_session
 
 
@@ -142,7 +144,7 @@ def validate_credentials(
     password: str,
 ) -> tuple[bool, bool]:
     """
-    Validate credentials using NetExec.
+    Validate credentials and NetExec's privilege marker using LDAP.
 
     Returns:
         (
@@ -152,7 +154,7 @@ def validate_credentials(
     """
     result = subprocess.run(
         [
-            "nxc", "smb", dc_ip,
+            "nxc", "ldap", dc_ip,
             "-u", username,
             "-p", password,
         ],
@@ -160,12 +162,21 @@ def validate_credentials(
         text=True,
     )
 
-    output = result.stdout
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"LDAP credential validation failed (NetExec exit code {result.returncode})."
+        )
 
-    is_valid = "[+]" in output
-    is_pwned = "Pwn3d!" in output
+    account = username.rsplit("\\", 1)[-1].lower()
+    for line in result.stdout.splitlines():
+        if f"\\{account}:" not in line.lower():
+            continue
+        if "[+]" in line:
+            return (True, "Pwn3d!" in line)
+        if "[-]" in line:
+            return (False, False)
 
-    return (is_valid, is_pwned)
+    raise RuntimeError("Unable to determine the LDAP credential validation result.")
 
 
 def export_domain_users(
@@ -392,11 +403,11 @@ def print_summary(
     table.add_row("Domain", session_data["domain"])
     table.add_row("Domain Controllers", str(session_data["dc_count"]))
     table.add_row(
-            "Standard User Validated",
+            "Standard User Authenticated (LDAP)",
             "Yes" if session_data["standard_user_validated"] else "No"
     )
     table.add_row(
-        "DA Validated",
+        "Privileged Account (LDAP)",
         "Yes" if session_data["da_validated"] else "No"
     )
     table.add_row(
@@ -535,33 +546,42 @@ def run_enumeration() -> None:
             valid, pwned = validate_credentials(dc_ip, std_user, std_pass)
 
             if not valid:
-                print_error("Standard user validation failed.")
+                print_error("Standard user LDAP authentication failed.")
                 return
 
             if pwned:
-                print_error("Standard user appears privileged.")
+                print_error("Standard user is marked privileged by NetExec LDAP.")
                 return
 
             std_validated = True
-            print_success("Standard user validated.")
+            print_success("Standard user authenticated via LDAP (not marked privileged by NetExec).")
 
         # Domain Admin
         if validate_da:
+            try:
+                valid, pwned = validate_credentials(dc_ip, da_user, da_pass)
+            except RuntimeError as exc:
+                print_error(str(exc))
+            else:
+                if not valid:
+                    print_error("Domain Admin LDAP authentication failed.")
+                elif not pwned:
+                    print_error(
+                        "Account authenticated via LDAP but was not marked privileged by NetExec."
+                    )
+                else:
+                    da_validated = True
+                    print_success(
+                        "Account authenticated via LDAP and marked privileged by NetExec."
+                    )
 
-            valid, pwned = validate_credentials(dc_ip, da_user, da_pass)
-
-            if not valid:
-                print_error("Domain Admin validation failed.")
-                return
-
-            if not pwned:
-                print_error(
-                    "Account authenticated but does not appear to be privileged."
-                )
-                return
-
-            da_validated = True
-            print_success("Domain Admin validated.")
+            if not da_validated:
+                if not std_validated:
+                    return
+                print_warning("Continuing enumeration using the validated standard user.")
+                if dump_ntds:
+                    print_warning("NTDS dump skipped because privileged access was not confirmed.")
+                    dump_ntds = False
 
         if not validate_std and not validate_da:
             raise RuntimeError(
