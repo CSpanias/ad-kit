@@ -55,55 +55,45 @@ def format_paragraphs(
     return "\n\n".join(paragraphs)
 
 
+def format_finding_sections(finding: Finding, *, heading_level: int = 1) -> dict[str, str]:
+    """Format independently copyable sections, including their related lists."""
+    heading = "#" * heading_level
+    subheading = "#" * (heading_level + 2)
+    sections = {}
+
+    if finding.commentary or finding.affected_assets:
+        parts = [f"{heading} Commentary", format_paragraphs(finding.commentary)]
+        if finding.affected_assets:
+            parts.extend([
+                f"{subheading} Affected Assets",
+                "\n".join(f"- {asset}" for asset in finding.affected_assets),
+            ])
+        sections["Commentary"] = "\n\n".join(part for part in parts if part)
+
+    if finding.evidence:
+        evidence = "\n".join(
+            f"{index}. {item}" for index, item in enumerate(finding.evidence, start=1)
+        )
+        sections["Evidence"] = f"{heading} Evidence\n\n{evidence}"
+
+    if finding.remediation or finding.references:
+        parts = [f"{heading} Remediation", format_paragraphs(finding.remediation)]
+        if finding.references:
+            parts.extend([
+                f"{subheading} References",
+                "\n".join(f"- [{reference}]({reference})" for reference in finding.references),
+            ])
+        sections["Remediation"] = "\n\n".join(part for part in parts if part)
+
+    return sections
+
+
 def format_findings(findings: list[Finding]) -> str:
     """Format findings as Markdown without a report-level heading."""
-    lines: list[str] = []
-
+    formatted = []
     for finding in findings:
-
-        lines.append(f"## {finding.id} - {finding.title}")
-        lines.append("")
-
-        lines.append("### Commentary")
-        lines.append("")
-        lines.append(format_paragraphs(finding.commentary))
-        lines.append("")
-
-        if finding.evidence:
-
-            lines.append("### Evidence")
-            lines.append("")
-
-            for index, evidence in enumerate(finding.evidence, start=1):
-                lines.append(f"{index}. {evidence}")
-
-            lines.append("")
-
-        lines.append("### Remediation")
-        lines.append("")
-        lines.append(format_paragraphs(finding.remediation))
-        lines.append("")
-
-        if finding.affected_assets:
-
-            lines.append("### Affected Assets")
-            lines.append("")
-
-            for asset in finding.affected_assets:
-
-                lines.append(f"- {asset}")
-
-            lines.append("")
-
-        if finding.references:
-
-            lines.append("### References")
-            lines.append("")
-
-            for reference in finding.references:
-
-                lines.append(f"- [{reference}]({reference})")
-
-            lines.append("")
-
-    return "\n".join(lines)
+        sections = format_finding_sections(finding, heading_level=3)
+        formatted.append(
+            "\n\n".join([f"## {finding.id} - {finding.title}", *sections.values()])
+        )
+    return "\n\n".join(formatted) + ("\n" if formatted else "")

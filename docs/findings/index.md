@@ -42,8 +42,10 @@ LDAP-001:
 
 ## Report Output
 
-Each run writes `ad-kit/ad-kit_findings.html`, where each finding can be copied
-as Markdown, and `ad-kit/ad-kit_findings.json` for integration. The exports
+Each run writes `ad-kit/ad-kit_findings.html`, where each finding or its
+individual commentary, evidence, and remediation sections can be copied as
+Markdown. Affected assets are included in commentary and references in
+remediation. It also writes `ad-kit/ad-kit_findings.json` for integration. The exports
 contain findings from the current run only. The JSON is a filtered integration
 export, not a complete copy of the HTML report.
 

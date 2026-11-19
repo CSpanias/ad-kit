@@ -15,9 +15,18 @@ class ReportParser(HTMLParser):
         super().__init__()
         self.copy_texts = []
         self.links = []
+        self.sections = []
         self._in_copy_text = False
+        self._in_summary = False
+        self._in_h3 = False
 
     def handle_starttag(self, tag, attrs):
+        if tag == "details":
+            self.sections.append({"title": "", "headings": []})
+        if tag == "summary":
+            self._in_summary = True
+        if tag == "h3" and self.sections:
+            self._in_h3 = True
         if tag == "textarea" and ("class", "copy-text") in attrs:
             self._in_copy_text = True
             self.copy_texts.append("")
@@ -27,10 +36,18 @@ class ReportParser(HTMLParser):
     def handle_endtag(self, tag):
         if tag == "textarea":
             self._in_copy_text = False
+        if tag == "summary":
+            self._in_summary = False
+        if tag == "h3":
+            self._in_h3 = False
 
     def handle_data(self, data):
         if self._in_copy_text:
             self.copy_texts[-1] += data
+        if self._in_summary:
+            self.sections[-1]["title"] += data
+        if self._in_h3:
+            self.sections[-1]["headings"].append(data)
 
 
 def test_html_contains_complete_copyable_findings_and_escapes_data():
@@ -48,7 +65,21 @@ def test_html_contains_complete_copyable_findings_and_escapes_data():
     parser = ReportParser()
     parser.feed(report)
 
-    assert parser.copy_texts == [markdown.format_findings([finding])]
+    assert parser.copy_texts == [
+        markdown.format_findings([finding]),
+        "# Commentary\n\nFirst line continues.\n\nSecond paragraph.\n\n"
+        "### Affected Assets\n\n- host <one>",
+        "# Evidence\n\n1. Evidence </textarea><script>alert(1)</script>",
+        "# Remediation\n\nFix <issue> & retry.\n\n### References\n\n"
+        "- [https://example.com/?a=1&b=2](https://example.com/?a=1&b=2)",
+    ]
+    assert [(s["title"], s["headings"]) for s in parser.sections] == [
+        ("Commentary", ["Affected Assets"]),
+        ("Evidence", []),
+        ("Remediation", ["References"]),
+    ]
+    assert parser.copy_texts[0].index("Affected Assets") < parser.copy_texts[0].index("Evidence")
+    assert parser.copy_texts[0].index("Remediation") < parser.copy_texts[0].index("References")
     assert "- [https://example.com/?a=1&b=2](https://example.com/?a=1&b=2)" in parser.copy_texts[0]
     assert "<script>alert" not in report
     assert "&lt;script&gt;" in report
@@ -76,7 +107,27 @@ def test_html_references_only_link_http_urls_and_escape_attributes():
     assert [link["href"] for link in parser.links] == references[:2]
     assert all(link["target"] == "_blank" for link in parser.links)
     assert "javascript:alert(1)" in report
-    assert parser.copy_texts == [markdown.format_findings([finding])]
+    assert parser.copy_texts == [
+        markdown.format_findings([finding]),
+        "# Remediation\n\n### References\n\n"
+        + "\n".join(f"- [{reference}]({reference})" for reference in references),
+    ]
+
+
+def test_html_sections_handle_missing_text_and_multiple_findings():
+    first = Finding("ONE", "First", "", "", affected_assets=["asset"])
+    second = Finding("TWO", "Second", "Other commentary", "Other fix")
+    parser = ReportParser()
+    parser.feed(html.render_html([first, second]))
+
+    assert [s["title"] for s in parser.sections] == ["Commentary", "Commentary", "Remediation"]
+    assert parser.copy_texts == [
+        markdown.format_findings([first]),
+        "# Commentary\n\n### Affected Assets\n\n- asset",
+        markdown.format_findings([second]),
+        "# Commentary\n\nOther commentary",
+        "# Remediation\n\nOther fix",
+    ]
 
 
 def test_run_exports_all_findings_without_markdown_files(monkeypatch, tmp_path):

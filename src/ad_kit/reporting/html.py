@@ -5,13 +5,18 @@ from html import escape
 from pathlib import Path
 
 from ad_kit.core.finding import Finding
-from ad_kit.reporting.markdown import format_findings, format_paragraphs
+from ad_kit.reporting.markdown import format_finding_sections, format_findings, format_paragraphs
 
 
-def _text_section(title: str, text: str) -> str:
-    if not text:
-        return ""
-    return f"<h3>{title}</h3><div class=\"text\">{escape(text)}</div>"
+def _copy_controls(markdown: str, label: str) -> str:
+    return (
+        '<div class="copy-controls">'
+        f'<button type="button" class="copy" aria-label="Copy {label} Markdown">'
+        "Copy Markdown</button> "
+        '<span class="status" aria-live="polite"></span>'
+        f'<textarea class="copy-text" hidden>{escape(markdown)}</textarea>'
+        "</div>"
+    )
 
 
 def _list_section(title: str, items: list[str], *, ordered: bool = False) -> str:
@@ -19,7 +24,8 @@ def _list_section(title: str, items: list[str], *, ordered: bool = False) -> str
         return ""
     tag = "ol" if ordered else "ul"
     entries = "".join(f"<li>{escape(item)}</li>" for item in items)
-    return f"<h3>{title}</h3><{tag}>{entries}</{tag}>"
+    heading = f"<h3>{title}</h3>" if title else ""
+    return f"{heading}<{tag}>{entries}</{tag}>"
 
 
 def _references_section(references: list[str]) -> str:
@@ -38,18 +44,32 @@ def render_html(findings: list[Finding]) -> str:
     """Render the complete report without external assets or network access."""
     cards = []
     for finding in findings:
+        sections = format_finding_sections(finding)
+        details = []
+        for label, markdown in sections.items():
+            if label == "Commentary":
+                body = (
+                    f'<div class="text">{escape(format_paragraphs(finding.commentary))}</div>'
+                    + _list_section("Affected Assets", finding.affected_assets)
+                )
+            elif label == "Evidence":
+                body = _list_section("", finding.evidence, ordered=True)
+            else:
+                body = (
+                    f'<div class="text">{escape(format_paragraphs(finding.remediation))}</div>'
+                    + _references_section(finding.references)
+                )
+            details.append(
+                f"<details><summary>{label}</summary>"
+                + _copy_controls(markdown, label)
+                + body
+                + "</details>"
+            )
         cards.append(
             '<article class="finding">'
             f"<h2>{escape(finding.id)} - {escape(finding.title)}</h2>"
-            '<button type="button" class="copy">Copy Markdown</button> '
-            '<span class="status" aria-live="polite"></span>'
-            f'<textarea class="copy-text" hidden>{escape(format_findings([finding]))}'
-            "</textarea>"
-            + _text_section("Commentary", format_paragraphs(finding.commentary))
-            + _list_section("Evidence", finding.evidence, ordered=True)
-            + _text_section("Remediation", format_paragraphs(finding.remediation))
-            + _list_section("Affected Assets", finding.affected_assets)
-            + _references_section(finding.references)
+            + _copy_controls(format_findings([finding]), "finding")
+            + "".join(details)
             + "</article>"
         )
     content = "\n".join(cards) or '<p class="empty">No findings were generated.</p>'
@@ -80,6 +100,11 @@ def render_html(findings: list[Finding]) -> str:
     }}
     .finding h2 {{ margin-top: 0; }}
     .finding h3 {{ margin-bottom: .4rem; }}
+    .finding details {{
+      margin: .75rem 0; padding: 1rem; border: 1px solid #dce3ed; border-radius: .6rem;
+    }}
+    .finding summary {{ cursor: pointer; font-weight: 650; }}
+    .copy-controls {{ margin: .75rem 0; }}
     .text {{ white-space: pre-wrap; line-height: 1.55; }}
     .status, #count, footer {{ color: #53647b; }}
     .copy-buffer {{ position: fixed; left: -9999px; top: 0; }}
@@ -128,14 +153,14 @@ def render_html(findings: list[Finding]) -> str:
       if (!copied) throw new Error("Clipboard access is unavailable.");
     }}
 
-    for (const card of cards) {{
-      const button = card.querySelector(".copy");
-      const status = card.querySelector(".status");
+    for (const controls of document.querySelectorAll(".copy-controls")) {{
+      const button = controls.querySelector(".copy");
+      const status = controls.querySelector(".status");
       button.addEventListener("click", async () => {{
         button.disabled = true;
         status.textContent = "Copying...";
         try {{
-          await copyText(card.querySelector(".copy-text").value);
+          await copyText(controls.querySelector(".copy-text").value);
           status.textContent = "Copied Markdown to clipboard.";
         }} catch {{
           status.textContent = "Copy failed. Select and copy the text manually.";
