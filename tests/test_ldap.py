@@ -42,9 +42,9 @@ def test_ldap_check_reports_null_bind_result(
     monkeypatch.setattr(ldap, "load_dc_hostnames", lambda: [dc_hostname])
 
     def fake_run_check(name, command):
-        assert name == "ldap-MOLLYSEC-DC01"
+        assert name == f"ldap-{dc_hostname}"
         assert command == [
-            "nxc", "ldap", "MOLLYSEC-DC01", "-u", "", "-p", "",
+            "nxc", "ldap", dc_hostname, "-u", "", "-p", "",
         ]
         return output
 
