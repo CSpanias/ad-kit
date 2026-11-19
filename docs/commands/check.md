@@ -1,55 +1,55 @@
 # Check Commands
 
-Execute assessment checks and generate HTML and JSON findings with supporting evidence.
-
-## `ad-kit check`
-
-Run all assessment checks in the established workflow order.
+Execute assessment checks and generate HTML and JSON findings with supporting 
+evidence.
 
 ```bash
+# Run all assessment checks in the established workflow order
 ad-kit check
 ad-kit check all
-```
 
-## `ad-kit check run <modules>`
-
-Execute one or more selected assessment modules.
-
-```bash
-# Run specific checks
+# Execute one or more selected assessment modules
 ad-kit check run ldap smb pass-pol
 ```
 
-Modules are executed in the order provided. Authentication is prompted once and reused across checks that require it.
+Modules are executed in the order provided. Checks requiring a Standard User 
+account will prompt for credentials once and reuse them across subsequent 
+checks. Some checks (e.g., MAQ) may prompt for DA credentials.
 
-The current run writes `ad-kit/ad-kit_findings.html` and
-`ad-kit/ad-kit_findings.json`. The HTML report is self-contained and has
-Copy Markdown buttons for each finding and for its individual commentary,
-evidence, and remediation sections. Affected assets are included in commentary,
-and references in remediation. Individual commentary and remediation copies
-omit their section titles; the full finding copy includes them. Each run
-replaces the HTML and JSON exports, including when running selected checks.
-Previously generated Markdown files are not removed.
+The current run writes `ad-kit/ad-kit_findings.html` and 
+`ad-kit/ad-kit_findings.json`.
+
+The HTML report is self-contained and has **Copy Markdown** buttons for each 
+finding and for its individual commentary, evidence, and remediation sections. 
+Affected assets are included in commentary, and references in remediation. 
+
+Individual commentary and remediation copies omit their section titles; the 
+full finding copy includes them. Each run replaces the HTML and JSON exports, 
+including when running selected checks.
 
 ### SureFormat XML
 
 Use `--csacyber` to write `ad-kit/ad-kit_findings.xml` instead of the generic
-JSON export. The domain hostname comes from the session created by `ad-kit enum`;
-the export fails before checks start if the domain is unavailable. The HTML
-report is still written. Only findings supported by the integration mapping are
-exported.
+JSON export.
+
+The domain hostname comes from the session created by `ad-kit enum`; the export 
+fails before checks start if the domain is unavailable. The HTML report is 
+still written. 
+
+Only findings supported by the integration mapping are exported.
 
 ```bash
 ad-kit check --csacyber
-ad-kit check run ldap smb --csacyber --dc DC01.example.com
 ```
 
-With `--dc`, LDAP signing, LDAP channel binding, LDAP null binds, DC coercion,
-and NoPAC findings are written to `ad-kit/ad-kit_findings-dc.xml` for the
-specified hostname. Other findings remain in the domain XML. Without `--dc`,
-all mapped findings are written to the domain XML. Each run replaces its
-selected outputs; files from earlier runs in other formats or without the
-current DC split are not removed.
+With `--dc`, LDAP-related (signing, channel binding, null binds), DC 
+coercion, and NoPAC findings are written to `ad-kit/ad-kit_findings-dc.xml` for 
+the specified hostname. Other findings remain in the domain XML. Without 
+`--dc`, all mapped findings are written to the domain XML.
+
+```bash
+ad-kit check run ldap smb --csacyber --dc DC01.example.com
+```
 
 ## Available Checks
 
@@ -74,7 +74,3 @@ current DC split are not removed.
 | Local Administrator | `ad-kit check local-admin` | Local admin access on domain hosts |
 | LDAP Info Exposure | `ad-kit check ldap-info` | Sensitive LDAP attribute exposure |
 | Authentication Coercion | `ad-kit check coercion` | Coercion attack paths + Print Spooler |
-
-## Authentication
-
-Checks requiring a Standard User account will prompt for credentials once and reuse them across subsequent checks. Some checks (e.g., DNS cleanup) may prompt for Domain Administrator credentials.

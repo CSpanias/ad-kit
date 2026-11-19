@@ -8,7 +8,7 @@ ad-kit enum
 
 ## What it does
 
-1. **Discover the target domain**: Identifies the Domain Controller and domain name from a DC IP address.
+1. **Discover the target domain**: Identifies the Domain Controller (DC) and domain name from a DC IP address.
 2. **Enumerate Domain Controllers**: Discovers all DCs and saves their hostnames and IP addresses.
 3. **Configure NetExec's audit mode**: Ensures `audit_mode = *` is set in NetExec's configuration.
 4. **Validate a Standard User account**: Prompts for and validates standard user credentials.
