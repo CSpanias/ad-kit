@@ -59,6 +59,8 @@ def render_html(findings: list[Finding]) -> str:
                     f'<div class="text">{escape(format_paragraphs(finding.remediation))}</div>'
                     + _references_section(finding.references)
                 )
+            if label in ("Commentary", "Remediation"):
+                markdown = markdown.partition("\n\n")[2]
             details.append(
                 f"<details><summary>{label}</summary>"
                 + _copy_controls(markdown, label)

@@ -23,12 +23,13 @@ ad-kit check run ldap smb pass-pol
 Modules are executed in the order provided. Authentication is prompted once and reused across checks that require it.
 
 The current run writes `ad-kit/ad-kit_findings.html` and
-`ad-kit/ad-kit_findings.json`. The HTML report is self-contained and has a
+`ad-kit/ad-kit_findings.json`. The HTML report is self-contained and has
 Copy Markdown buttons for each finding and for its individual commentary,
 evidence, and remediation sections. Affected assets are included in commentary,
-and references in remediation. Each run replaces the HTML and JSON exports,
-including when running selected checks. Previously generated Markdown files are
-not removed.
+and references in remediation. Individual commentary and remediation copies
+omit their section titles; the full finding copy includes them. Each run
+replaces the HTML and JSON exports, including when running selected checks.
+Previously generated Markdown files are not removed.
 
 ## Available Checks
 

@@ -67,10 +67,10 @@ def test_html_contains_complete_copyable_findings_and_escapes_data():
 
     assert parser.copy_texts == [
         markdown.format_findings([finding]),
-        "# Commentary\n\nFirst line continues.\n\nSecond paragraph.\n\n"
+        "First line continues.\n\nSecond paragraph.\n\n"
         "### Affected Assets\n\n- host <one>",
         "# Evidence\n\n1. Evidence </textarea><script>alert(1)</script>",
-        "# Remediation\n\nFix <issue> & retry.\n\n### References\n\n"
+        "Fix <issue> & retry.\n\n### References\n\n"
         "- [https://example.com/?a=1&b=2](https://example.com/?a=1&b=2)",
     ]
     assert [(s["title"], s["headings"]) for s in parser.sections] == [
@@ -80,6 +80,8 @@ def test_html_contains_complete_copyable_findings_and_escapes_data():
     ]
     assert parser.copy_texts[0].index("Affected Assets") < parser.copy_texts[0].index("Evidence")
     assert parser.copy_texts[0].index("Remediation") < parser.copy_texts[0].index("References")
+    assert "### Commentary\n\nFirst line continues." in parser.copy_texts[0]
+    assert "### Remediation\n\nFix <issue> & retry." in parser.copy_texts[0]
     assert "- [https://example.com/?a=1&b=2](https://example.com/?a=1&b=2)" in parser.copy_texts[0]
     assert "<script>alert" not in report
     assert "&lt;script&gt;" in report
@@ -109,7 +111,7 @@ def test_html_references_only_link_http_urls_and_escape_attributes():
     assert "javascript:alert(1)" in report
     assert parser.copy_texts == [
         markdown.format_findings([finding]),
-        "# Remediation\n\n### References\n\n"
+        "### References\n\n"
         + "\n".join(f"- [{reference}]({reference})" for reference in references),
     ]
 
@@ -123,10 +125,10 @@ def test_html_sections_handle_missing_text_and_multiple_findings():
     assert [s["title"] for s in parser.sections] == ["Commentary", "Commentary", "Remediation"]
     assert parser.copy_texts == [
         markdown.format_findings([first]),
-        "# Commentary\n\n### Affected Assets\n\n- asset",
+        "### Affected Assets\n\n- asset",
         markdown.format_findings([second]),
-        "# Commentary\n\nOther commentary",
-        "# Remediation\n\nOther fix",
+        "Other commentary",
+        "Other fix",
     ]
 
 
