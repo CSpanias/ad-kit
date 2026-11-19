@@ -17,6 +17,11 @@ ad-kit enum
 7. **Collect BloodHound data**: Runs RustHound-CE to collect AD graph data (optional).
 8. **Dump NTDS**: Extracts NTDS.dit using Impacket secretsdump (optional, requires Domain Admin).
 
+User and computer exports are checked before being accepted. If collection
+fails, existing files are not treated as this session's results; dependent
+checks require a successful export. A computer export with no parsed hosts is
+accepted as empty only when NetExec explicitly reports zero records.
+
 ## Output
 
 Artefacts are written to the `ad-kit/` directory:

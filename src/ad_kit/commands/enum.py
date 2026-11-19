@@ -4,6 +4,7 @@ Initial engagement enumeration functionality.
 
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 
 import typer
@@ -198,44 +199,41 @@ def export_domain_users(
         RuntimeError: If the user export fails.
     """
 
-    users_file = (get_artefacts_dir() / "domain-users.txt")
+    artefacts_dir = get_artefacts_dir()
+    with tempfile.TemporaryDirectory(dir=artefacts_dir, prefix=".users-") as directory:
+        staged_users = Path(directory) / "domain-users.txt"
+        staged_filtered = Path(directory) / "domain-users-filtered.txt"
+        result = subprocess.run(
+            [
+                "nxc", "ldap", dc_ip,
+                "-u", username,
+                "-p", password,
+                "--users-export", staged_users,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
 
-    subprocess.run(
-        [
-            "nxc", "ldap", dc_ip,
-            "-u", username,
-            "-p", password,
-            "--users-export", users_file,
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+        if result.returncode != 0:
+            detail = result.stderr.replace(password, "[REDACTED]").strip() if password else result.stderr.strip()
+            raise RuntimeError(
+                f"Failed to export domain users (exit code {result.returncode})"
+                + (f": {detail}" if detail else ".")
+            )
+        if not staged_users.is_file():
+            raise RuntimeError("Failed to export domain users: NetExec produced no export file.")
 
-    if not users_file.exists():
-        raise RuntimeError("Failed to export domain users.")
-
-    users = [
-        line.strip()
-        for line in users_file.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-
-    user_count = len(users)
-
-    filtered_users = [
-        user
-        for user in users
-        if user.lower() not in excluded_users
-    ]
-
-    (
-        get_artefacts_dir()
-        / "domain-users-filtered.txt"
-    ).write_text(
-        "\n".join(filtered_users) + "\n",
-        encoding="utf-8",
-    )
+        users = [
+            line.strip()
+            for line in staged_users.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        user_count = len(users)
+        filtered_users = [user for user in users if user.lower() not in excluded_users]
+        staged_filtered.write_text("\n".join(filtered_users) + "\n", encoding="utf-8")
+        staged_users.replace(artefacts_dir / "domain-users.txt")
+        staged_filtered.replace(artefacts_dir / "domain-users-filtered.txt")
 
     return user_count, len(filtered_users)
 
@@ -340,6 +338,13 @@ def export_domain_computers(
         text=True,
     )
 
+    if result.returncode != 0:
+        detail = result.stderr.replace(password, "[REDACTED]").strip() if password else result.stderr.strip()
+        raise RuntimeError(
+            f"Failed to export domain computers (exit code {result.returncode})"
+            + (f": {detail}" if detail else ".")
+        )
+
     computers = []
 
     computer_regex = re.compile(r"\b([A-Za-z0-9\-]+)\$")
@@ -351,11 +356,21 @@ def export_domain_computers(
             computers.append(f"{match.upper()}.{domain.upper()}")
 
     computers = sorted(set(computers))
+    if not computers and not re.search(
+        r"Total records returned:\s*0\b", result.stdout, re.IGNORECASE
+    ):
+        raise RuntimeError(
+            "Failed to export domain computers: NetExec did not confirm an empty result."
+        )
 
-    (
-        get_artefacts_dir()
-        / "domain-computers.txt"
-    ).write_text("\n".join(computers) + "\n", encoding="utf-8",)
+    artefacts_dir = get_artefacts_dir()
+    with tempfile.TemporaryDirectory(dir=artefacts_dir, prefix=".computers-") as directory:
+        staged_computers = Path(directory) / "domain-computers.txt"
+        staged_computers.write_text(
+            "\n".join(computers) + ("\n" if computers else ""),
+            encoding="utf-8",
+        )
+        staged_computers.replace(artefacts_dir / "domain-computers.txt")
 
     return len(computers)
 
@@ -628,6 +643,9 @@ def run_enumeration() -> None:
             "domain_users_exported": False,
             "domain_users_count": 0,
             "domain_users_filtered_count": 0,
+            "excluded_users": sorted(
+                account.lower() for account in [std_user, da_user] if account
+            ),
 
             "domain_computers_exported": False,
             "domain_computers_count": 0,
@@ -668,6 +686,9 @@ def run_enumeration() -> None:
 
         session_data["domain_users_exported"] = True
         session_data["domain_users_count"] = user_count
+        session_data["domain_users_filtered_count"] = filtered_count
+        session_data["excluded_users"] = sorted(excluded_users)
+        save_session(session_data)
 
         # Print filtered accounts to stdout
         excluded_count = (user_count - filtered_count)

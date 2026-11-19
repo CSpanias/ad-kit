@@ -6,10 +6,12 @@ including evidence management, credential validation, command execution, and
 helper functions for loading enumerated Active Directory assets.
 """
 
+import re
 import subprocess
 from pathlib import Path
 
 from ad_kit.core.exceptions import CheckExecutionError
+from ad_kit.core.console import print_warning
 from ad_kit.core.util import get_artefacts_dir, progress
 
 #-------------------------------------------------------------------------------
@@ -126,22 +128,29 @@ def duration_to_minutes(
         determined.
     """
 
-    if value == "Unknown":
+    value = value.strip().lower()
+    if value == "none":
+        return 0
+
+    if not re.fullmatch(
+        r"\d+\s+(?:days?|hours?|minutes?)(?:\s+\d+\s+(?:days?|hours?|minutes?))*",
+        value,
+    ):
         return None
 
     minutes = 0
 
-    tokens = value.lower().split()
+    tokens = value.split()
 
     for i, token in enumerate(tokens):
 
-        if token == "days":
+        if token in {"day", "days"}:
             minutes += int(tokens[i - 1]) * 1440
 
-        elif token == "hours":
+        elif token in {"hour", "hours"}:
             minutes += int(tokens[i - 1]) * 60
 
-        elif token == "minutes":
+        elif token in {"minute", "minutes"}:
             minutes += int(tokens[i - 1])
 
     return minutes
@@ -203,6 +212,14 @@ def validate_credentials(
             return "invalid"
 
     return "unknown"
+
+
+def warn_test_artifact_remaining(kind: str, name: str, evidence: str) -> None:
+    evidence_path = get_artefacts_dir() / "evidence" / f"{evidence}.txt"
+    print_warning(
+        f"Cleanup of {kind} {name} was not confirmed; it may remain. "
+        f"Check and remove it if necessary. Creation evidence: {evidence_path}"
+    )
 
 
 def cleanup_test_artifact(

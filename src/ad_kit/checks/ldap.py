@@ -3,8 +3,10 @@ LDAP-related assessment checks.
 """
 
 from ad_kit.core.checks import load_dc_hostnames, run_check
+from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
+from ad_kit.reporting.results import record_incomplete
 
 
 def ldap_check() -> tuple[list[dict], list[Finding]]:
@@ -32,6 +34,7 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
     channel_binding_not_enforced: list[str] = []
     anonymous_bind_permitted: set[str] = set()
     anonymous_bind_rejected: set[str] = set()
+    failed_dcs: set[str] = set()
 
     for dc_hostname in dc_hostnames:
 
@@ -45,10 +48,15 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
         # Target the fully-qualified hostname. NetExec performs the DNS
         # resolution itself, so a short name that may not resolve without a
         # domain search suffix is never relied upon.
-        output = run_check(
-            f"ldap-{dc_hostname}",
-            ["nxc", "ldap", dc_hostname, "-u", "", "-p", ""],
-        )
+        try:
+            output = run_check(
+                f"ldap-{dc_hostname}",
+                ["nxc", "ldap", dc_hostname, "-u", "", "-p", ""],
+            )
+        except CheckExecutionError as exc:
+            record_incomplete("LDAP", dc_hostname, str(exc))
+            failed_dcs.add(dc_hostname)
+            continue
 
         for line in output.splitlines():
 
@@ -108,6 +116,21 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
 
     for dc_hostname in permitted_dc_hostnames:
         results[dc_hostname]["anonymous_bind"] = "[red]✗ Permitted[/red]"
+
+    for dc_hostname, result in results.items():
+        if dc_hostname in failed_dcs:
+            continue
+        unknown = [
+            label
+            for key, label in (
+                ("signing", "signing"),
+                ("channel_binding", "channel binding"),
+                ("anonymous_bind", "anonymous bind"),
+            )
+            if result[key] == "[yellow]⚠ Unknown[/yellow]"
+        ]
+        if unknown:
+            record_incomplete("LDAP", dc_hostname, f"Unknown: {', '.join(unknown)}")
 
     if signing_not_enforced:
 

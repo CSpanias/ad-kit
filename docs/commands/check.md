@@ -19,6 +19,11 @@ checks. Some checks (e.g., MAQ) may prompt for DA credentials.
 The current run writes `ad-kit/ad-kit_findings.html` and 
 `ad-kit/ad-kit_findings.json`.
 
+When a command or host check cannot be completed, ad-kit preserves confirmed
+findings and lists incomplete checks in the console and HTML report. The JSON
+and SureFormat exports contain findings only; consult the HTML report for
+coverage gaps.
+
 The HTML report is self-contained and has **Copy Markdown** buttons for each 
 finding and for its individual commentary, evidence, and remediation sections. 
 Affected assets are included in commentary, and references in remediation. 

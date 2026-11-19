@@ -51,12 +51,13 @@ def run_privileged_group_checks(
                 std_pass,
             )
         )
+        record_findings(findings)
         builtin_accounts, builtin_account_findings = builtin_accounts_check(
             session_data["dc_ip"],
             session_data["standard_user"],
             std_pass,
         )
-        findings.extend(builtin_account_findings)
+        record_findings(builtin_account_findings)
         administrative_accounts = {
             member
             for group_name in ("Domain Admins", "Enterprise Admins")
@@ -79,7 +80,7 @@ def run_privileged_group_checks(
             administrative_accounts,
             dc_hostnames,
         )
-        findings.extend(dcsync_findings)
+        record_findings(dcsync_findings)
 
     table = Table()
 
@@ -157,8 +158,6 @@ def run_privileged_group_checks(
         dcsync_table.add_row("No unexpected trustees found", "", "", "")
 
     console.print(dcsync_table)
-
-    record_findings(findings)
 
 def run_delegation_checks(
     std_pass: str | None = None,

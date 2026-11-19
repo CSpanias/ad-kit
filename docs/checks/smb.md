@@ -38,6 +38,10 @@ The signing, SMBv1, and anonymous checks are unauthenticated. The
 writable-share check uses the Standard User account and is prompted only when
 needed.
 
+If a host or an individual enumeration command fails, ad-kit retains confirmed
+results from other checks and hosts. Incomplete checks are listed in the
+console and HTML report.
+
 ## How it works
 
 SMB is the Windows file-sharing and remote-administration protocol, reachable

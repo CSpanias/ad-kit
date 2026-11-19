@@ -6,7 +6,7 @@ def test_admin_count_uses_its_own_threshold(monkeypatch, tmp_path):
     monkeypatch.setattr(
         privileged_excessive,
         "require_session",
-        lambda: {"domain_users_filtered_count": 100},
+        lambda: {"domain_users_exported": True, "domain_users_filtered_count": 100},
     )
     monkeypatch.setattr(
         privileged_excessive,
@@ -52,7 +52,7 @@ def test_admin_count_below_threshold_does_not_create_finding(
     monkeypatch.setattr(
         privileged_excessive,
         "require_session",
-        lambda: {"domain_users_filtered_count": 100},
+        lambda: {"domain_users_exported": True, "domain_users_filtered_count": 100},
     )
     monkeypatch.setattr(
         privileged_excessive,

@@ -4,7 +4,8 @@ Machine Account Quota assessment checks.
 
 import secrets
 
-from ad_kit.core.checks import run_check
+from ad_kit.core.checks import run_check, warn_test_artifact_remaining
+from ad_kit.core.exceptions import ADKitError
 
 
 def maq_check(
@@ -105,44 +106,47 @@ def maq_check(
             results["machine_created"] = True
 
             # Machine validation
-            auth_output = run_check(
-                "maq-auth-machine",
-                [
-                    "nxc", "smb", dc_ip,
-                    "-u", f"{machine_name}$",
-                    "-p", machine_password,
-                ],
-            )
+            try:
+                auth_output = run_check(
+                    "maq-auth-machine",
+                    [
+                        "nxc", "smb", dc_ip,
+                        "-u", f"{machine_name}$",
+                        "-p", machine_password,
+                    ],
+                )
 
-            if "[+]" in auth_output:
+                if "[+]" in auth_output:
+                    results["machine_authenticated"] = True
 
-                results["machine_authenticated"] = True
-
-            # Machine removal
-            delete_output = run_check(
-                "maq-delete-machine",
-                [
-                    "nxc", "ldap", dc_ip,
-                    "-u", username,
-                    "-p", password,
-                    "-M", "add-computer",
-                    "-o",
-                    f"NAME={machine_name}",
-                    f"PASSWORD={machine_password}",
-                    "DELETE=True",
-                ],
-            )
+                delete_output = run_check(
+                    "maq-delete-machine",
+                    [
+                        "nxc", "ldap", dc_ip,
+                        "-u", username,
+                        "-p", password,
+                        "-M", "add-computer",
+                        "-o",
+                        f"NAME={machine_name}",
+                        f"PASSWORD={machine_password}",
+                        "DELETE=True",
+                    ],
+                )
+            except (ADKitError, KeyboardInterrupt):
+                warn_test_artifact_remaining(
+                    "machine account", f"{machine_name}$", "maq-create-machine"
+                )
+                raise
 
             if "successfully deleted" in delete_output.lower():
 
                 results["machine_deleted"] = True
                 results["cleanup_method"] = "Standard User"
 
-            elif (
-                "insufficient" in delete_output.lower()
-                or "does not have the right to delete" in delete_output.lower()
-            ):
-
+            else:
+                warn_test_artifact_remaining(
+                    "machine account", f"{machine_name}$", "maq-create-machine"
+                )
                 results["cleanup_method"] = "Domain Admin Required"
 
     return results

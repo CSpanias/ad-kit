@@ -5,6 +5,8 @@ SMB-related assessment checks.
 import re
 
 from ad_kit.core.checks import run_check
+from ad_kit.core.exceptions import CheckExecutionError
+from ad_kit.reporting.results import record_incomplete
 
 
 def _smb_log_payload(line: str) -> str | None:
@@ -199,21 +201,23 @@ def smb_configuration_check(
     anonymous_shares: int | None = None
     anonymous_users: int | None = None
     if null_auth:
-        anonymous_shares = 0
-        anonymous_users = 0
-        enumeration_output = run_check(
-            f"smb-anonymous-enumeration-{host}",
-            [
-                "nxc", "smb", host,
-                "-u", "",
-                "-p", "",
-                "--shares",
-                "--users",
-                "--dns-server", dc_ip,
-            ],
-        )
-        anonymous_shares = _parse_share_count(enumeration_output)
-        anonymous_users = _parse_user_count(enumeration_output)
+        try:
+            enumeration_output = run_check(
+                f"smb-anonymous-enumeration-{host}",
+                [
+                    "nxc", "smb", host,
+                    "-u", "",
+                    "-p", "",
+                    "--shares",
+                    "--users",
+                    "--dns-server", dc_ip,
+                ],
+            )
+        except CheckExecutionError as exc:
+            record_incomplete("SMB anonymous enumeration", host, str(exc))
+        else:
+            anonymous_shares = _parse_share_count(enumeration_output)
+            anonymous_users = _parse_user_count(enumeration_output)
 
     if signing == "true":
         signing = "[green]✓ Enabled[/green]"

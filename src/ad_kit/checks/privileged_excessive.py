@@ -89,7 +89,11 @@ def privileged_excessive_check(
 
         pass
 
-    if users_file is not None and users_file.exists():
+    if (
+        session_data.get("domain_users_exported") is True
+        and users_file is not None
+        and users_file.exists()
+    ):
 
         enabled_users = sum(
             1
@@ -97,7 +101,10 @@ def privileged_excessive_check(
             if line.strip()
         )
 
-    elif session_data.get("domain_users_filtered_count"):
+    elif (
+        session_data.get("domain_users_exported") is True
+        and session_data.get("domain_users_filtered_count")
+    ):
 
         enabled_users = session_data["domain_users_filtered_count"]
 

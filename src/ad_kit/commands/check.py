@@ -86,6 +86,7 @@ def _run_step(
         result = runnable()
     except ADKitError as exc:
         print_error(f"Skipped '{module}': {exc}")
+        results.record_incomplete(module, "", str(exc), notify=False)
         result = None
 
     return result if result is not None else std_pass

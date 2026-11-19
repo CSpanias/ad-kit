@@ -49,6 +49,10 @@ ad-kit:
 3. Authenticates as the machine account, then deletes it and records the
    cleanup method.
 
+If cleanup cannot be confirmed, ad-kit warns with the machine account name and
+the creation evidence path. It may prompt for Domain Administrator credentials
+to retry cleanup; otherwise, check whether the account remains and remove it.
+
 ## How it works
 
 By default Active Directory allows any authenticated user to create up to 10

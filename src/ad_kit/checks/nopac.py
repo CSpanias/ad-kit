@@ -6,8 +6,10 @@ import re
 from typing import Literal, TypedDict
 
 from ad_kit.core.checks import run_check
+from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
+from ad_kit.reporting.results import record_incomplete
 
 PAC_TGT_SIZE_PATTERN = re.compile(r"TGT with PAC size\s+(\d+)", re.IGNORECASE)
 NO_PAC_TGT_SIZE_PATTERN = re.compile(
@@ -68,17 +70,25 @@ def nopac_check(
     results: list[NoPACResult] = []
 
     for dc_ip in dc_ips:
-        output = run_check(
-            f"nopac-{dc_ip.replace(':', '-')}",
-            [
-                "nxc", "smb", dc_ip,
-                "-u", username,
-                "-p", password,
-                "-M", "nopac",
-            ],
-            sensitive_values=[password],
-        )
-        results.append(_parse_result(dc_ip, output))
+        try:
+            output = run_check(
+                f"nopac-{dc_ip.replace(':', '-')}",
+                [
+                    "nxc", "smb", dc_ip,
+                    "-u", username,
+                    "-p", password,
+                    "-M", "nopac",
+                ],
+                sensitive_values=[password],
+            )
+        except CheckExecutionError as exc:
+            record_incomplete("NoPAC", dc_ip, str(exc))
+            results.append(_parse_result(dc_ip, ""))
+            continue
+        result = _parse_result(dc_ip, output)
+        if result["status"] == "Unable to assess":
+            record_incomplete("NoPAC", dc_ip, "Unable to assess ticket responses")
+        results.append(result)
 
     vulnerable_results = [
         result

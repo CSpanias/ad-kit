@@ -5,8 +5,17 @@ from pathlib import Path
 import typer
 
 from ad_kit.core.console import console, print_info, print_section
+from ad_kit.core.exceptions import ADKitError
 
 ARTEFACTS_DIR = Path("ad-kit")
+
+
+def require_collected_data(session_data: dict, key: str, label: str) -> None:
+    if session_data.get(key) is not True:
+        raise ADKitError(
+            f"{label} collection was not completed for this session. "
+            "Run 'ad-kit enum' again before using this check."
+        )
 
 
 def get_artefacts_dir() -> Path:

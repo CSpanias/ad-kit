@@ -34,6 +34,10 @@ baseline:
 | Lockout duration | at least 30 minutes |
 | Observation window | at least 15 minutes |
 
+Settings that cannot be parsed are shown as **Unknown** and are not treated as
+either compliant or weak. Check `ad-kit/evidence/password-policy.txt` for the
+raw output.
+
 ## How it works
 
 The password and account-lockout policy controls how resistant the domain is to

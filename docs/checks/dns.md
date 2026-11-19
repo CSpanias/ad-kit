@@ -25,9 +25,10 @@ The [`add dnsRecord`](https://github.com/CravateRouge/bloodyAD/wiki/User-Guide#a
 ## What it checks
 
 ad-kit verifies whether a standard domain user can modify DNS data by adding a
-temporary `dnsRecord` entry and then removing it again. The created record is
-always cleaned up (with a Domain Administrator account if the Standard User
-cannot remove it).
+temporary `dnsRecord` entry and attempting to remove it. If removal cannot be
+confirmed, it warns with the record name and creation evidence path. It may
+prompt for Domain Administrator credentials to retry cleanup; otherwise, check
+whether the record remains and remove it.
 
 ## How it works
 

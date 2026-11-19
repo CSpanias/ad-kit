@@ -10,7 +10,8 @@ authenticated users are permitted to create DNS records within ADIDNS zones.
 
 import secrets
 
-from ad_kit.core.checks import run_check
+from ad_kit.core.checks import run_check, warn_test_artifact_remaining
+from ad_kit.core.exceptions import ADKitError
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
 
@@ -94,20 +95,26 @@ def dns_record_creation_check(
 
         findings.append(finding)
 
-        remove_output = run_check(
-            "dns-record-remove",
-            [
-                "bloodyAD",
-                "-u", username,
-                "-p", password,
-                "-d", domain,
-                "--dc-ip", dc_ip,
-                "remove",
-                "dnsRecord",
-                record_name,
-                record_ip,
-            ],
-        )
+        try:
+            remove_output = run_check(
+                "dns-record-remove",
+                [
+                    "bloodyAD",
+                    "-u", username,
+                    "-p", password,
+                    "-d", domain,
+                    "--dc-ip", dc_ip,
+                    "remove",
+                    "dnsRecord",
+                    record_name,
+                    record_ip,
+                ],
+            )
+        except (ADKitError, KeyboardInterrupt):
+            warn_test_artifact_remaining(
+                "DNS record", results["record_name"], "dns-record-create"
+            )
+            raise
 
         if "successfully removed" in remove_output.lower():
 
@@ -121,6 +128,9 @@ def dns_record_creation_check(
 
         if results["dns_record_creation"] and not results["record_deleted"]:
 
+            warn_test_artifact_remaining(
+                "DNS record", results["record_name"], "dns-record-create"
+            )
             finding.evidence.append(
                 "The temporary DNS record could not be removed using the "
                 "standard user account."

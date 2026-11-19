@@ -4,6 +4,8 @@ Password-related assessment checks.
 
 from ad_kit.core.checks import PASSWORD_POLICY_BASELINE, duration_to_minutes, run_check
 
+UNKNOWN = "[yellow]⚠ Unknown[/yellow]"
+
 
 def password_policy_check(
     dc_ip: str,
@@ -37,14 +39,14 @@ def password_policy_check(
         ],
     )
 
-    minimum_length = "[yellow]⚠ Unknown[/yellow]"
-    password_history = "[yellow]⚠ Unknown[/yellow]"
-    maximum_age = "[yellow]⚠ Unknown[/yellow]"
-    minimum_age = "[yellow]⚠ Unknown[/yellow]"
-    complexity = "[yellow]⚠ Unknown[/yellow]"
-    observation_window = "[yellow]⚠ Unknown[/yellow]"
-    lockout_duration = "[yellow]⚠ Unknown[/yellow]"
-    lockout_threshold = "[yellow]⚠ Unknown[/yellow]"
+    minimum_length = UNKNOWN
+    password_history = UNKNOWN
+    maximum_age = UNKNOWN
+    minimum_age = UNKNOWN
+    complexity = UNKNOWN
+    observation_window = UNKNOWN
+    lockout_duration = UNKNOWN
+    lockout_threshold = UNKNOWN
 
     for line in output.splitlines():
 
@@ -64,7 +66,7 @@ def password_policy_check(
 
         elif "Domain Password Complex:" in line:
             value = (line.split(":")[-1].strip())
-            complexity = ("Enabled" if value == "1" else "Disabled")
+            complexity = {"1": "Enabled", "0": "Disabled"}.get(value, UNKNOWN)
 
         elif "Reset Account Lockout Counter:" in line:
             observation_window = (line.split(":", 1)[1].strip())
@@ -101,11 +103,9 @@ def password_policy_assessment(
     # MINIMUM LENGTH
     #---------------------------------------------------------------------------
 
-    if (
-        policy["minimum_length"].isdigit()
-        and int(policy["minimum_length"])
-        < PASSWORD_POLICY_BASELINE["minimum_length"]
-    ):
+    if not policy["minimum_length"].isdecimal():
+        assessment["minimum_length"] = UNKNOWN
+    elif int(policy["minimum_length"]) < PASSWORD_POLICY_BASELINE["minimum_length"]:
         assessment["minimum_length"] = "[red]✗ Too Short[/red]"
     else:
         assessment["minimum_length"] = "[green]✓ OK[/green]"
@@ -114,11 +114,9 @@ def password_policy_assessment(
     # PASSWORD HISTORY
     #---------------------------------------------------------------------------
 
-    if (
-        policy["password_history"].isdigit()
-        and int(policy["password_history"])
-        < PASSWORD_POLICY_BASELINE["password_history"]
-    ):
+    if not policy["password_history"].isdecimal():
+        assessment["password_history"] = UNKNOWN
+    elif int(policy["password_history"]) < PASSWORD_POLICY_BASELINE["password_history"]:
         assessment["password_history"] = "[red]✗ Too Low[/red]"
     else:
         assessment["password_history"] = "[green]✓ OK[/green]"
@@ -129,8 +127,11 @@ def password_policy_assessment(
     
     minimum_age = policy["minimum_age"].lower()
 
-    if minimum_age in {"none"} or minimum_age.startswith("0"):
+    minimum_age_minutes = duration_to_minutes(minimum_age)
+    if minimum_age in {"none", "not set"} or minimum_age_minutes == 0:
         assessment["minimum_age"] = "[red]✗ Not Set[/red]"
+    elif minimum_age_minutes is None:
+        assessment["minimum_age"] = UNKNOWN
     else:
         assessment["minimum_age"] = "[green]✓ OK[/green]"
 
@@ -140,12 +141,11 @@ def password_policy_assessment(
 
     maximum_age = policy["maximum_age"].lower()
 
-    if (
-        maximum_age == "none"
-        or maximum_age.startswith("0")
-        or "not set" in maximum_age
-    ):
+    maximum_age_minutes = duration_to_minutes(maximum_age)
+    if maximum_age in {"none", "not set"} or maximum_age_minutes == 0:
         assessment["maximum_age"] = "[red]✗ Not Set[/red]"
+    elif maximum_age_minutes is None:
+        assessment["maximum_age"] = UNKNOWN
     else:
         assessment["maximum_age"] = "[green]✓ OK[/green]"
 
@@ -155,8 +155,10 @@ def password_policy_assessment(
 
     if policy["complexity"] == "Disabled":
         assessment["complexity"] = "[red]✗ Disabled[/red]"
-    else:
+    elif policy["complexity"] == "Enabled":
         assessment["complexity"] = "[green]✓ OK[/green]"
+    else:
+        assessment["complexity"] = UNKNOWN
 
     #---------------------------------------------------------------------------
     # OBSERVATION WINDOW
@@ -166,13 +168,9 @@ def password_policy_assessment(
         policy["observation_window"]
     )
 
-    if (
-        observation_window is not None
-        and observation_window
-        < PASSWORD_POLICY_BASELINE[
-            "observation_window_minutes"
-        ]
-    ):
+    if observation_window is None:
+        assessment["observation_window"] = UNKNOWN
+    elif observation_window < PASSWORD_POLICY_BASELINE["observation_window_minutes"]:
         assessment["observation_window"] = (
             "[red]✗ Too Short[/red]"
         )
@@ -189,13 +187,9 @@ def password_policy_assessment(
         policy["lockout_duration"]
     )
 
-    if (
-        lockout_duration is not None
-        and lockout_duration
-        < PASSWORD_POLICY_BASELINE[
-            "lockout_duration_minutes"
-        ]
-    ):
+    if lockout_duration is None:
+        assessment["lockout_duration"] = UNKNOWN
+    elif lockout_duration < PASSWORD_POLICY_BASELINE["lockout_duration_minutes"]:
         assessment["lockout_duration"] = (
             "[red]✗ Too Short[/red]"
         )
@@ -208,13 +202,9 @@ def password_policy_assessment(
     # LOCKOUT THRESHOLD
     #---------------------------------------------------------------------------
 
-    if (
-        policy["lockout_threshold"].isdigit()
-        and (
-            int(policy["lockout_threshold"]) == 0
-            or int(policy["lockout_threshold"]) > 10
-        )
-    ):
+    if not policy["lockout_threshold"].isdecimal():
+        assessment["lockout_threshold"] = UNKNOWN
+    elif int(policy["lockout_threshold"]) == 0 or int(policy["lockout_threshold"]) > 10:
         assessment["lockout_threshold"] = (
             "[red]✗ Too Permissive[/red]"
         )

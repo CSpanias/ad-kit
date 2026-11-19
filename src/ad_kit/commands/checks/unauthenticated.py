@@ -13,8 +13,11 @@ from ad_kit.checks.tombstone import tombstone_check
 from ad_kit.core.checks import load_dc_hostnames, load_domain_computers
 from ad_kit.core.console import console, print_info, print_section
 from ad_kit.core.findings import load_finding
-from ad_kit.core.util import get_artefacts_dir, progress, require_session
-from ad_kit.reporting.results import record_findings
+from ad_kit.core.exceptions import CheckExecutionError
+from ad_kit.core.util import (
+    get_artefacts_dir, progress, require_collected_data, require_session,
+)
+from ad_kit.reporting.results import record_findings, record_incomplete
 
 from .credentials import authenticate_standard_user
 
@@ -175,6 +178,9 @@ def run_smb_checks(
     """
 
     session_data = require_session()
+    require_collected_data(
+        session_data, "domain_computers_exported", "Domain computer"
+    )
 
     smb_results = []
     findings = []
@@ -191,17 +197,31 @@ def run_smb_checks(
 
         for host in hosts:
 
-            result = smb_configuration_check(
-                host,
-                session_data["dc_ip"],
-            )
+            try:
+                result = smb_configuration_check(
+                    host,
+                    session_data["dc_ip"],
+                )
+            except CheckExecutionError as exc:
+                record_incomplete("SMB configuration", host, str(exc))
+                unknown_hosts.append(host)
+                continue
 
-            if (
-                result["signing"] == "[yellow]⚠ Unknown[/yellow]"
-                and result["smbv1"] == "[yellow]⚠ Unknown[/yellow]"
-                and result["null_auth"] is None
-            ):
+            unknown = [
+                label
+                for value, label in (
+                    (result["signing"] == "[yellow]⚠ Unknown[/yellow]", "signing"),
+                    (result["smbv1"] == "[yellow]⚠ Unknown[/yellow]", "SMBv1"),
+                    (result["null_auth"] is None, "anonymous access"),
+                )
+                if value
+            ]
+            if unknown:
                 unknown_hosts.append(result["host"])
+                record_incomplete(
+                    "SMB configuration", host, f"Unknown: {', '.join(unknown)}"
+                )
+            if len(unknown) == 3:
                 continue
 
             smb_results.append(result)
@@ -295,34 +315,45 @@ def run_smb_checks(
     console.print(host_table)
 
     writable_share_results = []
+    writable_failed_hosts = []
     standard_user = session_data.get("standard_user", "")
     writable_checks_run = False
     if hosts:
         if standard_user:
             if std_pass is None:
-                std_pass = authenticate_standard_user()
-            writable_checks_run = True
+                try:
+                    std_pass = authenticate_standard_user()
+                except CheckExecutionError as exc:
+                    record_incomplete("SMB writable shares", "all hosts", str(exc))
+            if std_pass is not None:
+                writable_checks_run = True
 
-            with progress("Checking writable SMB shares..."):
+            if writable_checks_run:
+                with progress("Checking writable SMB shares..."):
 
-                for host in hosts:
+                    for host in hosts:
 
-                    shares = smb_writable_share_check(
-                        host,
-                        session_data["dc_ip"],
-                        standard_user,
-                        std_pass,
-                    )
+                        try:
+                            shares = smb_writable_share_check(
+                                host,
+                                session_data["dc_ip"],
+                                standard_user,
+                                std_pass,
+                            )
+                        except CheckExecutionError as exc:
+                            record_incomplete("SMB writable shares", host, str(exc))
+                            writable_failed_hosts.append(host)
+                            continue
 
-                    if shares:
-                        writable_share_results.append({
-                            "host": host,
-                            "shares": shares,
-                        })
+                        if shares:
+                            writable_share_results.append({
+                                "host": host,
+                                "shares": shares,
+                            })
         else:
-            print_info(
-                "Skipping writable SMB share checks: no Standard User is "
-                "configured for this session."
+            record_incomplete(
+                "SMB writable shares", "all hosts",
+                "No Standard User is configured for this session",
             )
 
     print_section("SMB Checks - Writable Shares")
@@ -338,7 +369,7 @@ def run_smb_checks(
 
     console.print(writable_table)
 
-    if writable_checks_run and not writable_share_results:
+    if writable_checks_run and not writable_share_results and not writable_failed_hosts:
         print_info("No writable SMB shares found for the Standard User.")
 
     if unknown_hosts:
@@ -348,15 +379,10 @@ def run_smb_checks(
             "host(s)."
         )
 
-        (
-            get_artefacts_dir()
-            / "findings-smb-unknown-hosts.txt"
-        ).write_text(
-            "\n".join(
-                sorted(unknown_hosts)
-            ) + "\n",
-            encoding="utf-8",
-        )
+    (get_artefacts_dir() / "findings-smb-unknown-hosts.txt").write_text(
+        "\n".join(sorted(unknown_hosts)) + ("\n" if unknown_hosts else ""),
+        encoding="utf-8",
+    )
 
     if smb_signing_disabled:
 
@@ -432,6 +458,7 @@ def run_asreproast_checks(
     """
 
     session_data = require_session()
+    require_collected_data(session_data, "domain_users_exported", "Domain user")
 
     print_section("AS-REP Roasting")
 
@@ -444,24 +471,30 @@ def run_asreproast_checks(
             )
         )
 
+    record_findings(findings)
     privileged_accounts: list[str] = []
+    privileged_assessed = True
     if asrep_results["accounts"]:
-        if std_pass is None:
-            std_pass = authenticate_standard_user()
+        try:
+            if std_pass is None:
+                std_pass = authenticate_standard_user()
 
-        with progress(
-            "Checking AS-REP roastable accounts for privileged group "
-            "membership..."
-        ):
-            privileged_accounts, privileged_findings = (
-                asreproast_privileged_check(
-                    session_data["dc_ip"],
-                    asrep_results["accounts"],
-                    session_data["standard_user"],
-                    std_pass,
+            with progress(
+                "Checking AS-REP roastable accounts for privileged group "
+                "membership..."
+            ):
+                privileged_accounts, privileged_findings = (
+                    asreproast_privileged_check(
+                        session_data["dc_ip"],
+                        asrep_results["accounts"],
+                        session_data["standard_user"],
+                        std_pass,
+                    )
                 )
-            )
-        findings.extend(privileged_findings)
+            record_findings(privileged_findings)
+        except CheckExecutionError as exc:
+            record_incomplete("AS-REP privileged membership", "", str(exc))
+            privileged_assessed = False
 
     table = Table()
 
@@ -474,11 +507,9 @@ def run_asreproast_checks(
     )
     table.add_row(
         "Privileged AS-REP Roastable Accounts",
-        str(len(privileged_accounts)),
+        str(len(privileged_accounts)) if privileged_assessed else "Unknown",
     )
 
     console.print(table)
-
-    record_findings(findings)
 
     return std_pass

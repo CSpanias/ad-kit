@@ -10,10 +10,11 @@ from ad_kit.checks.passwords import (
     password_policy_check,
 )
 from ad_kit.checks.pre2k import pre2k_check
-from ad_kit.core.checks import cleanup_test_artifact
+from ad_kit.core.checks import cleanup_test_artifact, warn_test_artifact_remaining
 from ad_kit.core.console import console, print_section
+from ad_kit.core.exceptions import ADKitError
 from ad_kit.core.findings import load_finding
-from ad_kit.core.util import progress, require_session
+from ad_kit.core.util import progress, require_collected_data, require_session
 from ad_kit.reporting.results import record_findings
 
 from .credentials import authenticate_domain_admin, authenticate_standard_user
@@ -33,6 +34,9 @@ def run_local_admin_checks(
     """
 
     session_data = require_session()
+    require_collected_data(
+        session_data, "domain_computers_exported", "Domain computer"
+    )
 
     print_section("Local Administrator Access")
 
@@ -199,7 +203,7 @@ def run_password_policy_checks(
     policy_evidence = []
 
     # Build password policy evidence
-    if assessment["minimum_length"] != "[green]✓ OK[/green]":
+    if assessment["minimum_length"].startswith("[red]"):
 
         policy_evidence.append(
             "Minimum password length was configured as "
@@ -207,7 +211,7 @@ def run_password_policy_checks(
              "the recommended best practice."
         )
 
-    if assessment["password_history"] != "[green]✓ OK[/green]":
+    if assessment["password_history"].startswith("[red]"):
 
         policy_evidence.append(
             "Password history retained only "
@@ -215,7 +219,7 @@ def run_password_policy_checks(
             "increasing the likelihood of password reuse."
         )
 
-    if assessment["minimum_age"] != "[green]✓ OK[/green]":
+    if assessment["minimum_age"].startswith("[red]"):
 
         policy_evidence.append(
             "Minimum password age was not configured, allowing users to "
@@ -223,14 +227,14 @@ def run_password_policy_checks(
                 "history controls."
         )
 
-    if assessment["maximum_age"] != "[green]✓ OK[/green]":
+    if assessment["maximum_age"].startswith("[red]"):
 
         policy_evidence.append(
             "Maximum password age was not configured, resulting in passwords "
             "that may remain unchanged indefinitely."
         )
 
-    if assessment["complexity"] != "[green]✓ OK[/green]":
+    if assessment["complexity"].startswith("[red]"):
 
         policy_evidence.append(
             "Password complexity requirements were disabled, allowing weak or "
@@ -238,7 +242,7 @@ def run_password_policy_checks(
         )
 
     # Build lockout policy evidence
-    if assessment["observation_window"] != "[green]✓ OK[/green]":
+    if assessment["observation_window"].startswith("[red]"):
 
         policy_evidence.append(
             "The account lockout observation window was configured as "
@@ -246,7 +250,7 @@ def run_password_policy_checks(
             "insufficient protection against password guessing attacks."
         )
 
-    if assessment["lockout_duration"] != "[green]✓ OK[/green]":
+    if assessment["lockout_duration"].startswith("[red]"):
 
         policy_evidence.append(
             "The account lockout duration was configured as "
@@ -254,7 +258,7 @@ def run_password_policy_checks(
             "recommended baseline."
         )
 
-    if assessment["lockout_threshold"] != "[green]✓ OK[/green]":
+    if assessment["lockout_threshold"].startswith("[red]"):
 
         policy_evidence.append(
             "The account lockout threshold was configured as "
@@ -419,23 +423,30 @@ def run_maq_checks(
 
     if maq_results["cleanup_method"] == "Domain Admin Required":
 
-        da_user, da_pass = authenticate_domain_admin()
+        try:
+            da_user, da_pass = authenticate_domain_admin()
 
-        maq_results["machine_deleted"] = (
-            cleanup_test_artifact(
-                "maq-delete-machine-da",
-                [
-                    "nxc", "smb", session_data["dc_ip"],
-                    "-u", da_user,
-                    "-p", da_pass,
-                    "-M", "add-computer",
-                    "-o",
-                    f"NAME={maq_results['machine_name']}",
-                    f"PASSWORD={maq_results['machine_password']}",
-                    "DELETE=True",
-                ],
+            maq_results["machine_deleted"] = (
+                cleanup_test_artifact(
+                    "maq-delete-machine-da",
+                    [
+                        "nxc", "smb", session_data["dc_ip"],
+                        "-u", da_user,
+                        "-p", da_pass,
+                        "-M", "add-computer",
+                        "-o",
+                        f"NAME={maq_results['machine_name']}",
+                        f"PASSWORD={maq_results['machine_password']}",
+                        "DELETE=True",
+                    ],
+                )
             )
-        )
+        except (ADKitError, KeyboardInterrupt):
+            warn_test_artifact_remaining(
+                "machine account", f"{maq_results['machine_name']}$",
+                "maq-create-machine",
+            )
+            raise
 
         if maq_results["machine_deleted"]:
 
@@ -444,6 +455,10 @@ def run_maq_checks(
         else:
 
             maq_results["cleanup_method"] = "Manual Intervention Required"
+            warn_test_artifact_remaining(
+                "machine account", f"{maq_results['machine_name']}$",
+                "maq-create-machine",
+            )
 
     table.add_row("Machine Cleanup", maq_results["cleanup_method"])
 
@@ -538,24 +553,30 @@ def run_dns_checks(
 
     if dns_results["cleanup_method"] == "Domain Admin Required":
 
-        da_user, da_pass = authenticate_domain_admin()
+        try:
+            da_user, da_pass = authenticate_domain_admin()
 
-        dns_results["record_deleted"] = (
-            cleanup_test_artifact(
-                "dns-record-remove-da",
-                [
-                    "bloodyAD",
-                    "-u", da_user,
-                    "-p", da_pass,
-                    "-d", session_data["domain"],
-                    "--dc-ip", session_data["dc_ip"],
-                    "remove",
-                    "dnsRecord",
-                    dns_results["record_name"].split(".")[0],
-                    dns_results["record_ip"],
-                ],
+            dns_results["record_deleted"] = (
+                cleanup_test_artifact(
+                    "dns-record-remove-da",
+                    [
+                        "bloodyAD",
+                        "-u", da_user,
+                        "-p", da_pass,
+                        "-d", session_data["domain"],
+                        "--dc-ip", session_data["dc_ip"],
+                        "remove",
+                        "dnsRecord",
+                        dns_results["record_name"].split(".")[0],
+                        dns_results["record_ip"],
+                    ],
+                )
             )
-        )
+        except (ADKitError, KeyboardInterrupt):
+            warn_test_artifact_remaining(
+                "DNS record", dns_results["record_name"], "dns-record-create"
+            )
+            raise
 
         if dns_results["record_deleted"]:
 
@@ -571,6 +592,9 @@ def run_dns_checks(
         else:
 
             dns_results["cleanup_method"] = "Manual Intervention Required"
+            warn_test_artifact_remaining(
+                "DNS record", dns_results["record_name"], "dns-record-create"
+            )
 
             if findings:
 
