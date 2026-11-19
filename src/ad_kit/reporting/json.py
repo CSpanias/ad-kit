@@ -117,7 +117,7 @@ GENERIC_FINDINGS: dict[str, dict[str, str]] = {
     },
 }
 
-_generic_findings: list[dict] = []
+_generic_findings: list[dict[str, str]] = []
 
 
 def collect(findings: list[Finding]) -> None:
@@ -145,16 +145,17 @@ def reset() -> None:
     _generic_findings.clear()
 
 
-def write_findings(path: str | Path) -> None:
-    """Write the collected findings to a JSON file."""
-
-    findings = sorted(
+def get_findings() -> list[dict[str, str]]:
+    """Return collected integration findings in a stable order."""
+    return sorted(
         _generic_findings,
         key=lambda item: (item["id"].casefold(), item["description"].casefold()),
     )
 
-    output = {"findings": findings}
 
+def write_findings(path: str | Path) -> None:
+    """Write the collected findings to a JSON file."""
+    output = {"findings": get_findings()}
     Path(path).write_text(
         json.dumps(output, indent=4) + "\n",
         encoding="utf-8",

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from ad_kit.core.console import console as console
 from ad_kit.core.console import print_error
 from ad_kit.core.exceptions import ADKitError
-from ad_kit.core.util import get_artefacts_dir
+from ad_kit.core.util import get_artefacts_dir, require_session
 from ad_kit.reporting import results
 
 from .checks.credentials import authenticate_standard_user
@@ -157,8 +157,24 @@ AVAILABLE_CHECKS: dict[str, CheckDefinition] = {
 }
 
 
-def run_selected_checks(modules: list[str]) -> None:
+def _export_domain(csacyber: bool, dc: str | None) -> str | None:
+    if dc is not None and (not csacyber or not dc.strip()):
+        raise ValueError("--dc requires --csacyber and a non-empty hostname.")
+    if not csacyber:
+        return None
+    domain = require_session().get("domain")
+    if not isinstance(domain, str) or not domain.strip():
+        raise ValueError(
+            "SureFormat export requires a domain in session metadata. Run 'ad-kit enum'."
+        )
+    return domain.strip()
+
+
+def run_selected_checks(
+    modules: list[str], *, csacyber: bool = False, dc: str | None = None
+) -> None:
     """Execute selected checks, reusing one Standard User password."""
+    domain = _export_domain(csacyber, dc)
     results.reset()
 
     requires_authentication = any(
@@ -180,11 +196,12 @@ def run_selected_checks(modules: list[str]) -> None:
             std_pass,
         )
 
-    results.write_reports(get_artefacts_dir())
+    results.write_reports(get_artefacts_dir(), domain=domain, dc=dc.strip() if dc else None)
 
 
-def run_checks() -> None:
+def run_checks(*, csacyber: bool = False, dc: str | None = None) -> None:
     """Execute all assessment checks in the established workflow order."""
+    domain = _export_domain(csacyber, dc)
     results.reset()
 
     _run_step("ldap", lambda: run_ldap_checks(), None)
@@ -215,4 +232,4 @@ def run_checks() -> None:
     std_pass = _run_authed("tombstone", run_tombstone_checks, std_pass)
     std_pass = _run_authed("coercion", run_coercion_checks, std_pass)
 
-    results.write_reports(get_artefacts_dir())
+    results.write_reports(get_artefacts_dir(), domain=domain, dc=dc.strip() if dc else None)

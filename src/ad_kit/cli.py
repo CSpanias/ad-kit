@@ -165,6 +165,10 @@ def enum() -> None:
 )
 def check_callback(
     ctx: typer.Context,
+    csacyber: bool = typer.Option(
+        False, "--csacyber", help="Export SureFormat XML instead of JSON."
+    ),
+    dc: str | None = typer.Option(None, "--dc", help="Split DC findings into a separate XML."),
 ) -> None:
     """
     Execute assessment checks.
@@ -172,8 +176,36 @@ def check_callback(
     If no specific check module is supplied, all assessment checks are executed.
     """
 
+    ctx.obj = (csacyber, dc)
     if ctx.invoked_subcommand is None:
+        _run_check_command(None, csacyber, dc)
+
+
+def _run_check_command(
+    modules: list[str] | None, csacyber: bool, dc: str | None
+) -> None:
+    if csacyber or dc is not None:
+        try:
+            check._export_domain(csacyber, dc)
+        except (ValueError, RuntimeError) as exc:
+            raise typer.BadParameter(str(exc)) from exc
+        if modules is None:
+            check.run_checks(csacyber=csacyber, dc=dc)
+        else:
+            check.run_selected_checks(modules, csacyber=csacyber, dc=dc)
+    elif modules is None:
         check.run_checks()
+    else:
+        check.run_selected_checks(modules)
+
+
+def _check_options(
+    ctx: typer.Context, csacyber: bool, dc: str | None
+) -> tuple[bool, str | None]:
+    parent_csacyber, parent_dc = ctx.parent.obj
+    if dc is not None and parent_dc is not None:
+        raise typer.BadParameter("Specify --dc only once.")
+    return csacyber or parent_csacyber, dc if dc is not None else parent_dc
 
 #-------------------------------------------------------------------------------
 # CHECK ALL MODULE
@@ -182,12 +214,18 @@ def check_callback(
     name="all",
     help="Execute all assessment checks."
 )
-def check_all() -> None:
+def check_all(
+    ctx: typer.Context,
+    csacyber: bool = typer.Option(
+        False, "--csacyber", help="Export SureFormat XML instead of JSON."
+    ),
+    dc: str | None = typer.Option(None, "--dc", help="Split DC findings into a separate XML."),
+) -> None:
     """
     Execute all assessment checks.
     """
 
-    check.run_checks()
+    _run_check_command(None, *_check_options(ctx, csacyber, dc))
 
 #-------------------------------------------------------------------------------
 # CHECK COMMANDS (generated dynamically from AVAILABLE_CHECKS)
@@ -197,8 +235,14 @@ def check_all() -> None:
 def _make_check_command(module_name: str):
     """Factory that creates a check command for the given module name."""
 
-    def run_check() -> None:
-        check.run_selected_checks([module_name])
+    def run_check(
+        ctx: typer.Context,
+        csacyber: bool = typer.Option(
+            False, "--csacyber", help="Export SureFormat XML instead of JSON."
+        ),
+        dc: str | None = typer.Option(None, "--dc", help="Split DC findings into a separate XML."),
+    ) -> None:
+        _run_check_command([module_name], *_check_options(ctx, csacyber, dc))
 
     run_check.__name__ = (
         f"check_{module_name.replace('-', '_').replace('.', '_')}"
@@ -223,7 +267,12 @@ for _module_name in AVAILABLE_CHECKS:
     help="Execute selected assessment modules.",
 )
 def selected(
+    ctx: typer.Context,
     modules: list[str],
+    csacyber: bool = typer.Option(
+        False, "--csacyber", help="Export SureFormat XML instead of JSON."
+    ),
+    dc: str | None = typer.Option(None, "--dc", help="Split DC findings into a separate XML."),
 ) -> None:
     """
     Execute one or more specified assessment modules.
@@ -237,7 +286,7 @@ def selected(
             Assessment modules to execute.
     """
 
-    check.run_selected_checks(modules)
+    _run_check_command(modules, *_check_options(ctx, csacyber, dc))
 
 
 if __name__ == "__main__":

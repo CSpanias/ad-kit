@@ -31,6 +31,26 @@ omit their section titles; the full finding copy includes them. Each run
 replaces the HTML and JSON exports, including when running selected checks.
 Previously generated Markdown files are not removed.
 
+### SureFormat XML
+
+Use `--csacyber` to write `ad-kit/ad-kit_findings.xml` instead of the generic
+JSON export. The domain hostname comes from the session created by `ad-kit enum`;
+the export fails before checks start if the domain is unavailable. The HTML
+report is still written. Only findings supported by the integration mapping are
+exported.
+
+```bash
+ad-kit check --csacyber
+ad-kit check run ldap smb --csacyber --dc DC01.example.com
+```
+
+With `--dc`, LDAP signing, LDAP channel binding, LDAP null binds, DC coercion,
+and NoPAC findings are written to `ad-kit/ad-kit_findings-dc.xml` for the
+specified hostname. Other findings remain in the domain XML. Without `--dc`,
+all mapped findings are written to the domain XML. Each run replaces its
+selected outputs; files from earlier runs in other formats or without the
+current DC split are not removed.
+
 ## Available Checks
 
 | Check | Command | Description |
