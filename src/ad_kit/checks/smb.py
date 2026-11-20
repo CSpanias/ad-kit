@@ -214,7 +214,7 @@ def smb_configuration_check(
                 ],
             )
         except CheckExecutionError as exc:
-            record_incomplete("SMB anonymous enumeration", host, str(exc))
+            record_incomplete("SMB anonymous enumeration", host, str(exc), notify=False)
         else:
             anonymous_shares = _parse_share_count(enumeration_output)
             anonymous_users = _parse_user_count(enumeration_output)

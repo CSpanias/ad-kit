@@ -11,7 +11,7 @@ from ad_kit.checks.smb import (
 )
 from ad_kit.checks.tombstone import tombstone_check
 from ad_kit.core.checks import load_dc_hostnames, load_domain_computers
-from ad_kit.core.console import console, print_info, print_section
+from ad_kit.core.console import console, print_info, print_section, print_warning
 from ad_kit.core.findings import load_finding
 from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.util import (
@@ -190,6 +190,7 @@ def run_smb_checks(
     anonymous_enumeration = []
 
     unknown_hosts = []
+    anonymous_failed_hosts = []
 
     hosts = load_domain_computers()
 
@@ -203,7 +204,7 @@ def run_smb_checks(
                     session_data["dc_ip"],
                 )
             except CheckExecutionError as exc:
-                record_incomplete("SMB configuration", host, str(exc))
+                record_incomplete("SMB configuration", host, str(exc), notify=False)
                 unknown_hosts.append(host)
                 continue
 
@@ -219,8 +220,13 @@ def run_smb_checks(
             if unknown:
                 unknown_hosts.append(result["host"])
                 record_incomplete(
-                    "SMB configuration", host, f"Unknown: {', '.join(unknown)}"
+                    "SMB configuration", host, f"Unknown: {', '.join(unknown)}",
+                    notify=False,
                 )
+            if result["null_auth"] and (
+                result["anonymous_shares"] is None or result["anonymous_users"] is None
+            ):
+                anonymous_failed_hosts.append(result["host"])
             if len(unknown) == 3:
                 continue
 
@@ -341,7 +347,9 @@ def run_smb_checks(
                                 std_pass,
                             )
                         except CheckExecutionError as exc:
-                            record_incomplete("SMB writable shares", host, str(exc))
+                            record_incomplete(
+                                "SMB writable shares", host, str(exc), notify=False
+                            )
                             writable_failed_hosts.append(host)
                             continue
 
@@ -374,9 +382,24 @@ def run_smb_checks(
 
     if unknown_hosts:
 
-        print_info(
-            f"Unable to determine SMB configuration for {len(unknown_hosts)} "
-            "host(s)."
+        print_warning(
+            "SMB configuration could not be fully assessed on "
+            f"{len({host.casefold() for host in unknown_hosts})} host(s). "
+            "See the HTML report for details."
+        )
+
+    if anonymous_failed_hosts:
+        print_warning(
+            "SMB anonymous enumeration could not be completed on "
+            f"{len({host.casefold() for host in anonymous_failed_hosts})} host(s). "
+            "See the HTML report for details."
+        )
+
+    if writable_failed_hosts:
+        print_warning(
+            "SMB writable-share checks could not be completed on "
+            f"{len({host.casefold() for host in writable_failed_hosts})} host(s). "
+            "See the HTML report for details."
         )
 
     (get_artefacts_dir() / "findings-smb-unknown-hosts.txt").write_text(

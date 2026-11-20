@@ -38,8 +38,8 @@ def write_reports(directory: Path, *, domain: str | None = None, dc: str | None 
     html.write_report(_findings, directory / "ad-kit_findings.html", _incomplete)
     if _incomplete:
         print_warning(
-            f"Assessment incomplete: {len(_incomplete)} check(s) could not be "
-            "completed. See the HTML report for details."
+            f"Assessment incomplete: {len(_incomplete)} coverage gap(s). "
+            "See the HTML report for details."
         )
     if domain is None:
         json.write_findings(directory / "ad-kit_findings.json")

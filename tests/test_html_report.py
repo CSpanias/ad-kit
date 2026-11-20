@@ -132,6 +132,17 @@ def test_html_sections_handle_missing_text_and_multiple_findings():
     ]
 
 
+def test_incomplete_checks_are_collapsed_after_findings_and_escaped():
+    finding = Finding("TEST-003", "Example", "Comment", "Fix")
+    report = html.render_html([finding], ["SMB - host <one>: Unknown", "LDAP - host: Failed"])
+    section = '<details class="incomplete"><summary>Incomplete checks (2 entries)</summary>'
+    assert section in report
+    assert report.index("TEST-003 - Example") < report.index(section) < report.index("<footer>")
+    assert "SMB - host &lt;one&gt;: Unknown" in report
+    assert "LDAP - host: Failed" in report
+    assert 'class="incomplete"' not in html.render_html([finding], [])
+
+
 def test_run_exports_all_findings_without_markdown_files(monkeypatch, tmp_path):
     mapped = Finding("SMB-001", "Mapped", "Comment", "Fix", evidence=["proof"])
     unmapped = Finding("OTHER-001", "Unmapped", "Other", "Fix")

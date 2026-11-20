@@ -76,10 +76,11 @@ def render_html(findings: list[Finding], incomplete: list[str] | None = None) ->
         )
     content = "\n".join(cards) or '<p class="empty">No findings were generated.</p>'
     incomplete_section = (
-        '<section class="incomplete"><h2>Incomplete checks</h2>'
+        '<details class="incomplete">'
+        f"<summary>Incomplete checks ({len(incomplete)} entries)</summary>"
         "<p>Results do not cover the following checks or hosts:</p>"
         + _list_section("", incomplete)
-        + "</section>"
+        + "</details>"
         if incomplete else ""
     )
     return f"""<!doctype html>
@@ -117,18 +118,22 @@ def render_html(findings: list[Finding], incomplete: list[str] | None = None) ->
     .text {{ white-space: pre-wrap; line-height: 1.55; }}
     .status, #count, footer {{ color: #53647b; }}
     .copy-buffer {{ position: fixed; left: -9999px; top: 0; }}
-    .incomplete {{ background: #fff3cd; border: 1px solid #d5a500; padding: 1rem; }}
+    .incomplete {{
+      background: #fff3cd; border: 1px solid #d5a500; border-radius: .6rem;
+      margin: 1rem 0; padding: 1rem; overflow-wrap: anywhere;
+    }}
+    .incomplete summary {{ cursor: pointer; font-weight: 650; }}
   </style>
 </head>
 <body>
   <header><h1>AD-Kit Findings</h1><p>Local assessment report</p></header>
   <main>
-    {incomplete_section}
     <label for="search">Search findings</label>
     <input id="search" type="search" placeholder="Search findings">
     <p id="count" aria-live="polite">{len(findings)} findings</p>
     <div id="findings">{content}</div>
     <p id="no-matches" hidden>No findings match the search.</p>
+    {incomplete_section}
     <footer>This report works offline and contains assessment data.</footer>
   </main>
   <script>

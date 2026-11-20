@@ -21,6 +21,9 @@ def failure(name):
 
 def test_smb_keeps_successes_and_reports_each_incomplete_host(monkeypatch, tmp_path):
     results.reset()
+    warnings = []
+    monkeypatch.setattr(results, "print_warning", warnings.append)
+    monkeypatch.setattr(unauthenticated, "print_warning", warnings.append)
     monkeypatch.setattr(unauthenticated, "require_session", lambda: {
         "dc_ip": "dc", "standard_user": "tester", "domain_computers_exported": True,
     })
@@ -46,6 +49,10 @@ def test_smb_keeps_successes_and_reports_each_incomplete_host(monkeypatch, tmp_p
     monkeypatch.setattr(unauthenticated, "smb_configuration_check", configuration)
     monkeypatch.setattr(unauthenticated, "smb_writable_share_check", writable)
     unauthenticated.run_smb_checks("secret")
+    assert len(warnings) == 2
+    assert "SMB configuration could not be fully assessed on 1 host(s)" in warnings[0]
+    assert "SMB writable-share checks could not be completed on 1 host(s)" in warnings[1]
+    assert all("smb-B" not in warning and "smb-writable-A" not in warning for warning in warnings)
     results.write_reports(tmp_path)
     report = (tmp_path / "ad-kit_findings.html").read_text(encoding="utf-8")
     assert "SMB-001" in report and "SMB-004" in report
@@ -56,8 +63,45 @@ def test_smb_keeps_successes_and_reports_each_incomplete_host(monkeypatch, tmp_p
     results.reset()
 
 
+def test_smb_summarises_multiple_partial_and_unknown_hosts(monkeypatch, tmp_path):
+    results.reset()
+    warnings = []
+    monkeypatch.setattr(results, "print_warning", warnings.append)
+    monkeypatch.setattr(unauthenticated, "print_warning", warnings.append)
+    monkeypatch.setattr(unauthenticated, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "tester", "domain_computers_exported": True,
+    })
+    monkeypatch.setattr(unauthenticated, "load_domain_computers", lambda: ["A", "B", "C"])
+    monkeypatch.setattr(unauthenticated, "load_dc_hostnames", lambda: [])
+    monkeypatch.setattr(unauthenticated, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(unauthenticated, "progress", no_progress)
+
+    def configuration(host, _dc):
+        unknown = "[yellow]⚠ Unknown[/yellow]"
+        return {
+            "host": host,
+            "signing": unknown if host in {"A", "B"} else "[green]✓ Enabled[/green]",
+            "smbv1": unknown if host == "A" else "[green]✓ Disabled[/green]",
+            "null_auth": None if host == "A" else False,
+            "anonymous_shares": None, "anonymous_users": None,
+        }
+
+    monkeypatch.setattr(unauthenticated, "smb_configuration_check", configuration)
+    monkeypatch.setattr(unauthenticated, "smb_writable_share_check", lambda *_args: [])
+    unauthenticated.run_smb_checks("secret")
+    assert len(warnings) == 1
+    assert "2 host(s)" in warnings[0]
+    assert len(results._incomplete) == 2
+    assert "SMB configuration - A: Unknown: signing, SMBv1, anonymous access" in results._incomplete
+    assert "SMB configuration - B: Unknown: signing" in results._incomplete
+    assert (tmp_path / "findings-smb-unknown-hosts.txt").read_text().splitlines() == ["A", "B"]
+    results.reset()
+
+
 def test_failed_anonymous_enumeration_keeps_smb_configuration(monkeypatch):
     results.reset()
+    warnings = []
+    monkeypatch.setattr(results, "print_warning", warnings.append)
     def run(name, _command):
         if name.startswith("smb-anonymous"):
             raise failure(name)
@@ -68,6 +112,36 @@ def test_failed_anonymous_enumeration_keeps_smb_configuration(monkeypatch):
     assert result["signing"] == "[red]✗ Disabled[/red]"
     assert result["anonymous_shares"] is None
     assert "SMB anonymous enumeration - host" in results._incomplete[0]
+    assert not warnings
+    results.reset()
+
+
+def test_smb_summarises_anonymous_enumeration_failures(monkeypatch, tmp_path):
+    results.reset()
+    warnings = []
+    monkeypatch.setattr(results, "print_warning", warnings.append)
+    monkeypatch.setattr(unauthenticated, "print_warning", warnings.append)
+    monkeypatch.setattr(unauthenticated, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "tester", "domain_computers_exported": True,
+    })
+    monkeypatch.setattr(unauthenticated, "load_domain_computers", lambda: ["A", "B"])
+    monkeypatch.setattr(unauthenticated, "load_dc_hostnames", lambda: [])
+    monkeypatch.setattr(unauthenticated, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(unauthenticated, "progress", no_progress)
+    monkeypatch.setattr(unauthenticated, "smb_writable_share_check", lambda *_args: [])
+
+    def run(name, _command):
+        if name.startswith("smb-anonymous"):
+            raise failure(name)
+        return "SMB dc 445 HOST (signing:True) (SMBv1:False) (null auth:True)"
+
+    monkeypatch.setattr(smb, "run_check", run)
+    unauthenticated.run_smb_checks("secret")
+    assert len(warnings) == 1
+    assert "SMB anonymous enumeration could not be completed on 2 host(s)" in warnings[0]
+    assert len(results._incomplete) == 2
+    assert "SMB anonymous enumeration - A" in results._incomplete[0]
+    assert "SMB anonymous enumeration - B" in results._incomplete[1]
     results.reset()
 
 

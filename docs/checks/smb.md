@@ -39,8 +39,8 @@ writable-share check uses the Standard User account and is prompted only when
 needed.
 
 If a host or an individual enumeration command fails, ad-kit retains confirmed
-results from other checks and hosts. Incomplete checks are listed in the
-console and HTML report.
+results from other checks and hosts. The console summarises affected host
+counts; individual incomplete checks are listed in the HTML report.
 
 ## How it works
 

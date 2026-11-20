@@ -21,7 +21,8 @@ The current run writes `ad-kit/ad-kit_findings.html` and
 
 When a command or host check cannot be completed, ad-kit preserves confirmed
 findings and lists incomplete checks in the console and HTML report. The JSON
-export contains findings only; consult the HTML report for coverage gaps.
+export contains findings only; consult the collapsed **Incomplete checks**
+section at the end of the HTML report for coverage gaps.
 
 The HTML report is self-contained and has **Copy Markdown** buttons for each 
 finding and for its individual commentary, evidence, and remediation sections. 
