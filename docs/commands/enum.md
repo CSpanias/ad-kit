@@ -27,6 +27,11 @@ If the Domain Admin account cannot be validated but the standard user was
 validated, enumeration continues using the standard account. A requested NTDS
 dump is skipped, and the session records that privileged validation failed.
 
+For an NTDS dump, ad-kit tries the supplied DC first, then other discovered
+DCs if necessary. Each attempt is isolated; failed or incomplete dumps are
+not used for retrieval. Authentication failures stop further attempts to
+reduce account-lockout risk. The successful DC is shown in the console.
+
 User and computer exports are checked before being accepted. If collection
 fails, existing files are not treated as this session's results; dependent
 checks require a successful export. A computer export with no parsed hosts is

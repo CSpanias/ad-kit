@@ -11,6 +11,12 @@ from ad_kit.commands import enum
 from ad_kit.core import util
 
 
+NTDS_RECORD = (
+    "example.test\\alice:1105:aad3b435b51404eeaad3b435b51404ee:"
+    "0123456789abcdef0123456789abcdef::: (status=Enabled)\n"
+)
+
+
 @pytest.mark.parametrize(
     ("line", "expected"),
     [
@@ -188,7 +194,7 @@ def test_enumeration_retrieves_only_current_run_files(
     (output_dir / "old.zip").write_text("stale")
     (output_dir / "OTHER.TEST.ntds").write_text("stale")
     (output_dir / "EXAMPLE.TEST.ntds").write_text("old")
-    captured = []
+    captured, sessions, attempted_dcs = [], [], []
     monkeypatch.setattr(enum.typer, "prompt", lambda *_args, **_kwargs: next(prompts))
     monkeypatch.setattr(enum.typer, "confirm", lambda *_args, **_kwargs: next(confirms))
     monkeypatch.setattr(enum, "identify_domain_controller", lambda _dc: ("DC01", "EXAMPLE.TEST"))
@@ -199,10 +205,10 @@ def test_enumeration_retrieves_only_current_run_files(
     )
     monkeypatch.setattr(
         enum, "enumerate_domain_controllers",
-        lambda *_args: [("DC01.EXAMPLE.TEST", "192.0.2.1")],
+        lambda *_args: [("DC02.EXAMPLE.TEST", "192.0.2.2"), ("DC01.EXAMPLE.TEST", "192.0.2.1")],
     )
     monkeypatch.setattr(enum, "write_results", lambda *_args: None)
-    monkeypatch.setattr(enum, "save_session", lambda *_args: None)
+    monkeypatch.setattr(enum, "save_session", lambda data: sessions.append(data.copy()))
     monkeypatch.setattr(enum, "progress", lambda _message: nullcontext())
     monkeypatch.setattr(enum, "get_artefacts_dir", lambda: output_dir)
     monkeypatch.setattr(enum, "export_domain_users", lambda *_args: (2, 1))
@@ -214,8 +220,9 @@ def test_enumeration_retrieves_only_current_run_files(
         (output_dir / "current.zip").write_text("new")
         return collection_succeeded
 
-    def dump(command, **_kwargs):
-        (output_dir / "EXAMPLE.TEST.ntds").write_text("fresh ntds")
+    def dump(command, **kwargs):
+        attempted_dcs.append(command[1].rsplit("@", 1)[-1])
+        (kwargs["cwd"] / "EXAMPLE.TEST.ntds").write_text(NTDS_RECORD)
         return subprocess.CompletedProcess(
             command, 0 if dump_succeeded else 1, stdout="", stderr=""
         )
@@ -229,6 +236,121 @@ def test_enumeration_retrieves_only_current_run_files(
     if dump_succeeded:
         expected.append(output_dir / "EXAMPLE.TEST.ntds")
     assert captured == expected
+    assert sessions[-1]["ntds_attempted"] is True
+    assert sessions[-1]["ntds_dumped"] is dump_succeeded
+    assert attempted_dcs == (["192.0.2.1"] if dump_succeeded else ["192.0.2.1", "192.0.2.2"])
+    if dump_succeeded:
+        assert sessions[-1]["ntds_dc"] == "192.0.2.1"
+
+
+@pytest.mark.parametrize("first_failure", ["missing", "partial"])
+def test_ntds_failover_discards_partial_output_and_preserves_success(monkeypatch, tmp_path, first_failure):
+    calls = []
+    warnings = []
+    monkeypatch.setattr(enum, "progress", lambda _message: nullcontext())
+    monkeypatch.setattr(enum, "print_warning", warnings.append)
+    old_dump = tmp_path / "EXAMPLE.TEST.ntds"
+    old_dump.write_text("previous")
+
+    def run(command, **kwargs):
+        calls.append(command[1].rsplit("@", 1)[-1])
+        dump = kwargs["cwd"] / "EXAMPLE.TEST.ntds"
+        if len(calls) == 1:
+            if first_failure == "partial":
+                dump.write_text(NTDS_RECORD)
+            return subprocess.CompletedProcess(
+                command, 0,
+                stdout="[-] Error while processing user!\n" if first_failure == "partial" else "",
+                stderr="",
+            )
+        dump.write_text(NTDS_RECORD)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(enum.subprocess, "run", run)
+    result = enum._dump_ntds(
+        "EXAMPLE.TEST", "admin", "secret", ["192.0.2.1", "192.0.2.1", "192.0.2.2"], tmp_path,
+    )
+    assert result == (old_dump, "192.0.2.2")
+    assert calls == ["192.0.2.1", "192.0.2.2"]
+    assert old_dump.read_text() == NTDS_RECORD
+    assert any(
+        "processing user" in warning if first_failure == "partial"
+        else "No valid NTDS" in warning
+        for warning in warnings
+    )
+    assert list(tmp_path.iterdir()) == [old_dump]
+
+
+@pytest.mark.parametrize(
+    "failure", ["missing", "empty", "invalid", "encoding", "resume", "nonzero", "warning"],
+)
+def test_ntds_rejects_failed_or_incomplete_attempts(monkeypatch, tmp_path, failure):
+    monkeypatch.setattr(enum, "progress", lambda _message: nullcontext())
+    warnings = []
+    monkeypatch.setattr(enum, "print_warning", warnings.append)
+    old_dump = tmp_path / "EXAMPLE.TEST.ntds"
+    old_dump.write_text("previous")
+
+    def run(command, **kwargs):
+        directory = kwargs["cwd"]
+        if failure != "missing":
+            content = "" if failure == "empty" else "not a hash\n" if failure == "invalid" else NTDS_RECORD
+            (directory / "EXAMPLE.TEST.ntds").write_text(content)
+        if failure == "encoding":
+            (directory / "EXAMPLE.TEST.ntds").write_bytes(b"\xff")
+        if failure == "resume":
+            (directory / "sessionresume_test").write_text("partial")
+        return subprocess.CompletedProcess(
+            command, 1 if failure == "nonzero" else 0,
+            stdout="[!] DRSCrackNames returned 0 items, skipping\n" if failure == "warning" else "",
+            stderr="",
+        )
+
+    monkeypatch.setattr(enum.subprocess, "run", run)
+    assert enum._dump_ntds("EXAMPLE.TEST", "admin", "secret", ["192.0.2.1"], tmp_path) is None
+    assert old_dump.read_text() == "previous"
+    assert warnings
+    assert list(tmp_path.iterdir()) == [old_dump]
+
+
+def test_ntds_authentication_failure_stops_retry_and_redacts_secrets(monkeypatch, tmp_path):
+    calls, warnings, errors = [], [], []
+    monkeypatch.setattr(enum, "progress", lambda _message: nullcontext())
+    monkeypatch.setattr(enum, "print_warning", warnings.append)
+    monkeypatch.setattr(enum, "print_error", errors.append)
+
+    def run(command, **_kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(
+            command, 0, stdout="[-] STATUS_LOGON_FAILURE secret 0123456789abcdef0123456789abcdef\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(enum.subprocess, "run", run)
+    assert enum._dump_ntds(
+        "EXAMPLE.TEST", "admin", "secret", ["192.0.2.1", "192.0.2.2"], tmp_path,
+    ) is None
+    assert len(calls) == 1
+    assert "secret" not in " ".join(warnings)
+    assert "0123456789abcdef0123456789abcdef" not in " ".join(warnings)
+    assert any("not trying additional DCs" in error for error in errors)
+
+
+def test_missing_secretsdump_is_reported_without_retry(monkeypatch, tmp_path):
+    calls, errors = [], []
+    monkeypatch.setattr(enum, "progress", lambda _message: nullcontext())
+    monkeypatch.setattr(enum, "print_error", errors.append)
+
+    def run(*_args, **_kwargs):
+        calls.append(True)
+        raise FileNotFoundError("secretsdump.py not found")
+
+    monkeypatch.setattr(enum.subprocess, "run", run)
+    assert enum._dump_ntds(
+        "EXAMPLE.TEST", "admin", "secret", ["192.0.2.1", "192.0.2.2"], tmp_path,
+    ) is None
+    assert len(calls) == 1
+    assert "secretsdump.py not found" in errors[0]
 
 
 def test_scp_retrieval_handles_no_usable_interface(monkeypatch, tmp_path):

