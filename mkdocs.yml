@@ -47,7 +47,7 @@ nav:
   - Workflow: workflow.md
   - Commands:
     - Tools: commands/tools.md
-    - Enumerate: commands/enum.md
+    - Enum: commands/enum.md
     - Check: commands/check.md
   - Checks:
     - LDAP: checks/ldap.md
