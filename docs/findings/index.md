@@ -49,7 +49,4 @@ remediation. It also writes `ad-kit/ad-kit_findings.json` for integration. The e
 contain findings from the current run only. The JSON is a filtered integration
 export, not a complete copy of the HTML report.
 
-Use `--csacyber` with a check command to produce SureFormat XML instead of JSON;
-see [Check Commands](../commands/check.md#sureformat-xml) for the optional DC split.
-
 Evidence is stored in `ad-kit/evidence/`.

@@ -21,8 +21,7 @@ The current run writes `ad-kit/ad-kit_findings.html` and
 
 When a command or host check cannot be completed, ad-kit preserves confirmed
 findings and lists incomplete checks in the console and HTML report. The JSON
-and SureFormat exports contain findings only; consult the HTML report for
-coverage gaps.
+export contains findings only; consult the HTML report for coverage gaps.
 
 The HTML report is self-contained and has **Copy Markdown** buttons for each 
 finding and for its individual commentary, evidence, and remediation sections. 
@@ -31,30 +30,6 @@ Affected assets are included in commentary, and references in remediation.
 Individual commentary and remediation copies omit their section titles; the 
 full finding copy includes them. Each run replaces the HTML and JSON exports, 
 including when running selected checks.
-
-### SureFormat XML
-
-Use `--csacyber` to write `ad-kit/ad-kit_findings.xml` instead of the generic
-JSON export.
-
-The domain hostname comes from the session created by `ad-kit enum`; the export 
-fails before checks start if the domain is unavailable. The HTML report is 
-still written. 
-
-Only findings supported by the integration mapping are exported.
-
-```bash
-ad-kit check --csacyber
-```
-
-With `--dc`, LDAP-related (signing, channel binding, null binds), DC 
-coercion, and NoPAC findings are written to `ad-kit/ad-kit_findings-dc.xml` for 
-the specified hostname. Other findings remain in the domain XML. Without 
-`--dc`, all mapped findings are written to the domain XML.
-
-```bash
-ad-kit check run ldap smb --csacyber --dc DC01.example.com
-```
 
 ## Available Checks
 
