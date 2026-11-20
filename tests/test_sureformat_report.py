@@ -21,10 +21,11 @@ def _vulnerabilities(path):
 @pytest.mark.parametrize("dc", [None, "DC01.example.com"])
 def test_sureformat_export_matches_adapter_and_optional_dc_split(monkeypatch, tmp_path, dc):
     findings = [
-        Finding("SMB-001", "SMB", "", ""),
-        Finding("LDAP-001", "LDAP", "", ""),
-        Finding("NOPAC-001", "NoPAC", "", ""),
-        Finding("OTHER-001", "Unmapped", "", ""),
+        Finding("SMB-001", "SMB", "SMB signing details.", ""),
+        Finding("LDAP-001", "LDAP", "LDAP signing details.", ""),
+        Finding("NOPAC-001", "NoPAC", "NoPAC details.", ""),
+        Finding("OTHER-001", "Unmapped", "Other details.", ""),
+        Finding("PRIV-001", "Privileged accounts", "Privilege details.", ""),
     ]
     monkeypatch.setattr(check, "get_artefacts_dir", lambda: tmp_path)
     monkeypatch.setattr(check, "require_session", lambda: {"domain": "example.com"})
@@ -41,10 +42,11 @@ def test_sureformat_export_matches_adapter_and_optional_dc_split(monkeypatch, tm
     assert item.attrib == {"ipaddress": "", "hostname": "example.com"}
     assert service.attrib == {"name": "", "port": "", "protocol": "tcp"}
     assert [v.attrib["id"] for v in vulnerabilities] == (
-        ["SC-7704"] if dc else ["SC-6080", "SC-3704", "SC-7704"]
+        ["SC-10674", "SC-7704"]
+        if dc else ["SC-6080", "SC-3704", "SC-10674", "SC-7704"]
     )
     smb = next(v for v in vulnerabilities if v.attrib["id"] == "SC-7704")
-    assert smb.findtext("information") == "SMB signing was not enforced on one or more hosts."
+    assert smb.findtext("information") == "SMB signing details."
     assert (tmp_path / "ad-kit_findings.html").exists()
     assert not (tmp_path / "ad-kit_findings.json").exists()
     dc_path = tmp_path / "ad-kit_findings-dc.xml"
@@ -61,13 +63,28 @@ def test_sureformat_escapes_data_and_warns_for_missing_mapping(monkeypatch, tmp_
     monkeypatch.setattr(sureformat, "print_warning", warnings.append)
     path = tmp_path / "test.xml"
     sureformat.write_findings(path, "example&domain", [
-        {"id": "smb-signing-not-enforced", "description": "A < B & C"},
+        {"id": "SMB-001", "description": "A < B & C"},
         {"id": "unmapped", "description": "omitted"},
     ])
     _, item, _, vulnerabilities = _vulnerabilities(path)
     assert item.attrib["hostname"] == "example&domain"
     assert [v.findtext("information") for v in vulnerabilities] == ["A < B & C"]
     assert warnings == ["No SureFormat mapping found for finding: unmapped"]
+
+
+def test_sureformat_combines_findings_with_the_same_platform_id(tmp_path):
+    path = tmp_path / "test.xml"
+    sureformat.write_findings(path, "example.test", [
+        {"id": "ASREP-001", "description": "Roastable accounts."},
+        {"id": "ASREP-002", "description": "Privileged accounts."},
+        {"id": "PRIV-001", "description": "Privileged membership."},
+    ])
+    _, _, _, vulnerabilities = _vulnerabilities(path)
+    assert [v.attrib["id"] for v in vulnerabilities] == ["SC-3550", "SC-10674"]
+    assert vulnerabilities[0].findtext("information") == (
+        "Roastable accounts.\nPrivileged accounts."
+    )
+    assert vulnerabilities[1].findtext("information") == "Privileged membership."
 
 
 def test_full_run_exports_xml_without_replacing_previous_json(monkeypatch, tmp_path):

@@ -14,7 +14,7 @@ from ad_kit.checks.privileged_excessive import (
 )
 from ad_kit.core.checks import load_dc_hostnames
 from ad_kit.core.console import console, print_info, print_section
-from ad_kit.core.findings import load_finding
+from ad_kit.core.findings import load_finding, load_finding_definition
 from ad_kit.core.util import progress, require_session
 from ad_kit.reporting.results import record_findings
 
@@ -321,8 +321,8 @@ def run_ldap_info_checks(
     sensitive information, including account descriptions, informational
     fields, and password-related attributes.
 
-    Findings are generated where sensitive information or password material is 
-    identified within LDAP attributes.
+    A finding is generated for keyword matches or returned password-attribute
+    values, which require further review.
     """
 
     session_data = require_session()
@@ -389,32 +389,36 @@ def run_ldap_info_checks(
 
     console.print(table)
 
-    if sensitive_attributes:
+    attributes = {attribute for _, _, attribute in sensitive_attributes}
+    if ldap_info_results["user_passwords"]:
+        attributes.add("userPassword")
+    if ldap_info_results["unix_passwords"]:
+        attributes.add("unixUserPassword")
 
+    if attributes:
         finding = load_finding("ldap_info", "LDAPINFO-001")
-
+        definitions = load_finding_definition("ldap_info", "LDAPINFO-001")["settings"]
+        commentary = []
+        remediation = []
+        references = []
+        for attribute in ("description", "info", "userPassword", "unixUserPassword"):
+            if attribute not in attributes:
+                continue
+            content = definitions[attribute]
+            commentary.append("- " + content["commentary"])
+            remediation.append("- " + content["remediation"])
+            references.extend(content["references"])
+        finding.commentary = finding.commentary.strip() + "\n\n" + "\n".join(commentary)
+        finding.remediation = finding.remediation.strip() + "\n\n" + "\n".join(remediation)
+        finding.references = list(dict.fromkeys(references))
         for user, value, attribute in sensitive_attributes:
-
             finding.evidence.append(
                 f"Account `{user}` contained potentially sensitive information "
                 f"within the LDAP `{attribute}` attribute: `{value}`."
             )
-
-        findings.append(finding)
-
-    password_entries = (
-        ldap_info_results["user_passwords"]
-        + ldap_info_results["unix_passwords"]
-    )
-
-    if password_entries:
-
-        finding = load_finding("ldap_info", "LDAPINFO-002")
-
-        for entry in password_entries:
-
-            finding.evidence.append(entry)
-
+        finding.evidence.extend(
+            ldap_info_results["user_passwords"] + ldap_info_results["unix_passwords"]
+        )
         findings.append(finding)
 
     record_findings(findings)

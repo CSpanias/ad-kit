@@ -6,34 +6,42 @@ from pathlib import Path
 from ad_kit.core.console import print_warning
 
 FINDING_MAP = {
-    "smb-signing-not-enforced": "SC-7704",
-    "smbv1-enabled": "SC-3576",
-    "smb-null-sessions": "SC-1909",
-    "weak-smb-share-permissions": "SC-7367",
-    "ldap-signing-not-enforced": "SC-6080",
-    "ldap-channel-binding-not-enforced": "SC-6643",
-    "ldap-null-binds": "SC-1000",
-    "dns-record-creation": "SC-7565",
-    "maq-set-to-10": "SC-5915",
-    "dc-coercion": "SC-9018",
-    "weak-password-policy": "SC-1932",
-    "password-not-required": "SC-9811",
-    "as-rep-roasting": "SC-3550",
-    "kerberoasting": "SC-3301",
-    "ad-cs-esc1": "SC-3570",
-    "ad-cs-esc8": "SC-3570",
-    "ad-cs-esc15": "SC-3570",
-    "nopac": "SC-3704",
-    "pre2k": "SC-7136",
-    "unconstrained-delegation": "SC-9479",
+    "SMB-001": "SC-7704",
+    "SMB-002": "SC-3576",
+    "SMB-003": "SC-1909",
+    "SMB-004": "SC-7367",
+    "LDAP-001": "SC-6080",
+    "LDAP-002": "SC-6643",
+    "LDAP-003": "SC-1000",
+    "LDAPINFO-001": "SC-9182",
+    "DNS-001": "SC-7565",
+    "MAQ-001": "SC-5915",
+    "COERCE-001": "SC-9018",
+    "PASS-001": "SC-1932",
+    "PASS-002": "SC-9249",
+    "PASS-003": "SC-10675",
+    "ASREP-001": "SC-3550",
+    "ASREP-002": "SC-3550",
+    "KERB-001": "SC-3301",
+    "KERB-002": "SC-3301",
+    "ADCS-ESC1": "SC-3570",
+    "ADCS-ESC8": "SC-3570",
+    "ADCS-ESC15": "SC-3570",
+    "NOPAC-001": "SC-3704",
+    "PRE2K-001": "SC-7136",
+    "DELEG-001": "SC-9479",
+    "PRIV-001": "SC-10674",
+    "PRIV-003": "SC-10676",
+    "PRIV-005": "SC-6642",
+    "LA-002": "SC-6642",
 }
 
 DC_FINDING_IDS = {
-    "ldap-signing-not-enforced",
-    "ldap-channel-binding-not-enforced",
-    "ldap-null-binds",
-    "dc-coercion",
-    "nopac",
+    "LDAP-001",
+    "LDAP-002",
+    "LDAP-003",
+    "COERCE-001",
+    "NOPAC-001",
 }
 
 
@@ -45,13 +53,20 @@ def write_findings(path: Path, hostname: str, findings: list[dict[str, str]]) ->
     service = ET.SubElement(services, "service", name="", port="", protocol="tcp")
     vulnerabilities = ET.SubElement(service, "vulnerabilities")
 
+    mapped_vulnerabilities: dict[str, ET.Element] = {}
     for finding in findings:
         vulnerability_id = FINDING_MAP.get(finding["id"])
         if not vulnerability_id:
             print_warning(f"No SureFormat mapping found for finding: {finding['id']}")
             continue
-        vulnerability = ET.SubElement(vulnerabilities, "vulnerability", id=vulnerability_id)
-        ET.SubElement(vulnerability, "information").text = finding["description"]
+        if vulnerability_id in mapped_vulnerabilities:
+            information = mapped_vulnerabilities[vulnerability_id]
+            information.text = (information.text or "") + "\n" + finding["description"]
+        else:
+            vulnerability = ET.SubElement(vulnerabilities, "vulnerability", id=vulnerability_id)
+            information = ET.SubElement(vulnerability, "information")
+            information.text = finding["description"]
+            mapped_vulnerabilities[vulnerability_id] = information
 
     tree = ET.ElementTree(root)
     ET.indent(tree, space="    ")

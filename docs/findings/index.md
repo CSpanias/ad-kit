@@ -17,7 +17,7 @@ Findings are generated during assessment checks and written to a self-contained 
 | PRIV | Privileged groups/accounts (PRIV-001 to PRIV-005) |
 | DELEG | Delegation (DELEG-001 to DELEG-003) |
 | PASS | Password policy (PASS-001 to PASS-003) |
-| LDAPINFO | LDAP info exposure (LDAPINFO-001 to LDAPINFO-002) |
+| LDAPINFO | LDAP info exposure (LDAPINFO-001) |
 | COERCE | Authentication coercion (COERCE-001) |
 | LA | Local administrator access (LA-001 to LA-002) |
 | MAQ | Machine Account Quota (MAQ-001) |
@@ -45,8 +45,10 @@ LDAP-001:
 Each run writes `ad-kit/ad-kit_findings.html`, where each finding or its
 individual commentary, evidence, and remediation sections can be copied as
 Markdown. Affected assets are included in commentary and references in
-remediation. It also writes `ad-kit/ad-kit_findings.json` for integration. The exports
-contain findings from the current run only. The JSON is a filtered integration
-export, not a complete copy of the HTML report.
+remediation. By default, it also writes `ad-kit/ad-kit_findings.json` for
+integration, containing the YAML ID and commentary for every finding. With
+`--csacyber`, SureFormat XML is written instead of JSON; it maps YAML IDs to
+platform IDs and warns about findings without a mapping. The exports contain
+findings from the current run only.
 
 Evidence is stored in `ad-kit/evidence/`.

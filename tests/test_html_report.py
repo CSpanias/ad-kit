@@ -161,7 +161,7 @@ def test_run_exports_all_findings_without_markdown_files(monkeypatch, tmp_path):
     report = (tmp_path / "ad-kit_findings.html").read_text(encoding="utf-8")
     data = json.loads((tmp_path / "ad-kit_findings.json").read_text(encoding="utf-8"))
     assert "SMB-001 - Mapped" in report and "OTHER-001 - Unmapped" in report
-    assert [item["id"] for item in data["findings"]] == ["smb-signing-not-enforced"]
+    assert [item["id"] for item in data["findings"]] == ["OTHER-001", "SMB-001"]
     assert list(tmp_path.glob("findings-*.md")) == [old_markdown]
     assert old_markdown.read_text(encoding="utf-8") == "previous report"
 
@@ -190,7 +190,7 @@ def test_full_run_writes_reports(monkeypatch, tmp_path):
     assert not list(tmp_path.glob("findings-*.md"))
     assert json.loads((tmp_path / "ad-kit_findings.json").read_text(encoding="utf-8"))[
         "findings"
-    ][0]["id"] == "smb-signing-not-enforced"
+    ][0]["id"] == "SMB-001"
 
 
 @pytest.mark.parametrize(

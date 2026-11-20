@@ -35,8 +35,9 @@ ad-kit collects account attributes:
 - `get-userPassword` - the `userPassword` attribute.
 - `get-unixUserPassword` - the `unixUserPassword` attribute.
 
-Values are compared against a list of sensitive keywords (password, secret,
-credential, token, VPN, SSH, RDP, SQL, and similar).
+Description and info values are compared against a list of sensitive keywords
+(password, secret, credential, token, VPN, SSH, RDP, SQL, and similar).
+Password-attribute values are reported when returned by the modules.
 
 ## How it works
 
@@ -44,7 +45,9 @@ Administrators sometimes leave operational notes in the `description` and
 `info` fields that include passwords, account details, or infrastructure
 information. The `userPassword` and `unixUserPassword` attributes can expose
 password or hash values to authenticated users depending on the directory
-configuration and its access controls.
+configuration and its access controls. Keyword matches and returned
+password-attribute values require review; they do not prove that usable
+credentials were exposed.
 
 ## Why it matters
 
@@ -57,7 +60,9 @@ exposed directly.
 | Finding ID | Title |
 |------------|-------|
 | LDAPINFO-001 | Sensitive Information Stored in LDAP Attributes |
-| LDAPINFO-002 | Password Data Stored in LDAP Attributes |
+
+The single finding identifies the attributes returned by the check and
+provides attribute-specific commentary and recommendations.
 
 ## Tooling
 
