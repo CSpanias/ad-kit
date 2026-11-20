@@ -1,10 +1,15 @@
+import getpass
+import ipaddress
 import json
+import os
+import shlex
+import subprocess
 from contextlib import contextmanager
 from pathlib import Path
 
 import typer
 
-from ad_kit.core.console import console, print_info, print_section
+from ad_kit.core.console import console, print_info, print_section, print_warning
 from ad_kit.core.exceptions import ADKitError
 
 ARTEFACTS_DIR = Path("ad-kit")
@@ -55,44 +60,69 @@ def save_session(
 
 
 def generate_scp_command(
-    session_data: dict,
+    files: list[Path],
 ) -> None:
-    """
-    Generate an SCP retrieval command.
-    """
+    """Generate an SCP command for artefacts collected in this run."""
 
     print_section("Retrieval")
 
-    host = typer.prompt(
-        "SSH Host's IP Address (typically the Tailscale IP)",
-        default=session_data.get("jumpbox_host", ""),
-        show_default=False,
-    )
+    if not files:
+        print_warning("No BloodHound ZIP or NTDS files were collected in this run.")
+        return
 
-    user = typer.prompt(
-        "SSH Username (typically x-user)",
-        default=session_data.get("jumpbox_user", ""),
-        show_default=False,
-    )
+    try:
+        result = subprocess.run(
+            ["ip", "-j", "address", "show"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        interfaces = json.loads(result.stdout)
+        addresses = []
+        for interface in interfaces:
+            if "UP" not in interface["flags"]:
+                continue
+            for entry in interface["addr_info"]:
+                if entry["family"] not in ("inet", "inet6"):
+                    continue
+                address = ipaddress.ip_address(entry["local"])
+                if address.is_loopback or address.is_link_local or address.is_unspecified:
+                    continue
+                addresses.append((interface["ifname"], str(address)))
+    except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError) as exc:
+        print_warning(f"Unable to identify network interfaces: {exc}")
+        return
 
-    remote_dir = typer.prompt(
-        "Remote AD-Kit Directory (typically /home/x-user/ad-kit)",
-        default=session_data.get("remote_dir", ""),
-        show_default=False,
-    )
+    if not addresses:
+        print_warning("No usable network interface addresses were found.")
+        return
 
-    session_data["jumpbox_host"] = host
-    session_data["jumpbox_user"] = user
-    session_data["remote_dir"] = remote_dir
+    print_info("Select an address reachable from your local machine:")
+    for index, (interface, address) in enumerate(addresses, 1):
+        console.print(f"  {index}. {interface}: {address}")
+    while True:
+        selection = typer.prompt("Interface address number", type=int)
+        if 1 <= selection <= len(addresses):
+            break
+        print_warning(f"Choose a number between 1 and {len(addresses)}.")
 
-    save_session(session_data)
+    address = addresses[selection - 1][1]
+    host = f"[{address}]" if ":" in address else address
+    try:
+        if os.name == "posix":
+            import pwd
 
-    command = (
-        f'scp '
-        f'"{user}@{host}:{remote_dir}/*.zip" '
-        f'"{user}@{host}:{remote_dir}/*.ntds*" '
-        './'
-    )
+            username = pwd.getpwuid(os.geteuid()).pw_name
+        else:
+            username = getpass.getuser()
+    except (KeyError, OSError) as exc:
+        print_warning(f"Unable to identify the current OS user: {exc}")
+        return
+    sources = [
+        f"{username}@{host}:{path.resolve()}"
+        for path in files
+    ]
+    command = shlex.join(["scp", *sources, "./"])
 
     console.print()
     print_info(
@@ -100,8 +130,12 @@ def generate_scp_command(
         "the assessment artefacts:"
     )
     console.print()
-    console.print(command, style="cyan")
+    console.print(command, style="cyan", markup=False)
     console.print()
+    print_info(
+        "The SSH username is the current OS user; adjust it if you connect "
+        "using a different account."
+    )
 
 
 @contextmanager

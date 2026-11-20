@@ -52,10 +52,8 @@ Each assessment run generates:
 
 ## Stage 4: Retrieve Artefacts
 
-`ad-kit enum` can generate an SCP command to pull artefacts from your jumpbox:
-
-```bash
-scp "user@host:/remote/dir/*.zip" "user@host:/remote/dir/*.ntds*" ./
-```
+`ad-kit enum` can generate an SCP command for artefacts collected in the
+current run. Select an interface address reachable from your local machine;
+see [Artefacts](artefacts.md#retrieval) for details.
 
 The BloodHound `.zip` and NTDS `.ntds` files can be processed using [password-audit](https://github.com/CSpanias/password-audit).

@@ -32,6 +32,13 @@ fails, existing files are not treated as this session's results; dependent
 checks require a successful export. A computer export with no parsed hosts is
 accepted as empty only when NetExec explicitly reports zero records.
 
+When prompted to generate an SCP retrieval command, select a displayed
+interface address reachable from your local machine. The command uses the
+current OS username and absolute artefact path, and includes only ZIP and NTDS
+files created or updated by this run. If the SSH username differs (for
+example, when running ad-kit with `sudo`), adjust it before running the
+command. Linux's `ip` command is required to list addresses.
+
 ## Output
 
 Artefacts are written to the `ad-kit/` directory:

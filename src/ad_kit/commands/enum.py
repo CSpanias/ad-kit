@@ -17,6 +17,23 @@ from ad_kit.core.console import (
 from ad_kit.core.util import generate_scp_command, get_artefacts_dir, progress, save_session
 
 
+def _artefact_snapshot(output_dir: Path, pattern: str) -> dict[Path, tuple[int, int, int]]:
+    """Track file metadata to identify outputs created or replaced by a command."""
+    snapshot = {}
+    for path in output_dir.glob(pattern):
+        if path.is_file():
+            stat = path.stat()
+            snapshot[path] = (stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size)
+    return snapshot
+
+
+def _new_artefacts(
+    output_dir: Path, pattern: str, before: dict[Path, tuple[int, int, int]]
+) -> list[Path]:
+    after = _artefact_snapshot(output_dir, pattern)
+    return sorted(path for path, state in after.items() if before.get(path) != state)
+
+
 # TODO: Automate domain and DC resolution
 def identify_domain_controller(
     dc_ip: str,
@@ -674,9 +691,6 @@ def run_enumeration() -> None:
 
             "ntds_dumped": False,
 
-            "jumpbox_host": "",
-            "jumpbox_user": "",
-            "remote_dir": "",
         }
 
         session_data["generate_scp_retrieval"] = (generate_scp_retrieval)
@@ -739,15 +753,23 @@ def run_enumeration() -> None:
         # BLOODHOUND DATA COLLECTION
         #-----------------------------------------------------------------------
 
+        retrieval_files: list[Path] = []
         if collect:
 
             print_section("BloodHound Collection")
 
+            output_dir = get_artefacts_dir()
+            before = _artefact_snapshot(output_dir, "*.zip") if generate_scp_retrieval else {}
             with console.status("[cyan]Collecting BloodHound data..."):
                 success = run_rusthound( domain, dc_ip, ldap_user, ldap_pass)
 
             if success:
                 session_data["rusthound_collected"] = True
+                if generate_scp_retrieval:
+                    collected = _new_artefacts(output_dir, "*.zip", before)
+                    if not collected:
+                        print_warning("No new or updated BloodHound ZIP was found for retrieval.")
+                    retrieval_files.extend(collected)
                 save_session(session_data)
 
         #-----------------------------------------------------------------------
@@ -763,6 +785,10 @@ def run_enumeration() -> None:
 
             else:
                 output_dir = get_artefacts_dir()
+                before = (
+                    _artefact_snapshot(output_dir, f"{domain}.ntds*")
+                    if generate_scp_retrieval else {}
+                )
 
                 with progress("[cyan]Running secretsdump..."):
 
@@ -787,6 +813,11 @@ def run_enumeration() -> None:
 
                 if result.returncode == 0:
                     session_data["ntds_dumped"] = True
+                    if generate_scp_retrieval:
+                        collected = _new_artefacts(output_dir, f"{domain}.ntds*", before)
+                        if not collected:
+                            print_warning("No new or updated NTDS files were found for retrieval.")
+                        retrieval_files.extend(collected)
                     print_success("NTDS dump completed.")
                 else:
                     print_error("NTDS dump failed.")
@@ -796,7 +827,7 @@ def run_enumeration() -> None:
         #-----------------------------------------------------------------------
         
         if generate_scp_retrieval:
-                            generate_scp_command(session_data)
+            generate_scp_command(retrieval_files)
         
         print_summary(session_data)
 
