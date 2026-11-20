@@ -51,7 +51,8 @@ ad-kit:
 
 If cleanup cannot be confirmed, ad-kit warns with the machine account name and
 the creation evidence path. It may prompt for Domain Administrator credentials
-to retry cleanup; otherwise, check whether the account remains and remove it.
+to retry cleanup over LDAP; otherwise, check whether the account remains and
+remove it.
 
 ## How it works
 

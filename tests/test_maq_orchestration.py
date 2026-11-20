@@ -1,4 +1,4 @@
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from types import SimpleNamespace
 
 import pytest
@@ -60,3 +60,42 @@ def test_maq_quota_value_color(
     rendered.print(tables[0])
 
     assert f"\x1b[{color_code}m{quota}\x1b[0m" in rendered.export_text(styles=True)
+
+
+def test_maq_admin_cleanup_uses_ldap(monkeypatch):
+    results = {
+        "machine_account_quota": "10",
+        "machine_join_group": "Authenticated Users",
+        "machine_created": True,
+        "machine_authenticated": True,
+        "machine_deleted": False,
+        "cleanup_method": "Domain Admin Required",
+        "machine_name": "ADKIT-TEST",
+        "machine_password": "machine-secret",
+    }
+    commands = []
+    monkeypatch.setattr(policy, "require_session", lambda: {
+        "dc_ip": "192.0.2.1", "standard_user": "test-user",
+    })
+    monkeypatch.setattr(policy, "progress", lambda _message: nullcontext())
+    monkeypatch.setattr(policy, "maq_check", lambda *_args: results)
+    monkeypatch.setattr(policy, "authenticate_domain_admin", lambda: ("admin", "admin-secret"))
+    monkeypatch.setattr(
+        policy, "cleanup_test_artifact",
+        lambda name, command: commands.append((name, command)) or True,
+    )
+    monkeypatch.setattr(policy, "load_finding", lambda *_args: SimpleNamespace(evidence=[]))
+    monkeypatch.setattr(policy, "record_findings", lambda *_args: None)
+
+    policy.run_maq_checks("standard-secret")
+
+    assert commands == [(
+        "maq-delete-machine-da",
+        [
+            "nxc", "ldap", "192.0.2.1", "-u", "admin", "-p", "admin-secret",
+            "-M", "add-computer", "-o", "NAME=ADKIT-TEST",
+            "PASSWORD=machine-secret", "DELETE=True",
+        ],
+    )]
+    assert results["machine_deleted"] is True
+    assert results["cleanup_method"] == "Domain Administrator"

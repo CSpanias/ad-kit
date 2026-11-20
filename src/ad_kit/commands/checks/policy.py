@@ -385,7 +385,7 @@ def run_maq_checks(
                 cleanup_test_artifact(
                     "maq-delete-machine-da",
                     [
-                        "nxc", "smb", session_data["dc_ip"],
+                        "nxc", "ldap", session_data["dc_ip"],
                         "-u", da_user,
                         "-p", da_pass,
                         "-M", "add-computer",
