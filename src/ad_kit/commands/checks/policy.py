@@ -6,6 +6,7 @@ from ad_kit.checks.maq import maq_check
 from ad_kit.checks.password_never_expires import password_never_expires_check
 from ad_kit.checks.password_not_required import password_not_required_check
 from ad_kit.checks.passwords import (
+    UNKNOWN,
     password_policy_assessment,
     password_policy_check,
 )
@@ -13,9 +14,9 @@ from ad_kit.checks.pre2k import pre2k_check
 from ad_kit.core.checks import cleanup_test_artifact, warn_test_artifact_remaining
 from ad_kit.core.console import console, print_section
 from ad_kit.core.exceptions import ADKitError
-from ad_kit.core.findings import load_finding
+from ad_kit.core.findings import load_finding, load_finding_definition
 from ad_kit.core.util import progress, require_collected_data, require_session
-from ad_kit.reporting.results import record_findings
+from ad_kit.reporting.results import record_findings, record_incomplete
 
 from .credentials import authenticate_domain_admin, authenticate_standard_user
 
@@ -116,8 +117,8 @@ def run_password_policy_checks(
     """
     Execute password policy assessment checks.
 
-    This check authenticates using a valid domain account and retrieves the 
-    effective domain password policy. Configuration settings are assessed 
+    This check authenticates using a valid domain account and retrieves the
+    default domain password policy. Configuration settings are assessed
     against common Active Directory security practices and the results are 
     displayed in tabular format.
 
@@ -198,95 +199,49 @@ def run_password_policy_checks(
 
     console.print(table)
 
-    findings = []
-
-    policy_evidence = []
-
-    # Build password policy evidence
-    if assessment["minimum_length"].startswith("[red]"):
-
-        policy_evidence.append(
-            "Minimum password length was configured as "
-             f"{password_policy['minimum_length']} characters, which is below "
-             "the recommended best practice."
+    unknown = [
+        setting.replace("_", " ")
+        for setting, status in assessment.items()
+        if status == UNKNOWN
+    ]
+    if unknown:
+        record_incomplete(
+            "pass-pol",
+            session_data["dc_ip"],
+            "Could not assess: " + ", ".join(unknown)
+            + ". See password-policy.txt evidence.",
         )
 
-    if assessment["password_history"].startswith("[red]"):
+    weak_settings = [
+        setting for setting, status in assessment.items()
+        if status.startswith("[red]")
+    ]
+    if not weak_settings:
+        return
 
-        policy_evidence.append(
-            "Password history retained only "
-            f"{password_policy['password_history']} previous password(s), "
-            "increasing the likelihood of password reuse."
+    finding = load_finding("password_policy", "PASS-001")
+    definitions = load_finding_definition("password_policy", "PASS-001")["settings"]
+    commentary = []
+    remediation = []
+    references = []
+    for setting in weak_settings:
+        definition_key = (
+            "lockout_disabled"
+            if setting == "lockout_threshold" and int(password_policy[setting]) == 0
+            else setting
         )
+        content = definitions[definition_key]
+        commentary.append("- " + content["commentary"].format(value=password_policy[setting]))
+        remediation.append("- " + content["remediation"])
+        references.extend(content["references"])
 
-    if assessment["minimum_age"].startswith("[red]"):
-
-        policy_evidence.append(
-            "Minimum password age was not configured, allowing users to "
-                "rapidly change passwords and potentially circumvent password "
-                "history controls."
-        )
-
-    if assessment["maximum_age"].startswith("[red]"):
-
-        policy_evidence.append(
-            "Maximum password age was not configured, resulting in passwords "
-            "that may remain unchanged indefinitely."
-        )
-
-    if assessment["complexity"].startswith("[red]"):
-
-        policy_evidence.append(
-            "Password complexity requirements were disabled, allowing weak or "
-            "easily guessable passwords to be configured."
-        )
-
-    # Build lockout policy evidence
-    if assessment["observation_window"].startswith("[red]"):
-
-        policy_evidence.append(
-            "The account lockout observation window was configured as "
-            f"{password_policy['observation_window']}, which may provide "
-            "insufficient protection against password guessing attacks."
-        )
-
-    if assessment["lockout_duration"].startswith("[red]"):
-
-        policy_evidence.append(
-            "The account lockout duration was configured as "
-            f"{password_policy['lockout_duration']}, which is below the "
-            "recommended baseline."
-        )
-
-    if assessment["lockout_threshold"].startswith("[red]"):
-
-        policy_evidence.append(
-            "The account lockout threshold was configured as "
-            f"{password_policy['lockout_threshold']} failed authentication "
-            "attempts, providing insufficient protection against password "
-            "guessing attacks."
-        )
-
-    # Policy controls
-    if policy_evidence:
-
-        finding = load_finding("password_policy", "PASS-001")
-
-        weaknesses = "\n".join(
-            f"- {evidence}"
-            for evidence in policy_evidence
-        )
-
-        finding.commentary = (
-            "The assessment identified the following weaknesses within the "
-            "Active Directory password and account lockout policy:\n\n"
-            f"{weaknesses}\n\n"
-            + finding.commentary
-        )
-
-        findings.append(finding)
-
-    record_findings(findings)
+    finding.commentary = finding.commentary.strip() + "\n\n" + "\n".join(commentary)
+    finding.remediation = (
+        finding.remediation.strip() + "\n\n" + "\n".join(remediation)
+        + "\n\nTest proposed changes and communicate them to affected users and service owners."
+    )
+    finding.references = list(dict.fromkeys(references))
+    record_findings([finding])
 
 def run_password_not_required_checks(
     std_pass: str | None = None,

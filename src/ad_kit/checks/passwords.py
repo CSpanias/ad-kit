@@ -132,6 +132,8 @@ def password_policy_assessment(
         assessment["minimum_age"] = "[red]✗ Not Set[/red]"
     elif minimum_age_minutes is None:
         assessment["minimum_age"] = UNKNOWN
+    elif minimum_age_minutes < PASSWORD_POLICY_BASELINE["minimum_age_days"] * 1440:
+        assessment["minimum_age"] = "[red]✗ Too Short[/red]"
     else:
         assessment["minimum_age"] = "[green]✓ OK[/green]"
 
@@ -143,7 +145,7 @@ def password_policy_assessment(
 
     maximum_age_minutes = duration_to_minutes(maximum_age)
     if maximum_age in {"none", "not set"} or maximum_age_minutes == 0:
-        assessment["maximum_age"] = "[red]✗ Not Set[/red]"
+        assessment["maximum_age"] = "[yellow]Review (not set)[/yellow]"
     elif maximum_age_minutes is None:
         assessment["maximum_age"] = UNKNOWN
     else:
@@ -168,7 +170,10 @@ def password_policy_assessment(
         policy["observation_window"]
     )
 
-    if observation_window is None:
+    threshold = policy["lockout_threshold"]
+    if threshold.isdecimal() and int(threshold) == 0:
+        assessment["observation_window"] = "[yellow]Not applicable[/yellow]"
+    elif not threshold.isdecimal() or observation_window is None:
         assessment["observation_window"] = UNKNOWN
     elif observation_window < PASSWORD_POLICY_BASELINE["observation_window_minutes"]:
         assessment["observation_window"] = (
@@ -187,8 +192,12 @@ def password_policy_assessment(
         policy["lockout_duration"]
     )
 
-    if lockout_duration is None:
+    if threshold.isdecimal() and int(threshold) == 0:
+        assessment["lockout_duration"] = "[yellow]Not applicable[/yellow]"
+    elif not threshold.isdecimal() or lockout_duration is None:
         assessment["lockout_duration"] = UNKNOWN
+    elif lockout_duration == 0:
+        assessment["lockout_duration"] = "[green]✓ Manual unlock[/green]"
     elif lockout_duration < PASSWORD_POLICY_BASELINE["lockout_duration_minutes"]:
         assessment["lockout_duration"] = (
             "[red]✗ Too Short[/red]"

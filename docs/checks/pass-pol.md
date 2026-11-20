@@ -12,7 +12,7 @@ ad-kit check pass-pol
 
 ## Commands run
 
-ad-kit reads the effective domain policy with NetExec:
+ad-kit reads the default domain policy with NetExec:
 
 ```bash
 nxc ldap <dc_ip> -u <username> -p <password> --pass-pol
@@ -20,7 +20,7 @@ nxc ldap <dc_ip> -u <username> -p <password> --pass-pol
 
 ## What it checks
 
-ad-kit reads the effective domain policy and compares each setting against the
+ad-kit reads the default domain policy and compares each setting against the
 baseline:
 
 | Setting | Baseline |
@@ -28,15 +28,27 @@ baseline:
 | Minimum password length | at least 12 characters |
 | Password history | at least 2 remembered passwords |
 | Minimum password age | at least 1 day |
-| Maximum password age | set (not never) |
+| Maximum password age | reported for review; an unset value is not a finding by itself |
 | Password complexity | enabled |
 | Lockout threshold | 1 to 10 attempts |
 | Lockout duration | at least 30 minutes |
 | Observation window | at least 15 minutes |
 
 Settings that cannot be parsed are shown as **Unknown** and are not treated as
-either compliant or weak. Check `ad-kit/evidence/password-policy.txt` for the
-raw output.
+either compliant or weak. They are also listed as incomplete in the report.
+Check `ad-kit/evidence/password-policy.txt` for the raw output.
+
+An account lockout threshold of zero disables lockout; the duration and
+observation window are then not applicable. A lockout duration of zero means
+manual administrator unlock, rather than a short automatic unlock period.
+When maximum password age is unset, review the organisation's approach to
+compromise-triggered resets and other controls rather than assuming periodic
+expiry is required.
+
+The finding's commentary, recommendations, and references are selected for
+the settings below the ad-kit baseline; compliant or unknown settings do not
+produce recommendations. Review the baseline and each finding in the context
+of the organisation's requirements and other password controls.
 
 ## How it works
 
@@ -45,7 +57,8 @@ password guessing:
 
 - **Minimum length, history, and complexity** make passwords harder to guess
   and to recycle.
-- **Maximum age** limits how long a password remains valid.
+- **Maximum age** controls how long a password remains valid; modern guidance
+  does not universally require periodic password changes.
 - **Minimum age** prevents a user cycling passwords immediately to defeat
   password history.
 - **Lockout threshold** is the number of failed attempts that lock an account.

@@ -20,10 +20,10 @@ import yaml
 from ad_kit.core.finding import Finding
 
 
-def load_finding(
+def load_finding_definition(
     category: str,
     finding_id: str,
-) -> Finding:
+) -> dict:
     """
     Load a finding definition from a YAML file.
 
@@ -35,7 +35,7 @@ def load_finding(
             Unique finding identifier (e.g. LDAP-001, SMB-001).
 
     Returns:
-        A populated Finding instance.
+        The finding definition.
 
     Raises:
         RuntimeError:
@@ -61,6 +61,12 @@ def load_finding(
             f"Finding '{finding_id}' not found."
         )
 
+    return finding
+
+
+def load_finding(category: str, finding_id: str) -> Finding:
+    """Load a finding definition as a Finding instance."""
+    finding = load_finding_definition(category, finding_id)
     return Finding(
         id=finding["id"],
         title=finding["title"],
