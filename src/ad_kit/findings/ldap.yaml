@@ -30,10 +30,11 @@ LDAP-001:
 
     Successful exploitation could allow an attacker to manipulate LDAP queries, 
     forge directory responses, and gain unauthorised access to systems or 
-    resources based on falsified Active Directory information.
+    resources based on falsified Active Directory (AD) information.
 
   remediation: |
-    Enforce LDAP signing across all Domain Controllers to prevent 
+    Enforce Lightweight Directory Access Protocol (LDAP) signing across all
+    Domain Controllers (DCs) to prevent
     authentication tampering and credential relay attacks.
 
     Prior to implementation, testing should be performed to identify and 
@@ -51,7 +52,7 @@ LDAP-002:
 
   commentary: |
     The assessment identified that {count} {subject} did not
-    enforce LDAP channel binding.
+    enforce Lightweight Directory Access Protocol (LDAP) channel binding.
 
     LDAP channel binding associates authentication credentials with the 
     specific Transport Layer Security (TLS) session over which authentication 
@@ -62,11 +63,12 @@ LDAP-002:
 
     Because the DC does not verify that the authentication request is bound to 
     the original secure channel, the relayed authentication may be accepted as 
-    legitimate. Enforcing LDAP channel binding significantly reduces the risk 
-    of credential relay attacks against Active Directory services.
+    legitimate. Enforcing LDAP channel binding significantly reduces the risk
+    of credential relay attacks against Active Directory (AD) services.
 
   remediation: |
-    Configure LDAP channel binding to be enforced across all Domain Controllers 
+    Configure Lightweight Directory Access Protocol (LDAP) channel binding to
+    be enforced across all Domain Controllers (DCs)
     to reduce the risk of credential relay attacks. Where possible, the setting 
     should be configured as `Always`. If compatibility constraints exist, `When 
     Supported` may be used as an interim measure while dependent systems are 
@@ -88,7 +90,7 @@ LDAP-003:
 
   commentary: |
     The assessment identified that {count} {subject} permitted
-    anonymous LDAP bind operations.
+    anonymous Lightweight Directory Access Protocol (LDAP) bind operations.
 
     A successful anonymous bind does not establish that directory searches are
     permitted. Depending on directory permissions, unauthenticated users may
@@ -96,15 +98,16 @@ LDAP-003:
     separate verification and may assist reconnaissance and attack planning.
 
     Directory services should require authentication for LDAP queries wherever 
-    possible to limit unauthorised access to Active Directory information.
+    possible to limit unauthorised access to Active Directory (AD) information.
 
   remediation: |
-    To reduce the risk of unauthorised access to Active Directory information, 
+    To reduce the risk of unauthorised access to Active Directory (AD) information,
     the following actions are recommended:
     
     - Restrict anonymous directory searches and require authentication for
     directory queries where appropriate.
-    - Review any systems, applications, or network appliances that utilise LDAP 
+    - Review any systems, applications, or network appliances that utilise
+    Lightweight Directory Access Protocol (LDAP)
     to ensure authenticated connections are used where required.
     
     Prior to implementation, testing should be performed to identify and 

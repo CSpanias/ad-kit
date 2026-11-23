@@ -115,7 +115,7 @@ def pre2k_check(
             )
 
         finding.evidence.append(
-            "A Kerberos Ticket Granting Ticket (TGT) was successfully "
+            "A Kerberos TGT was successfully "
             "obtained using the default machine account password convention."
         )
 

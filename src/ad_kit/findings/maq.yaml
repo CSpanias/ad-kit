@@ -24,7 +24,7 @@ MAQ-001:
     mature enterprise environments.
 
     For example, a threat actor may combine machine account creation with 
-    authentication coercion, NTLM relay, or Kerberos delegation attacks to 
+    authentication coercion, NT LAN Manager (NTLM) relay, or Kerberos delegation attacks to
     establish a foothold within the environment, facilitate further 
     enumeration, or escalate privileges. Machine accounts may also be abused in 
     Resource-Based Constrained Delegation (RBCD) attacks and other 
@@ -36,7 +36,7 @@ MAQ-001:
     capabilities to all authenticated users without  explicit delegation.
 
   remediation: |
-    Configure the domain Machine Account Quota to zero unless there is a 
+    Configure the domain Machine Account Quota (MAQ) to zero unless there is a
     documented operational requirement for non-administrative users to join 
     devices to the domain.
 
@@ -45,7 +45,7 @@ MAQ-001:
     rather than granted broadly to authenticated users.
 
     Prior to implementation, review existing device provisioning processes to 
-    ensure they do not rely on Machine Account Quota functionality.
+    ensure they do not rely on MAQ functionality.
 
   references:
     - https://www.netspi.com/blog/technical-blog/network-pentesting/machineaccountquota-is-useful-sometimes/

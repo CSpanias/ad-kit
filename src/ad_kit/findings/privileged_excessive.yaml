@@ -112,7 +112,8 @@ PRIV-003:
 
   commentary: |
     The built-in Guest account was enabled. Although it has limited default
-    permissions, it is a shared, well-known identity with a well-known SID.
+    permissions, it is a shared, well-known identity with a well-known
+    security identifier (SID).
     Depending on its password and the surrounding access-control settings,
     enabling it can allow access without an individually authenticated account
     and make activity harder to attribute. Keep it disabled unless there is a
@@ -123,7 +124,7 @@ PRIV-003:
     documented business need requires Guest access. Before changing the
     setting, review the `Network access: Sharing and security model for local
     accounts` policy: when it is set to Guest only, disabling Guest can cause
-    SMB and other network logons to fail.
+    Server Message Block (SMB) and other network logons to fail.
 
     If Guest access is temporarily required, use a strong password, limit its
     permissions and exposure, and monitor its activity. Avoid using it on
@@ -166,7 +167,7 @@ PRIV-004:
       commentary: >-
         The account used a name other than the default `Administrator`.
         This avoids using that well-known name, although the account can still
-        be identified by its well-known RID.
+        be identified by its well-known relative identifier (RID).
       remediation: >-
         Consider disabling the account only when operational and recovery
         requirements have been reviewed.

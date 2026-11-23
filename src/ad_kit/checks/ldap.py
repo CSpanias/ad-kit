@@ -128,7 +128,7 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
         if affected:
             finding = load_finding("ldap", finding_id)
             format_counted_commentary(
-                finding, len(affected), "Domain Controller", "Domain Controllers"
+                finding, len(affected), "Domain Controller (DC)", "Domain Controllers (DCs)"
             )
             finding.affected_assets.extend(affected)
             findings.append(finding)

@@ -7,7 +7,7 @@ TOMB-001:
   title: Deleted AD Objects Readable by Standard User
 
   commentary: |
-    The Standard User was able to enumerate objects in the Active Directory
+    The Standard User was able to enumerate objects in the Active Directory (AD)
     Deleted Objects container on {count} {subject}. Deleted objects may retain
     directory attributes that disclose information about the environment.
 

@@ -258,7 +258,9 @@ def run_tombstone_checks(
     if accessible_objects:
         finding = load_finding("tombstone", "TOMB-001")
         affected = {result["dc_hostname"].rstrip(".").casefold() for result in accessible_objects}
-        format_counted_commentary(finding, len(affected), "Domain Controller", "Domain Controllers")
+        format_counted_commentary(
+            finding, len(affected), "Domain Controller (DC)", "Domain Controllers (DCs)"
+        )
 
         for result in accessible_objects:
             dc_hostname = result["dc_hostname"]
@@ -663,7 +665,8 @@ def run_smb_checks(
 
             if user_count:
                 account_access = (
-                    access if result.get("guest_auth", False) else "Unauthenticated SAMR access"
+                    access if result.get("guest_auth", False)
+                    else "Unauthenticated account enumeration"
                 )
                 finding.evidence.append(
                     f"{account_access} on '{host}' returned "

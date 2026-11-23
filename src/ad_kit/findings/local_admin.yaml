@@ -32,7 +32,7 @@ LA-001:
 
     Excessive distribution of local administrator privileges increases the
     attack surface available to adversaries and commonly contributes to
-    privilege escalation paths within Active Directory environments.
+    privilege escalation paths within Active Directory (AD) environments.
 
   remediation: |
     To reduce the risks associated with excessive local administrative
@@ -69,7 +69,7 @@ LA-002:
     on which a standard user account possessed administrative
     access.
 
-    Administrative access to a Domain Controller (DC) represents a critical
+    Administrative access to a DC represents a critical
     security exposure because DCs host Active Directory (AD) services and 
     maintain sensitive authentication and directory data for the domain.
 
@@ -83,11 +83,11 @@ LA-002:
     requirement.
 
   remediation: |
-    To reduce the risk of Active Directory compromise arising from
-    administrative access to Domain Controllers, the following actions are
+    To reduce the risk of Active Directory (AD) compromise arising from
+    administrative access to Domain Controllers (DCs), the following actions are
     recommended:
 
-    - Review all administrative permissions granted on Domain Controllers (DCs)
+    - Review all administrative permissions granted on DCs
       and confirm that access remains operationally necessary and appropriately 
       authorised.
     - Remove DC administrative access from standard user accounts and migrate 

@@ -8,8 +8,9 @@ LDAPINFO-001:
 
   commentary: |
     The assessment identified potentially sensitive information or
-    password-related values in LDAP attributes accessible to the account used
-    for the check. Such information may assist with credential discovery,
+    password-related values in Lightweight Directory Access Protocol (LDAP)
+    attributes accessible to the account used for the check. Such information
+    may assist with credential discovery,
     further enumeration or compromise.
 
     The following attributes require review:

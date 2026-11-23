@@ -27,7 +27,7 @@ KERB-001:
     attacks, a technique commonly referred to as Kerberoasting.
 
     Because password cracking is performed offline, the activity does not 
-    generate additional authentication attempts against Active Directory and 
+    generate additional authentication attempts against AD and
     may therefore be difficult to detect through conventional account lockout 
     controls and authentication monitoring.
 
@@ -44,7 +44,7 @@ KERB-001:
     To reduce the risk of credential compromise arising from Kerberoasting
     attacks, the following actions are recommended:
 
-    - Identify all service accounts associated with Service Principal Names and 
+    - Identify all service accounts associated with Service Principal Names (SPNs) and
       verify that each account remains operationally required.
     - Enforce strong password policies for service accounts, including long, 
       unique passwords that are resistant to brute-force and dictionary attacks.

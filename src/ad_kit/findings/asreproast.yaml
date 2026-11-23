@@ -18,17 +18,17 @@ ASREP-001:
     A review of Active Directory (AD) account configurations identified
     {count} user {subject} configured without Kerberos pre-authentication.
 
-    Accounts configured with the setting 'Do not require Kerberos 
-    pre-authentication' are susceptible to AS-REP roasting attacks.
+    Accounts configured with the setting 'Do not require Kerberos
+    pre-authentication' are susceptible to Authentication Service Response
+    (AS-REP) roasting attacks.
 
-    An attacker may request Kerberos Authentication Service Responses (AS-REPs) 
-    from the Key Distribution Centre (KDC) without first providing valid 
-    credentials for the affected account.
+    An attacker may request AS-REPs from the Key Distribution Centre (KDC)
+    without first providing valid credentials for the affected account.
 
     The returned AS-REP response contains password-derived cryptographic 
     material that can be subjected to offline brute-force and dictionary 
     attacks without generating additional authentication attempts against 
-    Active Directory.
+    AD.
 
     Because password cracking is performed offline, the attack generates 
     minimal authentication activity and may be difficult to detect through
@@ -46,7 +46,7 @@ ASREP-001:
 
   remediation: |
     To reduce the risk of unauthorised access arising from accounts susceptible 
-    to AS-REP roasting attacks, the following actions are recommended:
+    to Authentication Service Response (AS-REP) roasting attacks, the following actions are recommended:
 
     - Identify all accounts configured without Kerberos pre-authentication and 
       determine whether the setting remains operationally necessary.
@@ -60,7 +60,8 @@ ASREP-001:
       reduce the impact of potential credential compromise.
     - Periodically review account configurations to identify accounts that do 
       not require Kerberos pre-authentication and remove unnecessary exceptions.
-    - Monitor Kerberos authentication activity for unusual AS-REQ and AS-REP 
+    - Monitor Kerberos authentication activity for unusual Authentication
+      Service Request (AS-REQ) and AS-REP
       activity and investigate unexpected requests involving privileged or 
       sensitive accounts.
     - Legacy applications requiring disabled pre-authentication should be 
@@ -81,7 +82,8 @@ ASREP-002:
     also identified as members of a monitored privileged Active Directory
     group.
 
-    This combination increases the potential impact of AS-REP roasting:
+    This combination increases the potential impact of Authentication Service
+    Response (AS-REP) roasting:
     authentication material may be obtained without authenticating as the
     affected account, and a recovered password could provide access to
     permissions assigned through the account's group memberships. Membership
@@ -89,7 +91,8 @@ ASREP-002:
     administrative rights; the effective permissions should be reviewed.
 
   remediation: |
-    In addition to addressing the AS-REP roasting exposure, review the affected
+    In addition to addressing the Authentication Service Response (AS-REP)
+    roasting exposure, review the affected
     accounts' group memberships and effective permissions.
 
     - Enable Kerberos pre-authentication for each account wherever possible.

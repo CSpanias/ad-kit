@@ -33,7 +33,9 @@ def test_builtin_accounts_resolve_renamed_accounts_by_sid(monkeypatch, admin_nam
     assert accounts["guest"]["enabled"] is False
     assert [finding.id for finding in findings] == ["PRIV-004"]
     assert "name other than the default `Administrator`" in findings[0].commentary
-    assert "well-known RID" in findings[0].commentary
+    assert "well-known relative identifier (RID)" in findings[0].commentary
+    assert "with RID 500" in findings[0].evidence[0]
+    assert "relative identifier" not in findings[0].evidence[0]
     assert "Consider disabling" in findings[0].remediation
     assert "renaming" not in findings[0].remediation
     assert calls[1][1][-3:] == [f"{DOMAIN_SID}-500", "--attr", "sAMAccountName"]
@@ -60,6 +62,7 @@ def test_builtin_administrator_default_name_retains_rename_guidance(monkeypatch,
     )
     assert "name other than the default `Administrator`" not in findings[0].commentary
     assert "Consider renaming or disabling" in findings[0].remediation
+    assert "relative identifier (RID) 500" in findings[0].evidence[0]
 
 
 @pytest.mark.parametrize("failure", ["lookup", "status"])
@@ -120,6 +123,8 @@ def test_failed_builtin_account_does_not_hide_other_account(monkeypatch, failure
     assert accounts["administrator"]["enabled"] is None
     assert accounts["guest"]["enabled"] is True
     assert [finding.id for finding in findings] == ["PRIV-003"]
+    assert "security identifier (SID)" in findings[0].commentary
+    assert "relative identifier (RID) 501" in findings[0].evidence[0]
     assert len(incomplete) == 1 and f"{DOMAIN_SID}-500" in incomplete[0]
 
 

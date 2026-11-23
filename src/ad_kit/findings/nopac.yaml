@@ -3,14 +3,14 @@ NOPAC-001:
   title: NoPAC Vulnerability Detected
 
   commentary: |
-    The Domain Controller returned a Ticket Granting Ticket (TGT) without a
+    The Domain Controller (DC) returned a Ticket Granting Ticket (TGT) without a
     Privilege Attribute Certificate (PAC) that was smaller than the TGT
     returned with a PAC. This response pattern is associated with the NoPAC
     vulnerabilities CVE-2021-42278 and CVE-2021-42287.
 
     NoPAC chains two issues. CVE-2021-42278 allows sAMAccountName spoofing
     when an attacker can create or modify a suitable machine account. The
-    account can be made to resemble a Domain Controller account. CVE-2021-42287
+    account can be made to resemble a DC account. CVE-2021-42287
     is a Key Distribution Center (KDC) account-lookup flaw that can cause a
     service ticket request for a nonexistent account to be associated with
     the matching machine account. The resulting ticket behavior can enable
@@ -25,10 +25,11 @@ NOPAC-001:
 
   remediation: |
     Apply the Microsoft security updates addressing CVE-2021-42278 and
-    CVE-2021-42287 to all Domain Controllers and ensure PAC validation
+    CVE-2021-42287 to all Domain Controllers (DCs) and ensure Privilege
+    Attribute Certificate (PAC) validation
     enforcement is active. Microsoft states that updates dated November 9,
     2021 or later enforce PAC validation for domain accounts; verify every
-    Domain Controller is updated and follow Microsoft's deployment guidance.
+    DC is updated and follow Microsoft's deployment guidance.
 
     Where appropriate, set ms-DS-MachineAccountQuota to zero and review
     delegated rights to create computer accounts or modify sAMAccountName.

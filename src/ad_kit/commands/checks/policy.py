@@ -112,20 +112,20 @@ def run_local_admin_checks(
         finding = load_finding("local_admin", "LA-002")
         controller_count = len(local_admin_results["domain_controllers"])
         format_counted_commentary(
-            finding, controller_count, "Domain Controller", "Domain Controllers"
+            finding, controller_count, "Domain Controller (DC)", "Domain Controllers (DCs)"
         )
 
         for host in local_admin_results["domain_controllers"]:
 
             finding.evidence.append(
                 f"Authenticated user `{session_data['standard_user']}` "
-                "was identified as an administrator on Domain Controller "
+                "was identified as an administrator on DC "
                 f"`{host}`."
             )
 
         finding.evidence.append(
             f"A total of {controller_count} "
-            f"{count_form(controller_count, 'Domain Controller', 'Domain Controllers')} "
+            f"{count_form(controller_count, 'DC', 'DCs')} "
             "permitted administrative access."
         )
 
@@ -451,7 +451,7 @@ def run_maq_checks(
         finding = load_finding("maq", "MAQ-001")
 
         finding.evidence.append(
-            f"Machine Account Quota was configured as `{maq}`."
+            f"MAQ was configured as `{maq}`."
         )
 
         if maq_results["machine_created"]:

@@ -561,7 +561,7 @@ def run_coercion_checks(
         if coercible_dcs:
             finding.evidence_table = EvidenceTable(
                 introduction=(
-                    "The following Domain Controllers exposed authentication coercion techniques:"
+                    "The following DCs exposed authentication coercion techniques:"
                 ),
                 columns=("Hostname", "Coercion Methods"),
                 rows=[(host, ", ".join(techniques)) for host, techniques in coercible_dcs.items()],
@@ -570,7 +570,7 @@ def run_coercion_checks(
         for dc in coercion_results["spooler_dcs"]:
 
             finding.evidence.append(
-                f"The Print Spooler service was enabled on Domain Controller "
+                f"The Print Spooler service was enabled on DC "
                 f"`{dc}`."
             )
 

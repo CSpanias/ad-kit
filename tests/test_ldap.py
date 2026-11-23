@@ -107,7 +107,7 @@ def test_ldap_user_search_without_results_is_not_treated_as_denied(monkeypatch):
 
 
 @pytest.mark.parametrize(("count", "noun"), [
-    (1, "Domain Controller"), (2, "Domain Controllers")
+    (1, "Domain Controller (DC)"), (2, "Domain Controllers (DCs)")
 ])
 def test_ldap_commentary_counts_affected_controllers(monkeypatch, count, noun):
     monkeypatch.setattr(ldap, "load_dc_hostnames", lambda: [f"DC{i}" for i in range(count)])
@@ -123,6 +123,9 @@ def test_ldap_commentary_counts_affected_controllers(monkeypatch, count, noun):
     _, findings = ldap.ldap_check()
     signing = next(finding for finding in findings if finding.id == "LDAP-001")
     assert f"{count} {noun} did not" in signing.commentary
+    assert "Lightweight Directory Access Protocol (LDAP)" in signing.commentary
+    assert "Lightweight Directory Access Protocol (LDAP)" in signing.remediation
+    assert "Domain Controllers (DCs)" in signing.remediation
 
 
 def test_ldap_parallel_controllers_keep_per_host_evidence_and_order(monkeypatch):

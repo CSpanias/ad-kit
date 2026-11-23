@@ -132,8 +132,9 @@ def builtin_accounts_check(
         if not name_is_administrator:
             finding.commentary = finding.commentary.strip() + "\n\n" + guidance["commentary"]
         finding.remediation = finding.remediation.strip() + "\n\n" + guidance["remediation"]
+        rid_label = "relative identifier (RID)" if name_is_administrator else "RID"
         finding.evidence.append(
-            f"The built-in Administrator account (RID 500), named "
+            f"The built-in Administrator account with {rid_label} 500, named "
             f"`{administrator['account_name']}`, was enabled."
         )
         findings.append(finding)
@@ -141,7 +142,7 @@ def builtin_accounts_check(
     if guest["enabled"] is True:
         finding = load_finding("privileged_excessive", "PRIV-003")
         finding.evidence.append(
-            f"The built-in Guest account (RID 501), named "
+            f"The built-in Guest account with relative identifier (RID) 501, named "
             f"`{guest['account_name']}`, was enabled."
         )
         findings.append(finding)

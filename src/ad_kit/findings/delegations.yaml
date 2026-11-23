@@ -107,7 +107,7 @@ DELEG-002:
     - Consider migrating service accounts to Group Managed Service Accounts 
     (gMSAs) where possible to improve credential hygiene and reduce the 
     likelihood of credential exposure.
-    - Monitor Kerberos activity for S4U operations, delegated authentication 
+    - Monitor Kerberos activity for Service-for-User (S4U) operations, delegated authentication
     activity, and other anomalous ticket requests that may indicate delegation 
     abuse.
 

@@ -69,6 +69,11 @@ def test_kerberoast_parses_names_not_spns_and_ignores_other_output(monkeypatch, 
     assert "identified 1\nprivileged account associated" in findings[1].commentary
     assert "2 Kerberoastable accounts were identified." in findings[0].evidence[-1]
     assert "1 privileged Kerberoastable account was identified." in findings[1].evidence[-1]
+    for finding in findings:
+        assert "Service Principal Names (SPNs)" in finding.commentary
+        assert all("Service Principal Name" not in entry for entry in finding.evidence)
+        assert any("SPN" in entry for entry in finding.evidence)
+        assert "Service Principal Names (SPNs)" in finding.remediation
     assert all("successfully requested" not in entry for f in findings for entry in f.evidence)
 
 
@@ -131,7 +136,8 @@ def test_pre2k_commentary_counts_identified_accounts(monkeypatch, count, noun):
     monkeypatch.setattr(pre2k, "run_check", lambda *_args: output)
     _, findings = pre2k.pre2k_check("dc", "user", "password")
     assert f"{count} pre-created computer\n{noun}" in findings[0].commentary
-    assert "A Kerberos Ticket Granting Ticket (TGT) was successfully" in findings[0].evidence[-1]
+    assert "Ticket Granting Ticket (TGT)" in findings[0].commentary
+    assert "A Kerberos TGT was successfully" in findings[0].evidence[-1]
 
 
 def test_delegation_parses_enabled_accounts_from_netexec_table(monkeypatch):
@@ -336,7 +342,8 @@ def test_coercion_methods_are_shown_for_each_host(monkeypatch):
     finding = recorded_findings[0]
     assert "identified 3\nsystems exposing" in finding.commentary
     markdown = format_finding_sections(finding)["Evidence"]
-    assert "The following Domain Controllers exposed" in markdown
+    assert "Domain Controller (DC)" in finding.commentary
+    assert "The following DCs exposed" in markdown
     assert "| Hostname | Coercion Methods |" in markdown
     assert "| DC1 | PetitPotam, WebDAV |" in markdown
     assert "| DC2 | DFSCoerce |" in markdown

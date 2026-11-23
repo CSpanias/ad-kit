@@ -15,11 +15,11 @@ SMB-001:
   title: SMB Signing Not Enforced
 
   commentary: |
-    The assessment identified {count} {subject} that did not enforce SMB
-    signing.
+    The assessment identified {count} {subject} that did not enforce
+    Server Message Block (SMB) signing.
 
-    SMB signing provides integrity protection for Server Message Block (SMB) 
-    communications and helps prevent tampering and relay attacks.
+    SMB signing provides integrity protection for SMB communications and helps
+    prevent tampering and relay attacks.
 
     Without SMB signing, an attacker positioned on the network may be able to 
     intercept and relay SMB authentication requests in order to authenticate as 
@@ -29,7 +29,7 @@ SMB-001:
     or services through SMB relay attacks.
 
   remediation: |
-    Enforce SMB signing on affected systems to reduce the risk of 
+    Enforce Server Message Block (SMB) signing on affected systems to reduce the risk of
     authentication relay and network-based tampering attacks.
 
     Prior to implementation, testing should be performed to identify and 
@@ -46,10 +46,11 @@ SMB-002:
   title: SMBv1 Enabled
 
   commentary: |
-    The assessment identified {count} {subject} with SMBv1 enabled.
+    The assessment identified {count} {subject} with Server Message Block
+    (SMB) version 1 (SMBv1) enabled.
 
     SMBv1 is a legacy protocol that lacks many of the security protections 
-    present in SMBv2 and SMBv3 and has been associated with multiple 
+    present in SMB version 2 (SMBv2) and version 3 (SMBv3) and has been associated with multiple
     high-profile vulnerabilities and malware outbreaks.
 
     Continued use of SMBv1 increases the attack surface of the environment and 
@@ -59,8 +60,9 @@ SMB-002:
     provide improved security, performance, and resilience.
 
   remediation: |
-    Disable SMBv1 on affected systems and migrate any dependent services or 
-    applications to SMBv2 or SMBv3.
+    Disable Server Message Block (SMB) version 1 (SMBv1) on affected systems and
+    migrate any dependent services or applications to SMB version 2 (SMBv2)
+    or version 3 (SMBv3).
 
     Prior to implementation, identify any legacy systems, applications, or 
     devices that require SMBv1 and develop an appropriate migration plan.
@@ -74,7 +76,7 @@ SMB-003:
   title: Anonymous SMB Enumeration Permitted
 
   commentary: |
-    The assessment established an SMB session using empty credentials and
+    The assessment established a Server Message Block (SMB) session using empty credentials and
     successfully enumerated share names and/or user account information.
 
     Anonymous SMB session setup alone does not demonstrate access to share
@@ -83,7 +85,7 @@ SMB-003:
     reconnaissance.
 
   remediation: |
-    Restrict anonymous SMB access and enumeration to the minimum required by
+    Restrict anonymous Server Message Block (SMB) access and enumeration to the minimum required by
     documented operational needs.
 
     - Review the affected hosts' SMB share permissions and remove unnecessary
@@ -102,8 +104,9 @@ SMB-004:
   title: SMB Shares Writable by Standard User
 
   commentary: |
-    The assessment identified {count} SMB {subject} for which an ACL-based
-    permission check reported write-related permissions for the Standard User.
+    The assessment identified {count} Server Message Block (SMB) {subject} for
+    which an access control list (ACL)-based permission check reported
+    write-related permissions for the Standard User.
     NetExec's WRITE (SUBDIR) and WRITE (ACL) labels indicate specific
     permissions and do not by themselves establish direct file-write access.
 

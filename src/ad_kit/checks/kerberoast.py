@@ -127,8 +127,7 @@ def kerberoast_check(
         for account in accounts:
 
             finding.evidence.append(
-                f"Account '{account}' was associated with a Service "
-                "Principal Name (SPN)."
+                f"Account '{account}' was associated with an SPN."
             )
 
             finding.evidence.append(
@@ -166,7 +165,7 @@ def kerberoast_check(
 
                 finding.evidence.append(
                     f"Privileged account '{account}' was associated with one "
-                    "or more Service Principal Names (SPNs)."
+                    "or more SPNs."
                 )
 
                 finding.evidence.append(
@@ -176,7 +175,7 @@ def kerberoast_check(
 
                 finding.evidence.append(
                     "The account was identified as holding elevated privileges "
-                    "within Active Directory."
+                    "within AD."
                 )
 
             finding.evidence.append(
