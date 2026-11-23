@@ -159,6 +159,37 @@ def test_smb_configuration_runs_in_parallel_and_keeps_sample_evidence(monkeypatc
     results.reset()
 
 
+def test_smb_null_session_without_enumeration_finding_hides_evidence(monkeypatch, tmp_path):
+    results.reset()
+    output = io.StringIO()
+    monkeypatch.setattr(unauthenticated, "console", Console(file=output, width=160))
+    monkeypatch.setattr(unauthenticated, "print_section", lambda title: print(title, file=output))
+    monkeypatch.setattr(unauthenticated, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(unauthenticated, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user", "domain_computers_exported": True,
+    })
+    monkeypatch.setattr(unauthenticated, "load_domain_computers", lambda: ["DC"])
+    monkeypatch.setattr(unauthenticated, "load_dc_hostnames", lambda: ["DC"])
+    monkeypatch.setattr(unauthenticated, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(unauthenticated, "smb_share_access_check", lambda *_args: ([], []))
+
+    def run(name, command, **_kwargs):
+        text = (
+            "SMB dc 445 DC [-] access denied"
+            if name.startswith("smb-anonymous")
+            else "SMB dc 445 DC (signing:True) (SMBv1:False) (Null Auth:True)"
+        )
+        append_captured_evidence([unauthenticated.CheckEvidence(name, command, text, "")])
+        return text
+
+    monkeypatch.setattr(smb, "run_check", run)
+    unauthenticated.run_smb_checks("secret")
+    assert "Anonymous evidence -" not in output.getvalue()
+    assert not any(finding.id == "SMB-003" for finding in results._findings)
+    assert any("SMB anonymous enumeration" in entry for entry in results._incomplete)
+    results.reset()
+
+
 def test_smb_invalid_configuration_values_remain_unknown(monkeypatch):
     monkeypatch.setattr(
         smb, "run_check",

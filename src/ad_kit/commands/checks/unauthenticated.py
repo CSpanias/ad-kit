@@ -470,7 +470,11 @@ def run_smb_checks(
         )
 
     console.print(host_table)
-    _show_anonymous_evidence(evidence, dc_results + host_results, "smb")
+    _show_anonymous_evidence(
+        evidence,
+        [result for result in dc_results + host_results if result in anonymous_enumeration],
+        "smb",
+    )
 
     share_access_results = []
     share_failed_hosts = []

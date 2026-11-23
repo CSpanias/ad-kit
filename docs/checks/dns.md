@@ -13,10 +13,11 @@ ad-kit check dns
 
 ## Commands run
 
-ad-kit uses bloodyAD to add, then remove, a temporary `dnsRecord`:
+ad-kit uses bloodyAD to add, confirm, then remove a temporary `dnsRecord`:
 
 ```bash
 bloodyAD -u <username> -p <password> -d <domain> --dc-ip <dc_ip> add dnsRecord <name> <ip>
+bloodyAD -u <username> -p <password> -d <domain> --dc-ip <dc_ip> get dnsDump
 bloodyAD -u <username> -p <password> -d <domain> --dc-ip <dc_ip> remove dnsRecord <name> <ip>
 ```
 
@@ -25,13 +26,18 @@ The [`add dnsRecord`](https://github.com/CravateRouge/bloodyAD/wiki/User-Guide#a
 ## What it checks
 
 ad-kit verifies whether a standard domain user can modify DNS data by adding a
-temporary `dnsRecord` entry and attempting to remove it. If removal cannot be
+temporary `dnsRecord` entry, checking the DNS dump for its exact name and A
+value, and attempting to remove it. A DNS dump confirms the directory record,
+not DNS resolution. A failed or inconclusive confirmation is marked incomplete
+and does not prevent cleanup or invalidate a confirmed creation. If removal cannot be
 confirmed, it warns with the record name and creation evidence path. It may
 prompt for Domain Administrator credentials to retry cleanup; otherwise, check
 whether the record remains and remove it.
 
-The console shows the redacted commands and output from the current check,
-including attempted cleanup, without repeating any state-changing commands.
+When a finding is generated, the console shows the redacted commands and
+output, including attempted cleanup, without repeating state-changing commands.
+The DNS dump is filtered to the test record in the console; the full redacted
+output is retained in the evidence directory.
 
 ## How it works
 

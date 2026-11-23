@@ -5,12 +5,14 @@ Checks for the status of built-in Active Directory accounts.
 import re
 from typing import TypedDict
 
-from ad_kit.core.checks import run_check
+from ad_kit.core.checks import parse_domain_sid, run_check
+from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
 from ad_kit.core.util import track_items
+from ad_kit.reporting.results import record_incomplete
 
-ACCOUNT_NAME_PATTERN = re.compile(r"\bsAMAccountName:\s*(\S+)", re.IGNORECASE)
+ACCOUNT_NAME_PATTERN = re.compile(r"\bsAMAccountName:[ \t]*([^\r\n]+)", re.IGNORECASE)
 ENABLED_PATTERN = re.compile(r"\bEnabled:\s*(Yes|No)\b", re.IGNORECASE)
 USER_SID_PATTERN = re.compile(
     r"\bUser SID:\s*(S-1-5-21-(?:\d+-){3}\d+)\b",
@@ -21,12 +23,12 @@ USER_SID_PATTERN = re.compile(
 class BuiltinAccountResult(TypedDict):
     rid: int
     account_name: str
-    enabled: bool
+    enabled: bool | None
 
 
 def _account_status(
     output: str,
-    expected_rid: int,
+    expected_sid: str,
 ) -> tuple[str, bool]:
     account_name_match = ACCOUNT_NAME_PATTERN.search(output)
     enabled_match = ENABLED_PATTERN.search(output)
@@ -35,22 +37,20 @@ def _account_status(
     if account_name_match is None or enabled_match is None or sid_match is None:
         raise RuntimeError(
             f"Could not determine the status of built-in account RID "
-            f"{expected_rid} from NetExec output."
+            f"{expected_sid.rsplit('-', 1)[-1]} from NetExec output."
         )
 
-    actual_rid = int(sid_match.group(1).rsplit("-", 1)[1])
-
-    if actual_rid != expected_rid:
+    if sid_match.group(1).casefold() != expected_sid.casefold():
         raise RuntimeError(
-            f"NetExec returned SID RID {actual_rid}; expected "
-            f"built-in account RID {expected_rid}."
+            f"NetExec returned SID {sid_match.group(1)}; expected {expected_sid}."
         )
 
-    return account_name_match.group(1), enabled_match.group(1).lower() == "yes"
+    return account_name_match.group(1).strip(), enabled_match.group(1).lower() == "yes"
 
 
 def builtin_accounts_check(
     dc_ip: str,
+    domain: str,
     username: str,
     password: str,
 ) -> tuple[dict[str, BuiltinAccountResult], list[Finding]]:
@@ -63,23 +63,50 @@ def builtin_accounts_check(
     """
 
     accounts: dict[str, BuiltinAccountResult] = {}
-
-    for account_key, account_name, rid in track_items((
-        ("administrator", "Administrator", 500),
-        ("guest", "Guest", 501),
-    ), "Built-in accounts"):
-        output = run_check(
-            f"builtin-account-rid-{rid}",
-            [
-                "nxc", "ldap", dc_ip,
-                "-u", username,
-                "-p", password,
-                "-M", "whoami",
-                "-o", f"USER={account_name}",
-            ],
+    try:
+        sid_output = run_check(
+            "builtin-account-domain-sid",
+            ["nxc", "ldap", dc_ip, "-u", username, "-p", password, "--get-sid"],
             sensitive_values=[password],
         )
-        returned_name, enabled = _account_status(output, rid)
+        domain_sid = parse_domain_sid(sid_output)
+    except (CheckExecutionError, RuntimeError) as exc:
+        record_incomplete("Built-in accounts", dc_ip, str(exc))
+        return {
+            "administrator": {"rid": 500, "account_name": "Unknown", "enabled": None},
+            "guest": {"rid": 501, "account_name": "Unknown", "enabled": None},
+        }, []
+
+    for account_key, rid in track_items((
+        ("administrator", 500),
+        ("guest", 501),
+    ), "Built-in accounts"):
+        sid = f"{domain_sid}-{rid}"
+        try:
+            lookup = run_check(
+                f"builtin-account-lookup-{rid}",
+                [
+                    "bloodyAD", "-u", username, "-p", password, "-d", domain,
+                    "--dc-ip", dc_ip, "get", "object", sid, "--attr", "sAMAccountName",
+                ],
+                sensitive_values=[password],
+            )
+            match = ACCOUNT_NAME_PATTERN.search(lookup)
+            if match is None:
+                raise RuntimeError(f"Could not resolve built-in account SID {sid}.")
+            output = run_check(
+                f"builtin-account-rid-{rid}",
+                [
+                    "nxc", "ldap", dc_ip, "-u", username, "-p", password,
+                    "-M", "whoami", "-o", f"USER={match.group(1).strip()}",
+                ],
+                sensitive_values=[password],
+            )
+            returned_name, enabled = _account_status(output, sid)
+        except (CheckExecutionError, RuntimeError) as exc:
+            record_incomplete("Built-in account", sid, str(exc))
+            accounts[account_key] = {"rid": rid, "account_name": "Unknown", "enabled": None}
+            continue
 
         accounts[account_key] = {
             "rid": rid,
@@ -91,7 +118,7 @@ def builtin_accounts_check(
     administrator = accounts["administrator"]
     guest = accounts["guest"]
 
-    if administrator["enabled"]:
+    if administrator["enabled"] is True:
         finding = load_finding("privileged_excessive", "PRIV-004")
         finding.evidence.append(
             f"The built-in Administrator account (RID 500), named "
@@ -99,7 +126,7 @@ def builtin_accounts_check(
         )
         findings.append(finding)
 
-    if guest["enabled"]:
+    if guest["enabled"] is True:
         finding = load_finding("privileged_excessive", "PRIV-003")
         finding.evidence.append(
             f"The built-in Guest account (RID 501), named "

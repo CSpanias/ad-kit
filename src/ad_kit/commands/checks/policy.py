@@ -1,6 +1,6 @@
 from rich.table import Table
 
-from ad_kit.checks.dns import dns_record_creation_check
+from ad_kit.checks.dns import dns_confirmation_excerpt, dns_record_creation_check
 from ad_kit.checks.local_admin import local_admin_check
 from ad_kit.checks.maq import maq_check
 from ad_kit.checks.password_never_expires import password_never_expires_check
@@ -424,12 +424,6 @@ def run_maq_checks(
     table.add_row("Machine Cleanup", maq_results["cleanup_method"])
 
     console.print(table)
-    if evidence:
-        print_section("Machine Account Quota - Command Evidence")
-        for record in evidence:
-            console.print(format_check_evidence(record), markup=False, highlight=False)
-            console.print()
-
     generated_findings = []
 
     maq = int(maq_results["machine_account_quota"])
@@ -481,6 +475,12 @@ def run_maq_checks(
             )
 
         generated_findings.append(finding)
+
+    if generated_findings and evidence:
+        print_section("Machine Account Quota - Command Evidence")
+        for record in evidence:
+            console.print(format_check_evidence(record), markup=False, highlight=False)
+            console.print()
 
     record_findings(generated_findings)
 
@@ -586,10 +586,19 @@ def run_dns_checks(
     table.add_row("Record Cleanup", dns_results["cleanup_method"])
 
     console.print(table)
-    if evidence:
+    if findings and evidence:
         print_section("DNS Record Creation - Command Evidence")
         for record in evidence:
-            console.print(format_check_evidence(record), markup=False, highlight=False)
+            excerpt = None
+            if record.name == "dns-record-confirm":
+                excerpt, _ = dns_confirmation_excerpt(
+                    record.stdout, dns_results["record_name"], dns_results["record_ip"]
+                )
+                excerpt = (
+                    f"[Filtered DNS dump for {dns_results['record_name']}]\n"
+                    + (excerpt or "No matching record returned.")
+                )
+            console.print(format_check_evidence(record, excerpt), markup=False, highlight=False)
             console.print()
 
     record_findings(findings)

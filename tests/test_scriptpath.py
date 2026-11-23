@@ -1,3 +1,4 @@
+import io
 import struct
 from contextlib import nullcontext
 
@@ -11,6 +12,7 @@ from impacket.ldap.ldaptypes import (
 )
 from impacket.smb3 import SessionError as SMB3SessionError
 from impacket.smbconnection import SessionError
+from rich.console import Console
 
 from ad_kit.checks import scriptpath
 from ad_kit.commands.checks import hosts
@@ -241,6 +243,8 @@ def test_raw_smb3_acl_error_is_reported_and_write_probe_continues(monkeypatch):
 
 
 def test_scriptpath_acl_failure_is_recorded_as_incomplete(monkeypatch, tmp_path):
+    output = io.StringIO()
+    monkeypatch.setattr(hosts, "console", Console(file=output, width=160))
     monkeypatch.setattr(hosts, "require_session", lambda: {
         "dc_ip": "dc", "standard_user": "user", "domain": "example.test",
     })
@@ -250,7 +254,7 @@ def test_scriptpath_acl_failure_is_recorded_as_incomplete(monkeypatch, tmp_path)
         "username": "alice",
         "script_path": "test.ps1",
         "resolved_path": r"\\dc\NETLOGON\test.ps1",
-        "acl_entries": [],
+        "acl_entries": ["ALLOW S-1-5-21-1-2-3-1000: WRITE_DATA"],
         "standard_user_writable": "Yes",
         "error": "ACL query failed (NTSTATUS 0xC000000D).",
     }], []))
@@ -263,6 +267,9 @@ def test_scriptpath_acl_failure_is_recorded_as_incomplete(monkeypatch, tmp_path)
     assert incomplete == [
         ("scriptPath", r"\\dc\NETLOGON\test.ps1", "ACL query failed (NTSTATUS 0xC000000D).")
     ]
+    assert "ACL query failed" in output.getvalue()
+    assert "WRITE_DATA" not in output.getvalue()
+    assert "WRITE_DATA" in (tmp_path / "scriptpath-permissions.txt").read_text()
 
 
 def test_security_descriptor_without_dacl_is_reported_as_unrestricted():

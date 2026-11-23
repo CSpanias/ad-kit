@@ -49,6 +49,11 @@ def test_current_command_evidence_includes_cleanup_without_replaying(
                 result = "successfully deleted" if "admin" in command else "delete denied"
             else:
                 result = "successfully added"
+        elif "dnsDump" in command:
+            result = (
+                "recordName: unrelated.example.test\nA: 203.0.113.1\n\n"
+                "recordName: ad-kit-ffff.example.test\nA: 192.0.2.1\n"
+            )
         elif "add" in command:
             result = "successfully added"
         else:
@@ -61,7 +66,7 @@ def test_current_command_evidence_includes_cleanup_without_replaying(
         assert len(commands) == 5
     else:
         policy.run_dns_checks("standard-secret")
-        assert len(commands) == 3
+        assert len(commands) == 4
 
     text = output.getvalue()
     assert text.count("$ ") == len(commands)
@@ -70,16 +75,24 @@ def test_current_command_evidence_includes_cleanup_without_replaying(
     assert "standard-secret" not in text and "admin-secret" not in text
     assert "ffffffffffffffff" not in text
     assert "[REDACTED]" in text
+    if kind == "dns":
+        assert "recordName: ad-kit-ffff.example.test" in text
+        assert "unrelated.example.test" not in text
+        assert [command[-2:] for command in commands[:3]] == [
+            ["ad-kit-ffff", "192.0.2.1"], ["get", "dnsDump"],
+            ["ad-kit-ffff", "192.0.2.1"],
+        ]
     assert text.count("\n\n$ ") == len(commands) - 1
     assert text.endswith("\n\n")
 
 
-def test_maq_evidence_does_not_read_stale_files(monkeypatch, tmp_path):
+def test_maq_without_finding_does_not_display_evidence(monkeypatch, tmp_path):
     output = io.StringIO()
     evidence_dir = tmp_path / "evidence"
     evidence_dir.mkdir()
     (evidence_dir / "maq-create-machine.txt").write_text("STALE", encoding="utf-8")
     monkeypatch.setattr(policy, "console", Console(file=output, width=200))
+    monkeypatch.setattr(policy, "print_section", lambda title: print(title, file=output))
     monkeypatch.setattr(policy, "require_session", lambda: {
         "dc_ip": "dc", "standard_user": "user",
     })
@@ -93,8 +106,89 @@ def test_maq_evidence_does_not_read_stale_files(monkeypatch, tmp_path):
         ),
     )
     policy.run_maq_checks("secret")
-    assert "MachineAccountQuota: 0" in output.getvalue()
+    assert "Machine Account Quota - Command Evidence" not in output.getvalue()
     assert "STALE" not in output.getvalue()
+    assert "MachineAccountQuota: 0" in (evidence_dir / "maq.txt").read_text()
+
+
+def test_dns_without_finding_does_not_display_evidence(monkeypatch, tmp_path):
+    output = io.StringIO()
+    monkeypatch.setattr(policy, "console", Console(file=output, width=200))
+    monkeypatch.setattr(policy, "print_section", lambda title: print(title, file=output))
+    monkeypatch.setattr(policy, "require_session", lambda: {
+        "dc_ip": "dc", "domain": "example.test", "standard_user": "user",
+    })
+    monkeypatch.setattr(policy, "progress", no_progress)
+    monkeypatch.setattr(checks, "progress", no_progress)
+    monkeypatch.setattr(checks, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        checks.subprocess, "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command, 0, stdout="access denied", stderr=""
+        ),
+    )
+    policy.run_dns_checks("secret")
+    assert "DNS Record Creation - Command Evidence" not in output.getvalue()
+    assert "access denied" in (tmp_path / "evidence" / "dns-record-create.txt").read_text()
+
+
+@pytest.mark.parametrize("confirmation", [
+    "recordName: ad-kit-abcd.example.test\nA: 203.0.113.1",
+    "recordName: ad-kit-abcd-other.example.test\nA: 192.0.2.1",
+    "recordName: ad-kit-abcd.example.test",
+    "command failed",
+])
+def test_unconfirmed_dns_record_still_gets_cleaned_up(monkeypatch, confirmation):
+    calls = []
+    incomplete = []
+    monkeypatch.setattr(dns.secrets, "token_hex", lambda _size: "abcd")
+    monkeypatch.setattr(dns, "record_incomplete", lambda *args: incomplete.append(args))
+
+    def run(name, _command):
+        calls.append(name)
+        if name == "dns-record-create":
+            return "Successfully added"
+        if name == "dns-record-confirm":
+            if confirmation == "command failed":
+                raise CheckExecutionError(name, [], returncode=1)
+            return confirmation
+        return "Successfully removed"
+
+    monkeypatch.setattr(dns, "run_check", run)
+    result, findings = dns.dns_record_creation_check("dc", "example.test", "user", "secret")
+    assert calls == ["dns-record-create", "dns-record-confirm", "dns-record-remove"]
+    assert result["record_deleted"] and findings
+    assert len(incomplete) == 1
+    assert not any("DNS dump confirmed" in entry or "resolved to" in entry
+                   for entry in findings[0].evidence)
+
+
+def test_dns_confirmation_requires_exact_name_and_address():
+    excerpt, confirmed = dns.dns_confirmation_excerpt(
+        "recordName: ad-kit-abcd.example.test\nA: 203.0.113.1\n\n"
+        "recordName: other.example.test\nA: 192.0.2.1",
+        "ad-kit-abcd.example.test", "192.0.2.1",
+    )
+    assert not confirmed
+    assert "other.example.test" not in excerpt
+
+
+def test_dns_confirmation_interruption_still_attempts_cleanup(monkeypatch):
+    calls = []
+    monkeypatch.setattr(dns.secrets, "token_hex", lambda _size: "abcd")
+
+    def run(name, _command):
+        calls.append(name)
+        if name == "dns-record-create":
+            return "Successfully added"
+        if name == "dns-record-confirm":
+            raise KeyboardInterrupt
+        return "Successfully removed"
+
+    monkeypatch.setattr(dns, "run_check", run)
+    with pytest.raises(KeyboardInterrupt):
+        dns.dns_record_creation_check("dc", "example.test", "user", "secret")
+    assert calls == ["dns-record-create", "dns-record-confirm", "dns-record-remove"]
 
 
 def test_unknown_policy_is_not_reported_as_weak(monkeypatch):

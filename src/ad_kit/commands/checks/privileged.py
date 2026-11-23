@@ -54,6 +54,7 @@ def run_privileged_group_checks(
         record_findings(findings)
         builtin_accounts, builtin_account_findings = builtin_accounts_check(
             session_data["dc_ip"],
+            session_data["domain"],
             session_data["standard_user"],
             std_pass,
         )
@@ -130,7 +131,9 @@ def run_privileged_group_checks(
         account = builtin_accounts[account_key]
         enabled = account["enabled"]
         status = (
-            "[yellow]Enabled[/yellow]"
+            "[yellow]Unknown[/yellow]"
+            if enabled is None
+            else "[yellow]Enabled[/yellow]"
             if enabled and account_key == "administrator"
             else "[red]Enabled[/red]"
             if enabled

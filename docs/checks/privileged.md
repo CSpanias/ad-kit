@@ -8,7 +8,7 @@ ad-kit check privileged
 ```
 
 !!! info "Prerequisite"
-    Requires a valid Standard User account (authenticated).
+    Requires a valid Standard User account (authenticated), NetExec, and bloodyAD.
 
 ## Commands run
 
@@ -17,6 +17,9 @@ ad-kit runs NetExec against the Domain Controller:
 ```bash
 nxc ldap <dc_ip> -u <username> -p <password> --users
 nxc ldap <dc_ip> -u <username> -p <password> --admin-count
+nxc ldap <dc_ip> -u <username> -p <password> --get-sid
+bloodyAD -u <username> -p <password> -d <domain> --dc-ip <dc_ip> get object <domain_sid-rid> --attr sAMAccountName
+nxc ldap <dc_ip> -u <username> -p <password> -M whoami -o USER=<resolved_name>
 ```
 
 The `--users` flag corresponds to NetExec's
@@ -33,7 +36,9 @@ ad-kit:
 - Compares membership of high-privilege groups against the number of enabled
   users (flagged above 10%).
 - Counts accounts marked with `adminCount=1` (flagged above 25%).
-- Checks the state of the built-in Guest and Administrator accounts.
+- Resolves the built-in Guest and Administrator accounts by domain SID and RID
+  before checking their state, including when they have been renamed. Failed
+  lookups are reported as incomplete rather than treated as disabled.
 - Reads the domain DACL with
   [`dacledit.py`](https://github.com/fortra/impacket/blob/master/examples/dacledit.py)
   to find non-default principals with DCSync-related replication rights.

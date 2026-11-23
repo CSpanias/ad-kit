@@ -5,11 +5,10 @@ Checks for unexpected Active Directory replication rights.
 import re
 from typing import TypedDict
 
-from ad_kit.core.checks import run_check
+from ad_kit.core.checks import parse_domain_sid, run_check
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
 
-DOMAIN_SID_PATTERN = re.compile(r"\b(S-1-5-21-(?:\d+-){2}\d+)\b", re.IGNORECASE)
 ACE_BLOCK_PATTERN = re.compile(
     r"ACE\[\s*\d+\s*\]\s+info(.*?)(?=ACE\[\s*\d+\s*\]\s+info|\Z)",
     re.IGNORECASE | re.DOTALL,
@@ -49,15 +48,6 @@ class _ParsedTrustee(TypedDict):
     name: str
     sid: str
     rights: set[str]
-
-
-def _domain_sid(output: str) -> str:
-    match = DOMAIN_SID_PATTERN.search(output)
-
-    if match is None:
-        raise RuntimeError("Could not determine the domain SID from NetExec output.")
-
-    return match.group(1)
 
 
 def _normalize_principal(name: str) -> str:
@@ -168,7 +158,7 @@ def dcsync_check(
         ],
         sensitive_values=[password],
     )
-    domain_sid = _domain_sid(sid_output)
+    domain_sid = parse_domain_sid(sid_output)
     target_credential = f"{domain}/{username}:{password}"
     dacl_output = run_check(
         "dcsync-rights",

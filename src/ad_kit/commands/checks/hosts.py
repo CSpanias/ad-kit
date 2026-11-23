@@ -109,13 +109,10 @@ def run_scriptpath_checks(
     table.add_column("ScriptPath", style="green")
     table.add_column("Resolved Path", style="yellow")
     table.add_column("Standard User Write", style="red")
-    table.add_column("NTFS ACL Entries", style="white")
+    table.add_column("Notes", style="white")
 
     if results:
         for result in results:
-            acl_text = "; ".join(result["acl_entries"]) or "Unavailable"
-            if result["error"]:
-                acl_text = f"{acl_text}; {result['error']}"
             write_access = result["standard_user_writable"]
             status_style = (
                 "red"
@@ -129,7 +126,7 @@ def run_scriptpath_checks(
                 result["script_path"],
                 result["resolved_path"],
                 f"[{status_style}]{write_access}[/{status_style}]",
-                acl_text,
+                result["error"] or "",
             )
     else:
         table.add_row(

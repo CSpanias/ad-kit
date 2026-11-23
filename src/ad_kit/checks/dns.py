@@ -8,12 +8,29 @@ Checks implemented within this module are intended to identify situations where
 authenticated users are permitted to create DNS records within ADIDNS zones.
 """
 
+import re
 import secrets
 
 from ad_kit.core.checks import run_check, warn_test_artifact_remaining
-from ad_kit.core.exceptions import ADKitError
+from ad_kit.core.exceptions import ADKitError, CheckExecutionError
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
+from ad_kit.reporting.results import record_incomplete
+
+
+def dns_confirmation_excerpt(output: str, record_name: str, record_ip: str) -> tuple[str, bool]:
+    """Extract the exact record and verify its A value in bloodyAD's DNS dump."""
+    matching = []
+    confirmed = False
+    for block in re.split(r"\n[ \t]*\n", output.strip()):
+        name = re.search(r"(?im)^[ \t]*recordName:[ \t]*(\S+)[ \t]*$", block)
+        if not name or name.group(1).rstrip(".").casefold() != record_name.rstrip(".").casefold():
+            continue
+        matching.append(block)
+        addresses = re.findall(r"(?im)^[ \t]*A:[ \t]*(.*)$", block)
+        if any(record_ip == address.strip() for line in addresses for address in line.split(";")):
+            confirmed = True
+    return "\n\n".join(matching), confirmed
 
 
 def dns_record_creation_check(
@@ -89,53 +106,68 @@ def dns_record_creation_check(
             f"record '`{record_name}.{domain}`'."
         )
 
-        finding.evidence.append(
-            f"The created DNS record resolved to `{record_ip}`."
-        )
-
         findings.append(finding)
 
         try:
-            remove_output = run_check(
-                "dns-record-remove",
-                [
-                    "bloodyAD",
-                    "-u", username,
-                    "-p", password,
-                    "-d", domain,
-                    "--dc-ip", dc_ip,
-                    "remove",
-                    "dnsRecord",
-                    record_name,
-                    record_ip,
-                ],
-            )
-        except (ADKitError, KeyboardInterrupt):
-            warn_test_artifact_remaining(
-                "DNS record", results["record_name"], "dns-record-create"
-            )
-            raise
+            try:
+                confirmation = run_check(
+                    "dns-record-confirm",
+                    [
+                        "bloodyAD", "-u", username, "-p", password, "-d", domain,
+                        "--dc-ip", dc_ip, "get", "dnsDump",
+                    ],
+                )
+            except CheckExecutionError as exc:
+                record_incomplete("DNS record confirmation", results["record_name"], str(exc))
+            else:
+                _, confirmed = dns_confirmation_excerpt(
+                    confirmation, results["record_name"], record_ip
+                )
+                if confirmed:
+                    finding.evidence.append(
+                        f"The DNS dump confirmed an A record for `{results['record_name']}` "
+                        f"with address `{record_ip}`."
+                    )
+                else:
+                    record_incomplete(
+                        "DNS record confirmation", results["record_name"],
+                        "The expected A record was not confirmed; see dns-record-confirm.txt.",
+                    )
+        finally:
+            try:
+                remove_output = run_check(
+                    "dns-record-remove",
+                    [
+                        "bloodyAD",
+                        "-u", username,
+                        "-p", password,
+                        "-d", domain,
+                        "--dc-ip", dc_ip,
+                        "remove",
+                        "dnsRecord",
+                        record_name,
+                        record_ip,
+                    ],
+                )
+            except (ADKitError, KeyboardInterrupt):
+                warn_test_artifact_remaining(
+                    "DNS record", results["record_name"], "dns-record-create"
+                )
+                raise
 
-        if "successfully removed" in remove_output.lower():
-
-            results["record_deleted"] = True
-            results["cleanup_method"] = "Standard User"
-
-            finding.evidence.append(
-                "The temporary DNS record was successfully removed following "
-                "testing."
-            )
-
-        if results["dns_record_creation"] and not results["record_deleted"]:
-
-            warn_test_artifact_remaining(
-                "DNS record", results["record_name"], "dns-record-create"
-            )
-            finding.evidence.append(
-                "The temporary DNS record could not be removed using the "
-                "standard user account."
-            )
-
-            results["cleanup_method"] = "Domain Admin Required"
+            if "successfully removed" in remove_output.lower():
+                results["record_deleted"] = True
+                results["cleanup_method"] = "Standard User"
+                finding.evidence.append(
+                    "The temporary DNS record was successfully removed following testing."
+                )
+            else:
+                warn_test_artifact_remaining(
+                    "DNS record", results["record_name"], "dns-record-create"
+                )
+                finding.evidence.append(
+                    "The temporary DNS record could not be removed using the standard user account."
+                )
+                results["cleanup_method"] = "Domain Admin Required"
 
     return results, findings

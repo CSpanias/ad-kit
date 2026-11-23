@@ -57,7 +57,7 @@ complete result. Counts reflect objects
 reported by NetExec, not whether the shares are readable. Partially returned
 account counts are marked as incomplete.
 
-For confirmed null sessions, the console displays one current-run sample:
+For confirmed anonymous-enumeration findings, the console displays one current-run sample:
 up to ten anonymous user rows from a Domain Controller where available,
 falling back to share rows from a controller or another host. An excerpt
 without rows does not establish that enumeration was denied. Captured evidence

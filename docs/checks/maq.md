@@ -54,8 +54,9 @@ the creation evidence path. It may prompt for Domain Administrator credentials
 to retry cleanup over LDAP; otherwise, check whether the account remains and
 remove it.
 
-The console shows the redacted commands and output from the current check,
-including attempted cleanup, without repeating any state-changing commands.
+When a finding is generated, the console shows the redacted commands and output
+from the current check, including attempted cleanup, without repeating any
+state-changing commands. Evidence files are retained regardless.
 
 ## How it works
 

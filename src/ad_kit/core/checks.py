@@ -32,9 +32,18 @@ PASSWORD_POLICY_BASELINE = {
     "observation_window_minutes": 15,
 }
 
+DOMAIN_SID_PATTERN = re.compile(r"\b(S-1-5-21-(?:\d+-){2}\d+)\b(?!-\d)", re.IGNORECASE)
+
 #-------------------------------------------------------------------------------
 # FUNCTIONS
 #-------------------------------------------------------------------------------
+
+def parse_domain_sid(output: str) -> str:
+    match = DOMAIN_SID_PATTERN.search(output)
+    if match is None:
+        raise RuntimeError("Could not determine the domain SID from NetExec output.")
+    return match.group(1)
+
 
 @dataclass(frozen=True)
 class CheckEvidence:
