@@ -28,7 +28,7 @@ def test_sureformat_export_matches_adapter_and_optional_dc_split(monkeypatch, tm
         Finding("PRIV-001", "Privileged accounts", "Privilege details.", ""),
     ]
     monkeypatch.setattr(check, "get_artefacts_dir", lambda: tmp_path)
-    monkeypatch.setattr(check, "require_session", lambda: {"domain": "example.com"})
+    monkeypatch.setattr(check, "require_session", lambda: {"domain": "EXAMPLE.COM"})
     monkeypatch.setitem(
         check.AVAILABLE_CHECKS,
         "fake",

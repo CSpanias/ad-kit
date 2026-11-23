@@ -49,7 +49,7 @@ def write_reports(directory: Path, *, domain: str | None = None, dc: str | None 
     domain_findings = [
         f for f in findings if dc is None or f["id"] not in sureformat.DC_FINDING_IDS
     ]
-    sureformat.write_findings(directory / "ad-kit_findings.xml", domain, domain_findings)
+    sureformat.write_findings(directory / "ad-kit_findings.xml", domain.lower(), domain_findings)
     if dc is not None:
         dc_findings = [f for f in findings if f["id"] in sureformat.DC_FINDING_IDS]
         sureformat.write_findings(directory / "ad-kit_findings-dc.xml", dc, dc_findings)

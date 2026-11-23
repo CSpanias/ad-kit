@@ -49,6 +49,7 @@ remediation. By default, it also writes `ad-kit/ad-kit_findings.json` for
 integration, containing the YAML ID and commentary for every finding. With
 `--csacyber`, SureFormat XML is written instead of JSON; it maps YAML IDs to
 platform IDs and warns about findings without a mapping. The exports contain
-findings from the current run only.
+findings from the current run only. The domain hostname in the XML is
+lowercase; a separately supplied DC label is preserved as entered.
 
 Evidence is stored in `ad-kit/evidence/`.
