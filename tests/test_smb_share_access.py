@@ -157,10 +157,77 @@ def test_parallel_share_checks_are_bounded_and_keep_host_order(monkeypatch, work
 def test_share_table_and_finding_only_include_write_related_permissions(monkeypatch, tmp_path):
     results.reset()
     output = io.StringIO()
-    monkeypatch.setattr(unauthenticated, "console", Console(file=output, width=160))
+    messages = []
+    monkeypatch.setattr(unauthenticated, "console", Console(file=output, width=200))
+    monkeypatch.setattr(unauthenticated, "print_info", messages.append)
     monkeypatch.setattr(unauthenticated, "print_section", lambda title: print(title, file=output))
     monkeypatch.setattr(unauthenticated, "progress", lambda *_args: nullcontext())
     monkeypatch.setattr(unauthenticated, "track_items", lambda items, _label: items)
+    monkeypatch.setattr(unauthenticated, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user", "domain_computers_exported": True,
+    })
+    monkeypatch.setattr(
+        unauthenticated, "load_domain_computers", lambda: ["host-A", "host-B", "host-C"]
+    )
+    monkeypatch.setattr(unauthenticated, "load_dc_hostnames", lambda: [])
+    monkeypatch.setattr(unauthenticated, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        unauthenticated, "smb_configuration_check", lambda host, *_args, **_kwargs: {
+            "host": host, "signing": "[green]✓ Enabled[/green]",
+            "smbv1": "[green]✓ Disabled[/green]", "null_auth": False,
+            "anonymous_shares": None, "anonymous_users": None, "anonymous_incomplete": [],
+        },
+    )
+    shares = {
+        "host-A": [
+            {"name": "ipc$", "permissions": ("READ",)},
+            {"name": "PrInT$", "permissions": ("READ",)},
+            {"name": "Read Only", "permissions": ("READ",)},
+            {"name": "SYSVOL", "permissions": ("READ",)},
+            {"name": "Writable", "permissions": ("READ", "WRITE")},
+            {"name": "Shared", "permissions": ("READ", "WRITE")},
+            {"name": "ACL", "permissions": ("READ", "WRITE (ACL)")},
+        ],
+        "host-B": [
+            {"name": "IPC$", "permissions": ("READ", "WRITE")},
+            {"name": "print$", "permissions": ("WRITE (SUBDIR)",)},
+        ],
+        "host-C": [
+            {"name": "IPC$", "permissions": ("READ",)},
+            {"name": "print$", "permissions": ("READ",)},
+        ],
+    }
+    monkeypatch.setattr(
+        unauthenticated, "smb_share_access_check", lambda host, *_args: (shares[host], [])
+    )
+
+    unauthenticated.run_smb_checks("secret")
+    table = output.getvalue().split("SMB Checks - Share Access", 1)[1]
+    assert "Shares" in table and "Permissions" in table
+    assert table.count("host-A") == 1 and table.count("host-B") == 1
+    assert "host-C" not in table and "ipc$" not in table and "PrInT$" not in table
+    assert any("Read Only, SYSVOL" in line and "READ" in line for line in table.splitlines())
+    assert any("Writable, Shared" in line and "READ, WRITE" in line for line in table.splitlines())
+    assert any("ACL" in line and "WRITE (ACL)" in line for line in table.splitlines())
+    assert any("IPC$" in line and "READ, WRITE" in line for line in table.splitlines())
+    assert any("print$" in line and "WRITE (SUBDIR)" in line for line in table.splitlines())
+    assert len(messages) == 1
+    assert "Read-only IPC$ and print$ shares are omitted" in messages[0]
+    assert "evidence directory" in messages[0]
+    finding = next(finding for finding in results._findings if finding.id == "SMB-004")
+    assert len(finding.evidence) == 5
+    assert any("'IPC$'" in entry for entry in finding.evidence)
+    assert any("'print$'" in entry for entry in finding.evidence)
+    assert all("Read Only" not in entry for entry in finding.evidence)
+    results.reset()
+
+
+@pytest.mark.parametrize("incomplete", [False, True])
+def test_hidden_default_shares_do_not_imply_no_access(monkeypatch, tmp_path, incomplete):
+    results.reset()
+    messages = []
+    monkeypatch.setattr(unauthenticated, "print_info", messages.append)
+    monkeypatch.setattr(unauthenticated, "progress", lambda *_args: nullcontext())
     monkeypatch.setattr(unauthenticated, "require_session", lambda: {
         "dc_ip": "dc", "standard_user": "user", "domain_computers_exported": True,
     })
@@ -172,18 +239,12 @@ def test_share_table_and_finding_only_include_write_related_permissions(monkeypa
         "null_auth": False, "anonymous_shares": None, "anonymous_users": None,
         "anonymous_incomplete": [],
     })
-    monkeypatch.setattr(unauthenticated, "smb_share_access_check", lambda *_args: ([
-        {"name": "Read Only", "permissions": ("READ",)},
-        {"name": "Writable", "permissions": ("READ", "WRITE")},
-    ], []))
+    monkeypatch.setattr(unauthenticated, "smb_share_access_check", lambda *_args: (
+        [{"name": "IPC$", "permissions": ("READ",)}], ["incomplete"] if incomplete else []
+    ))
 
     unauthenticated.run_smb_checks("secret")
-    table = output.getvalue().split("SMB Checks - Share Access", 1)[1]
-    assert "Share" in table and "Permissions" in table
-    assert any("Read Only" in line and "READ" in line for line in table.splitlines())
-    assert any("Writable" in line and "READ, WRITE" in line for line in table.splitlines())
-    finding = next(finding for finding in results._findings if finding.id == "SMB-004")
-    assert len(finding.evidence) == 1
-    assert "Writable" in finding.evidence[0]
-    assert "Read Only" not in finding.evidence[0]
+
+    assert ("No reportable SMB shares found for the Standard User." in messages) is not incomplete
+    assert any("Read-only IPC$ and print$ shares are omitted" in message for message in messages)
     results.reset()

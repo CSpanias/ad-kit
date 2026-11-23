@@ -515,20 +515,38 @@ def run_smb_checks(
 
     share_table = Table()
     share_table.add_column("Host", style="cyan")
-    share_table.add_column("Share", style="yellow")
+    share_table.add_column("Shares", style="yellow")
     share_table.add_column("Permissions", style="yellow")
 
+    displayed_shares = False
     for result in share_access_results:
-
+        grouped: dict[tuple[str, ...], list[str]] = {}
         for share in result["shares"]:
+            if (
+                share["name"].casefold() in {"ipc$", "print$"}
+                and share["permissions"] == ("READ",)
+            ):
+                continue
+            grouped.setdefault(share["permissions"], []).append(share["name"])
+
+        for index, (permissions, names) in enumerate(grouped.items()):
+            displayed_shares = True
             share_table.add_row(
-                result["host"], Text(share["name"]), ", ".join(share["permissions"])
+                result["host"] if index == 0 else "",
+                Text(", ".join(names)),
+                ", ".join(permissions),
             )
 
     console.print(share_table)
+    console.print()
 
-    if share_checks_run and not share_access_results and not share_failed_hosts:
-        print_info("No readable or writable SMB shares reported for the Standard User.")
+    if share_checks_run:
+        if not displayed_shares and not share_failed_hosts:
+            print_info("No reportable SMB shares found for the Standard User.")
+        print_info(
+            "Read-only IPC$ and print$ shares are omitted; writable entries remain visible. "
+            "Full command output is available in the evidence directory."
+        )
 
     if unknown_hosts:
 

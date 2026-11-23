@@ -27,8 +27,10 @@ session. User enumeration is restricted to discovered Domain Controllers.
 The share-access checks use the Standard User account and are prompted only
 when needed. Configuration and share access are checked across hosts
 concurrently, with four workers by default; use `--workers` to choose between
-one and 16. Share access is checked once per host. Only rows with reported
-READ or write-related permissions are displayed.
+one and 16. Share access is checked once per host. The console groups shares
+by host and reported permissions, omitting read-only `IPC$` and `print$`
+entries. Writable entries for these shares remain visible. Full command output
+remains in the evidence directory, and the omission does not affect findings.
 
 ## What it checks
 
