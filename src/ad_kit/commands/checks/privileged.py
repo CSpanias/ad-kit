@@ -117,14 +117,6 @@ def run_privileged_group_checks(
         )
     ]
     record_findings(dcsync_findings(dcsync_trustees))
-    unresolved = [
-        trustee for trustee in dcsync_trustees
-        if trustee["name"].strip().casefold() == "unknown"
-    ]
-    resolved = [
-        trustee for trustee in dcsync_trustees
-        if trustee["name"].strip().casefold() != "unknown"
-    ]
 
     table = Table()
 
@@ -192,24 +184,19 @@ def run_privileged_group_checks(
     dcsync_table.add_column("SID", style="green")
     dcsync_table.add_column("Replication Rights", style="yellow")
 
-    if resolved:
-        for trustee in resolved:
+    if dcsync_trustees:
+        for trustee in dcsync_trustees:
             dcsync_table.add_row(
                 trustee["name"],
                 trustee["sid"],
                 ", ".join(trustee["rights"]),
             )
     else:
-        dcsync_table.add_row("No resolved unexpected trustees found", "", "")
+        dcsync_table.add_row("No unexpected trustees found", "", "")
 
     console.print()
     console.print(dcsync_table)
-    if unresolved:
-        count = len(unresolved)
-        print_info(
-            f"{count} unresolved {'trustee has' if count == 1 else 'trustees have'} both "
-            "core DCSync rights. See the finding and raw evidence for their SIDs."
-        )
+
 
 def run_delegation_checks(
     std_pass: str | None = None,

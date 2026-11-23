@@ -54,7 +54,7 @@ ad-kit:
 Previously saved expected trustee SIDs remain excluded for resolved trustees
 other than `Cisco_Connector`; the check no longer prompts for selections.
 Rerunning `ad-kit enum` creates a new session and resets those saved selections.
-Unresolved trustees with both core rights are counted in the console and
+Unresolved trustees with both core rights are shown in the console table and
 retained in the finding with their SIDs, even if they were previously selected.
 An unresolved SID does not necessarily indicate a deleted account.
 

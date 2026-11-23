@@ -100,7 +100,8 @@ def test_no_finding_when_all_trustees_are_excluded():
 
 @pytest.mark.parametrize("unknown_count", [0, 1, 2])
 @pytest.mark.parametrize("cisco_complete", [False, True])
-def test_dcsync_output_and_findings(monkeypatch, unknown_count, cisco_complete):
+@pytest.mark.parametrize("include_resolved", [False, True])
+def test_dcsync_output_and_findings(monkeypatch, unknown_count, cisco_complete, include_resolved):
     output = io.StringIO()
     findings = []
     session = {
@@ -114,15 +115,20 @@ def test_dcsync_output_and_findings(monkeypatch, unknown_count, cisco_complete):
             "name": "expected", "sid": f"{DOMAIN_SID}-1001",
             "rights": ["right"], "complete": True,
         },
-        {"name": "unexpected", "sid": f"{DOMAIN_SID}-1002", "rights": ["right"], "complete": True},
         {"name": "partial", "sid": f"{DOMAIN_SID}-1003", "rights": ["right"], "complete": False},
         {"name": "EXAMPLE\\mSoL_connector", "sid": f"{DOMAIN_SID}-1004",
          "rights": ["right"], "complete": True},
-        {"name": "msolother", "sid": f"{DOMAIN_SID}-1005", "rights": ["right"], "complete": True},
         {"name": "Cisco_Connector", "sid": f"{DOMAIN_SID}-1006",
          "rights": ["right"], "complete": cisco_complete},
         {"name": "UNKNOWN", "sid": f"{DOMAIN_SID}-1007", "rights": ["right"], "complete": False},
     ]
+    if include_resolved:
+        trustees.extend([
+            {"name": "unexpected", "sid": f"{DOMAIN_SID}-1002",
+             "rights": ["right"], "complete": True},
+            {"name": "msolother", "sid": f"{DOMAIN_SID}-1005",
+             "rights": ["right"], "complete": True},
+        ])
     trustees.extend(
         {"name": "UNKNOWN", "sid": f"{DOMAIN_SID}-{1010 + i}",
          "rights": ["right"], "complete": True}
@@ -150,20 +156,25 @@ def test_dcsync_output_and_findings(monkeypatch, unknown_count, cisco_complete):
     privileged.run_privileged_group_checks("pw")
     text = output.getvalue()
     assert f"{DOMAIN_SID}-1001" not in text
-    assert "unexpected" in text
+    assert (f"{DOMAIN_SID}-1002" in text) is include_resolved
     assert "partial" not in text
     assert "mSoL_connector" not in text
-    assert "msolother" in text
+    assert ("msolother" in text) is include_resolved
     assert ("Cisco_Connector" in text) is cisco_complete
     assert "Select confirmed expected" not in text
-    assert "UNKNOWN" not in text
-    assert ("unresolved trustee" in text) is (unknown_count > 0)
-    if unknown_count:
-        assert f"{unknown_count} unresolved" in text
-    finding = next(finding for finding in findings if finding.id == "PRIV-005")
-    assert len(finding.evidence) == 2 + unknown_count + int(cisco_complete)
-    assert "unexpected" in finding.evidence[0]
-    assert "msolother" in finding.evidence[1]
-    assert sum("UNKNOWN" in item for item in finding.evidence) == unknown_count
-    assert any("Cisco_Connector" in item for item in finding.evidence) is cisco_complete
-    assert all("mSoL_connector" not in item and "partial" not in item for item in finding.evidence)
+    assert ("UNKNOWN" in text) is (unknown_count > 0)
+    assert f"{DOMAIN_SID}-1007" not in text
+    for i in range(unknown_count):
+        assert f"{DOMAIN_SID}-{1010 + i}" in text
+    total = 2 * int(include_resolved) + unknown_count + int(cisco_complete)
+    assert ("No unexpected trustees found" in text) is (total == 0)
+    assert "unresolved trustee" not in text
+    if total:
+        finding = next(finding for finding in findings if finding.id == "PRIV-005")
+        assert len(finding.evidence) == total
+        assert sum("UNKNOWN" in item for item in finding.evidence) == unknown_count
+        assert any("Cisco_Connector" in item for item in finding.evidence) is cisco_complete
+        assert all("mSoL_connector" not in item and "partial" not in item
+                   for item in finding.evidence)
+    else:
+        assert not findings
