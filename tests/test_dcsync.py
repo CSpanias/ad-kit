@@ -1,4 +1,14 @@
+import io
+from contextlib import nullcontext
+from types import SimpleNamespace
+
+import pytest
+from rich.console import Console
+
 from ad_kit.checks import dcsync
+from ad_kit.commands.checks import privileged
+from ad_kit.core import util
+from ad_kit.core.exceptions import ADKitError
 
 DOMAIN_SID = "S-1-5-21-1-2-3"
 RIGHTS = dcsync.DCSYNC_RIGHTS
@@ -51,7 +61,7 @@ def test_dcsync_check_reports_unexpected_trustees_and_excludes_defaults(
 
     monkeypatch.setattr(dcsync, "run_check", fake_run_check)
 
-    trustees, findings = dcsync.dcsync_check(
+    trustees = dcsync.dcsync_check(
         "192.0.2.1",
         "example.test",
         "poppy",
@@ -66,6 +76,7 @@ def test_dcsync_check_reports_unexpected_trustees_and_excludes_defaults(
     ]
     assert trustees[0]["complete"] is True
     assert trustees[1]["complete"] is False
+    findings = dcsync.dcsync_findings(trustees)
     assert [finding.id for finding in findings] == ["PRIV-005"]
     assert "MARA_DANIEL" in findings[0].evidence[0]
     assert commands[0][1][-1] == "--get-sid"
@@ -75,3 +86,106 @@ def test_dcsync_check_reports_unexpected_trustees_and_excludes_defaults(
         "Password123!",
         "example.test/poppy:Password123!",
     ]
+
+
+def test_expected_trustee_selection_is_saved_by_sid_and_can_be_edited(monkeypatch):
+    session = {"domain": "example.test"}
+    trustees = [
+        {
+            "name": "MSOL_example", "sid": f"{DOMAIN_SID}-1001",
+            "rights": ["right"], "complete": True,
+        },
+        {"name": "UNKNOWN", "sid": f"{DOMAIN_SID}-1002", "rights": ["right"], "complete": False},
+    ]
+    saved = []
+    choices_seen = []
+    selected = [f"{DOMAIN_SID}-1001"]
+    monkeypatch.setattr(privileged.sys, "stdin", SimpleNamespace(isatty=lambda: True))
+    monkeypatch.setattr(privileged, "save_session", lambda data: saved.append(dict(data)))
+
+    def checkbox(_message, *, choices):
+        choices_seen.append(choices)
+        return SimpleNamespace(ask=lambda: selected.copy())
+
+    monkeypatch.setattr(privileged.questionary, "checkbox", checkbox)
+    assert privileged._expected_dcsync_sids(session, trustees) == {f"{DOMAIN_SID}-1001"}
+    assert saved[-1]["expected_dcsync_sids"] == [f"{DOMAIN_SID}-1001"]
+    assert all(not choice.checked for choice in choices_seen[0])
+
+    selected.clear()
+    assert privileged._expected_dcsync_sids(session, trustees) == set()
+    assert choices_seen[1][0].checked and not choices_seen[1][1].checked
+    assert saved[-1]["expected_dcsync_sids"] == []
+
+
+def test_expected_sids_apply_noninteractively_and_invalid_state_is_rejected(monkeypatch):
+    monkeypatch.setattr(privileged.sys, "stdin", SimpleNamespace(isatty=lambda: False))
+    assert privileged._expected_dcsync_sids(
+        {"expected_dcsync_sids": [f"{DOMAIN_SID.lower()}-1001"]}, []
+    ) == {f"{DOMAIN_SID}-1001"}
+    with pytest.raises(ADKitError, match="Invalid expected DCSync SID"):
+        privileged._expected_dcsync_sids({"expected_dcsync_sids": ["MSOL_example"]}, [])
+
+
+def test_selection_persists_in_assessment_session(monkeypatch, tmp_path):
+    session = {"domain": "example.test"}
+    trustee = {
+        "name": "MSOL_example", "sid": f"{DOMAIN_SID}-1001",
+        "rights": ["right"], "complete": True,
+    }
+    monkeypatch.setattr(util, "ARTEFACTS_DIR", tmp_path)
+    monkeypatch.setattr(privileged.sys, "stdin", SimpleNamespace(isatty=lambda: True))
+    monkeypatch.setattr(
+        privileged.questionary, "checkbox",
+        lambda *_args, **_kwargs: SimpleNamespace(ask=lambda: [trustee["sid"]]),
+    )
+    privileged._expected_dcsync_sids(session, [trustee])
+    assert util.load_session()["expected_dcsync_sids"] == [trustee["sid"]]
+    monkeypatch.setattr(privileged.sys, "stdin", SimpleNamespace(isatty=lambda: False))
+    assert privileged._expected_dcsync_sids(util.load_session(), [trustee]) == {trustee["sid"]}
+
+
+def test_no_finding_when_all_trustees_are_excluded():
+    assert dcsync.dcsync_findings([]) == []
+
+
+def test_selected_sid_is_excluded_from_table_and_finding(monkeypatch):
+    output = io.StringIO()
+    findings = []
+    session = {"dc_ip": "dc", "domain": "example.test", "standard_user": "user"}
+    trustees = [
+        {
+            "name": "MSOL_example", "sid": f"{DOMAIN_SID}-1001",
+            "rights": ["right"], "complete": True,
+        },
+        {"name": "unexpected", "sid": f"{DOMAIN_SID}-1002", "rights": ["right"], "complete": False},
+    ]
+    monkeypatch.setattr(privileged, "console", Console(file=output, width=160))
+    monkeypatch.setattr(privileged, "print_section", lambda *_args: None)
+    monkeypatch.setattr(privileged, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(privileged, "record_findings", findings.extend)
+    monkeypatch.setattr(privileged, "require_session", lambda: session)
+    monkeypatch.setattr(privileged, "privileged_excessive_check", lambda *_args: ({
+        "groups": {
+            "Domain Admins": {"member_count": 0, "percentage": 0.0, "members": []},
+            "Enterprise Admins": {"member_count": 0, "percentage": 0.0, "members": []},
+        },
+        "admin_count": {"member_count": 0, "percentage": 0.0, "members": []},
+    }, []))
+    monkeypatch.setattr(privileged, "builtin_accounts_check", lambda *_args: ({
+        "administrator": {"enabled": False, "account_name": "administrator"},
+        "guest": {"enabled": False, "account_name": "guest"},
+    }, []))
+    monkeypatch.setattr(privileged, "load_dc_hostnames", lambda: [])
+    monkeypatch.setattr(privileged, "dcsync_check", lambda *_args: trustees)
+    monkeypatch.setattr(
+        privileged, "_expected_dcsync_sids", lambda *_args: {f"{DOMAIN_SID}-1001"}
+    )
+
+    privileged.run_privileged_group_checks("pw")
+    assert "MSOL_example" not in output.getvalue()
+    assert "unexpected" in output.getvalue()
+    finding = next(finding for finding in findings if finding.id == "PRIV-005")
+    assert len(finding.evidence) == 1
+    assert "unexpected" in finding.evidence[0]
+    assert "MSOL_example" not in finding.evidence[0]

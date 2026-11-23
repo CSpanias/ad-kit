@@ -47,6 +47,18 @@ ad-kit:
   [`dacledit.py`](https://github.com/fortra/impacket/blob/master/examples/dacledit.py)
   to find non-default principals with DCSync-related replication rights.
 
+After the DCSync check, an interactive selection lets you mark verified
+trustees as expected. Selections are stored as SIDs in the current assessment
+session and can be changed on later interactive runs. Selected trustees are
+omitted from the unexpected-principals table and finding; other trustees
+remain visible. Noninteractive runs use saved selections without prompting.
+Names such as `MSOL_` are not automatically trusted. Rerunning `ad-kit enum`
+creates a new session and resets these selections.
+
+The table marks the two core replication rights as complete or partial for
+each trustee. This is not an effective-permissions calculation: permissions
+can also be inherited or combined through group membership.
+
 ## How it works
 
 - **Group membership** proportional to the domain indicates that privileged

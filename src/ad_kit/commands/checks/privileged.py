@@ -1,11 +1,14 @@
 import re
+import sys
 
+import questionary
+import typer
 from rich.table import Table
 
 from ad_kit.checks.adcs import SUPPORTED_ESC_CLASSES, adcs_check
 from ad_kit.checks.builtin_accounts import builtin_accounts_check
 from ad_kit.checks.coercion import coercion_check, extract_hostname
-from ad_kit.checks.dcsync import dcsync_check
+from ad_kit.checks.dcsync import DCSyncTrustee, dcsync_check, dcsync_findings
 from ad_kit.checks.delegations import delegation_check
 from ad_kit.checks.kerberoast import kerberoast_check
 from ad_kit.checks.ldap_info import is_sensitive_value, ldap_info_check
@@ -20,11 +23,55 @@ from ad_kit.core.checks import (
     load_dc_hostnames,
 )
 from ad_kit.core.console import console, object_text, print_info, print_section
+from ad_kit.core.exceptions import ADKitError
 from ad_kit.core.findings import load_finding, load_finding_definition
-from ad_kit.core.util import progress, require_session
+from ad_kit.core.util import progress, require_session, save_session
 from ad_kit.reporting.results import record_findings
 
 from .credentials import authenticate_standard_user
+
+
+def _expected_dcsync_sids(
+    session_data: dict, trustees: list[DCSyncTrustee]
+) -> set[str]:
+    saved = session_data.get("expected_dcsync_sids", [])
+    if not isinstance(saved, list) or not all(
+        isinstance(sid, str) and re.fullmatch(r"S-\d+(?:-\d+)+", sid, re.IGNORECASE)
+        for sid in saved
+    ):
+        raise ADKitError("Invalid expected DCSync SID list in assessment session.")
+    expected = {sid.upper() for sid in saved}
+    if not sys.stdin.isatty():
+        if trustees and "expected_dcsync_sids" not in session_data:
+            print_info("Run interactively to select expected DCSync trustees.")
+        return expected
+
+    choices = [
+        questionary.Choice(
+            title=f"{trustee['name']} ({trustee['sid']}) — {', '.join(trustee['rights'])}",
+            value=trustee["sid"].upper(),
+            checked=trustee["sid"].upper() in expected,
+        )
+        for trustee in trustees
+    ]
+    current_sids = {trustee["sid"].upper() for trustee in trustees}
+    choices.extend(
+        questionary.Choice(
+            title=f"{sid} (not currently observed)", value=sid, checked=True
+        )
+        for sid in sorted(expected - current_sids)
+    )
+    if not choices:
+        return expected
+    selected = questionary.checkbox(
+        "Select confirmed expected DCSync trustees (Space to select, Enter to confirm):",
+        choices=choices,
+    ).ask()
+    if selected is None:
+        raise typer.Abort()
+    session_data["expected_dcsync_sids"] = sorted(selected)
+    save_session(session_data)
+    return set(selected)
 
 
 def run_privileged_group_checks(
@@ -79,7 +126,7 @@ def run_privileged_group_checks(
                 "excluding default controller groups only."
             )
 
-        dcsync_trustees, dcsync_findings = dcsync_check(
+        dcsync_trustees = dcsync_check(
             session_data["dc_ip"],
             session_data["domain"],
             session_data["standard_user"],
@@ -87,7 +134,13 @@ def run_privileged_group_checks(
             administrative_accounts,
             dc_hostnames,
         )
-        record_findings(dcsync_findings)
+
+    expected_dcsync_sids = _expected_dcsync_sids(session_data, dcsync_trustees)
+    dcsync_trustees = [
+        trustee for trustee in dcsync_trustees
+        if trustee["sid"].upper() not in expected_dcsync_sids
+    ]
+    record_findings(dcsync_findings(dcsync_trustees))
 
     table = Table()
 

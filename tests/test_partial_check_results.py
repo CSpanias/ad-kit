@@ -302,7 +302,7 @@ def test_privileged_tables_are_separated(monkeypatch):
         "guest": {"enabled": False, "account_name": "Guest"},
     }, []))
     monkeypatch.setattr(privileged, "load_dc_hostnames", lambda: [])
-    monkeypatch.setattr(privileged, "dcsync_check", lambda *_args: ([], []))
+    monkeypatch.setattr(privileged, "dcsync_check", lambda *_args: [])
     monkeypatch.setattr(privileged, "record_findings", lambda _findings: None)
 
     privileged.run_privileged_group_checks("secret")

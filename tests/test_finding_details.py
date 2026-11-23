@@ -233,7 +233,7 @@ def test_privileged_members_are_shown_only_for_indicators_needing_review(monkeyp
         "guest": {"enabled": False, "account_name": "guest"},
     }, []))
     monkeypatch.setattr(privileged, "load_dc_hostnames", lambda: [])
-    monkeypatch.setattr(privileged, "dcsync_check", lambda *_args: ([], []))
+    monkeypatch.setattr(privileged, "dcsync_check", lambda *_args: [])
     privileged.run_privileged_group_checks("pw")
     text = output.getvalue()
     assert "alice" in text and "stale" in text

@@ -139,7 +139,7 @@ def dcsync_check(
     password: str,
     administrative_accounts: set[str],
     dc_hostnames: list[str],
-) -> tuple[list[DCSyncTrustee], list[Finding]]:
+) -> list[DCSyncTrustee]:
     """
     Identify non-default trustees assigned DCSync-related replication rights.
 
@@ -200,8 +200,11 @@ def dcsync_check(
         and _normalize_principal(trustee["name"]) not in default_names
     ]
 
-    findings: list[Finding] = []
+    return trustees
 
+
+def dcsync_findings(trustees: list[DCSyncTrustee]) -> list[Finding]:
+    findings: list[Finding] = []
     if trustees:
         finding = load_finding("privileged_excessive", "PRIV-005")
 
@@ -218,4 +221,4 @@ def dcsync_check(
 
         findings.append(finding)
 
-    return trustees, findings
+    return findings
