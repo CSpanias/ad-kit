@@ -188,6 +188,7 @@ with Progress(console=console) as progress:
     assert "test-secret" not in output
     assert "test-secret" not in evidence
     assert "test-secret" not in display.getvalue()
+    assert sys.executable not in display.getvalue()
     assert 50 in updates and 100 in updates
     assert "50%" in display.getvalue()
     assert "failure involving [REDACTED]" in records[0].stderr
@@ -198,10 +199,16 @@ def test_nxc_progress_falls_back_when_no_progress_is_emitted(monkeypatch, tmp_pa
     monkeypatch.setattr(checks, "console", Console(file=display, force_terminal=True))
     monkeypatch.setattr(checks, "get_artefacts_dir", lambda: tmp_path)
     output = checks.run_check(
-        "nxc-fallback", [sys.executable, "-c", "print('SMB result')"], nxc_progress=True,
+        "nxc-fallback",
+        [sys.executable, "-c", "import time; time.sleep(0.2); print('SMB result')"],
+        nxc_progress=True,
     )
     assert output == "SMB result"
-    assert "Running" in display.getvalue()
+    assert "NetExec targets" in display.getvalue()
+    assert sys.executable not in display.getvalue()
+    assert sys.executable in (tmp_path / "evidence" / "nxc-fallback.txt").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_nxc_progress_uses_normal_capture_for_noninteractive_output(monkeypatch, tmp_path):

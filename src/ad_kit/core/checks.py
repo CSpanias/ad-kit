@@ -317,16 +317,13 @@ def cleanup_test_artifact(
     )
 
 
-def _run_nxc_with_progress(
-    command: list[str], display_command: list[str]
-) -> subprocess.CompletedProcess[str]:
+def _run_nxc_with_progress(command: list[str]) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["FORCE_COLOR"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
     if env.get("TERM") in (None, "", "dumb"):
         env["TERM"] = "xterm"
 
-    console.print(f"Running {shlex.join(display_command)}", markup=False, highlight=False)
     with Progress(
         SpinnerColumn(),
         TextColumn("{task.description}", markup=False),
@@ -452,7 +449,7 @@ def run_check(
 
     try:
         if nxc_progress and show_progress and console.is_terminal:
-            result = _run_nxc_with_progress(command, display_command)
+            result = _run_nxc_with_progress(command)
         else:
             activity = (
                 progress(f"Running {shlex.join(display_command)}")
