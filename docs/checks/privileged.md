@@ -15,17 +15,14 @@ ad-kit check privileged
 ad-kit runs NetExec against the Domain Controller:
 
 ```bash
-nxc ldap <dc_ip> -u <username> -p <password> --users
-nxc ldap <dc_ip> -u <username> -p <password> --admin-count
+nxc ldap <dc_ip> -u <username> -p <password> --query '(&(sAMAccountType=805306368)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))' 'sAMAccountName adminCount'
 nxc ldap <dc_ip> -u <username> -p <password> --get-sid
 bloodyAD -u <username> -p <password> -d <domain> --dc-ip <dc_ip> get object <domain_sid-rid> --attr sAMAccountName
 nxc ldap <dc_ip> -u <username> -p <password> -M whoami -o USER=<resolved_name>
 ```
 
-The `--users` flag corresponds to NetExec's
-[enumerate domain users](https://www.netexec.wiki/ldap-protocol/enumerate-users)
-module, and `--admin-count` to
-[admin count](https://www.netexec.wiki/ldap-protocol/admin-count).
+The LDAP query selects enabled normal user accounts and reads their
+`adminCount` attributes.
 
 Privileged group membership and the domain DACL are read in-process using Impacket ([`get_privileged_group_members`](https://github.com/CSpanias/ad-kit/blob/main/src/ad_kit/core/privileged.py#L31) and [`dacledit.py`](https://github.com/fortra/impacket/blob/master/examples/dacledit.py)).
 
@@ -39,7 +36,11 @@ ad-kit:
 
 - Compares membership of high-privilege groups against the number of enabled
   users (flagged above 10%).
-- Counts accounts marked with `adminCount=1` (flagged above 25%).
+- Counts enabled user accounts marked with `adminCount=1` (flagged at 25% or
+  more of enabled users). Disabled and computer accounts are excluded from
+  both counts. User-type service accounts remain included unless excluded
+  during enumeration; account type does not establish whether an account is
+  used by a person.
 - Resolves the built-in Guest and Administrator accounts by domain SID and RID
   before checking their state, including when they have been renamed. Failed
   lookups are reported as incomplete rather than treated as disabled.

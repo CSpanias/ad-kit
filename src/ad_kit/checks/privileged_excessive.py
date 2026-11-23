@@ -9,17 +9,88 @@ a disproportionate number of enabled user accounts hold elevated administrative
 privileges.
 """
 
-from ad_kit.core.checks import run_check
+import re
+
+from ad_kit.core.checks import ANSI_ESCAPE_PATTERN, run_check
+from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
 from ad_kit.core.privileged import (
     PRIVILEGED_GROUPS,
     get_privileged_group_members,
 )
-from ad_kit.core.util import get_artefacts_dir, require_session
+from ad_kit.core.util import require_session
 
 PRIVILEGED_GROUP_THRESHOLD = 10.0
 ADMIN_COUNT_THRESHOLD = 25.0
+
+ENABLED_USER_FILTER = (
+    "(&(sAMAccountType=805306368)"
+    "(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
+)
+
+
+def _enabled_user_accounts(output: str, excluded_users: set[str]) -> dict[str, bool]:
+    accounts: dict[str, bool] = {}
+    seen_names: set[str] = set()
+    current: dict[str, str] | None = None
+
+    def add_current() -> None:
+        if current is None:
+            return
+        name = current.get("samaccountname", "").strip()
+        admin_count = current.get("admincount", "0").strip()
+        if not name or admin_count not in {"0", "1"} or name.casefold() in seen_names:
+            raise CheckExecutionError(
+                "privileged-enabled-users", [],
+                stderr="Could not parse an enabled user entry; see privileged-enabled-users.txt.",
+            )
+        seen_names.add(name.casefold())
+        if name.casefold() not in excluded_users:
+            accounts[name] = admin_count == "1"
+
+    for line in ANSI_ESCAPE_PATTERN.sub("", output).splitlines():
+        match = re.match(r"^\s*LDAP\s+\S+\s+\d+\s+\S+\s+(.*)$", line)
+        if not match:
+            continue
+        payload = match.group(1).strip()
+        if payload.startswith(("[-]", "[!]")):
+            raise CheckExecutionError(
+                "privileged-enabled-users", [],
+                stderr="NetExec reported an LDAP error; see privileged-enabled-users.txt.",
+            )
+        if re.match(r"^\[\+\]\s+Response for object:", payload, re.IGNORECASE):
+            add_current()
+            current = {}
+            continue
+        if current is None:
+            continue
+        attribute = re.match(r"^(sAMAccountName|adminCount)\s+(.+)$", payload, re.IGNORECASE)
+        if attribute:
+            key = attribute.group(1).casefold()
+            if key in current:
+                raise CheckExecutionError(
+                    "privileged-enabled-users", [],
+                    stderr="NetExec returned a duplicate user attribute.",
+                )
+            current[key] = attribute.group(2).strip()
+        elif re.match(r"^(sAMAccountName|adminCount)\b", payload, re.IGNORECASE):
+            raise CheckExecutionError(
+                "privileged-enabled-users", [], stderr="NetExec returned an empty user attribute."
+            )
+
+    add_current()
+    if not seen_names:
+        raise CheckExecutionError(
+            "privileged-enabled-users", [],
+            stderr="NetExec returned no readable enabled users; see privileged-enabled-users.txt.",
+        )
+    if not accounts:
+        raise CheckExecutionError(
+            "privileged-enabled-users", [],
+            stderr="No enabled users remain after applying account exclusions.",
+        )
+    return accounts
 
 
 def privileged_excessive_check(
@@ -70,82 +141,20 @@ def privileged_excessive_check(
     session_data = require_session()
 
     excluded_users = {
-        user.lower()
+        user.casefold()
         for user in session_data.get("excluded_users", [])
     }
 
-    enabled_users = 0
-
-    users_file = None
-
-    try:
-
-        users_file = (
-            get_artefacts_dir()
-            / "domain-users-filtered.txt"
-        )
-
-    except RuntimeError:
-
-        pass
-
-    if (
-        session_data.get("domain_users_exported") is True
-        and users_file is not None
-        and users_file.exists()
-    ):
-
-        enabled_users = sum(
-            1
-            for line in users_file.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        )
-
-    elif (
-        session_data.get("domain_users_exported") is True
-        and session_data.get("domain_users_filtered_count")
-    ):
-
-        enabled_users = session_data["domain_users_filtered_count"]
-
-    else:
-
-        users_output = run_check(
-            "privileged-users",
-            [
-                "nxc", "ldap", dc_ip,
-                "-u", username,
-                "-p", password,
-                "--users",
-            ],
-        )
-
-        parsing_users = False
-
-        for line in users_output.splitlines():
-
-            if "-Username-" in line:
-                parsing_users = True
-                continue
-
-            if not parsing_users:
-                continue
-
-            if not line.strip():
-                continue
-
-            parts = line.split()
-
-            if not parts:
-                continue
-
-            # NetExec user table parsing fallback
-            account_name = parts[-4]
-
-            if account_name.lower() in excluded_users:
-                continue
-
-            enabled_users += 1
+    users_output = run_check(
+        "privileged-enabled-users",
+        [
+            "nxc", "ldap", dc_ip, "-u", username, "-p", password,
+            "--query", ENABLED_USER_FILTER, "sAMAccountName adminCount",
+        ],
+        sensitive_values=[password],
+    )
+    users = _enabled_user_accounts(users_output, excluded_users)
+    enabled_users = len(users)
 
     results["enabled_users"] = enabled_users
 
@@ -199,36 +208,9 @@ def privileged_excessive_check(
 
         findings.append(finding)
 
-    admin_count_output = run_check(
-        "privileged-admin-count",
-        [
-            "nxc", "ldap", dc_ip,
-            "-u", username,
-            "-p", password,
-            "--admin-count",
-        ],
-        sensitive_values=[password],
-    )
-
-    admin_count_members = set()
-
-    for line in admin_count_output.splitlines():
-
-        if (
-            not line.startswith("LDAP")
-            or any(marker in line for marker in ("[+]", "[*]", "[-]", "[!]"))
-        ):
-            continue
-
-        parts = line.split()
-
-        if len(parts) < 5:
-            continue
-
-        member = parts[-1].strip()
-
-        if member and member.lower() not in excluded_users:
-            admin_count_members.add(member)
+    admin_count_members = {
+        name for name, protected in users.items() if protected
+    }
 
     admin_count = len(admin_count_members)
     admin_count_percentage = (
@@ -252,8 +234,8 @@ def privileged_excessive_check(
             "assessment."
         )
         finding.evidence.append(
-            f"The `adminCount=1` query returned {admin_count} account(s), "
-            f"representing {admin_count_percentage}% of the enabled user "
+            f"The `adminCount=1` attribute was set on {admin_count} enabled user "
+            f"account(s), representing {admin_count_percentage}% of the enabled user "
             "population. This attribute can be stale and does not by itself "
             "confirm current privileged access."
         )

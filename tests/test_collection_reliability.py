@@ -161,7 +161,6 @@ def test_privileged_check_does_not_read_stale_users(monkeypatch, tmp_path):
     monkeypatch.setattr(privileged_excessive, "require_session", lambda: {
         "domain_users_exported": False, "domain_users_filtered_count": 10,
     })
-    monkeypatch.setattr(privileged_excessive, "get_artefacts_dir", lambda: tmp_path)
     monkeypatch.setattr(
         privileged_excessive, "get_privileged_group_members",
         lambda *_args: {group: [] for group in PRIVILEGED_GROUPS},
@@ -170,11 +169,14 @@ def test_privileged_check_does_not_read_stale_users(monkeypatch, tmp_path):
 
     def run(name, _command, **_kwargs):
         commands.append(name)
-        if name == "privileged-users":
-            return "-Username-\nLDAP dc 389 DC fresh password bad description\n"
-        return ""
+        if name == "privileged-enabled-users":
+            return (
+                "LDAP dc 389 DC [+] Response for object: CN=fresh,DC=example\n"
+                "LDAP dc 389 DC sAMAccountName       fresh\n"
+            )
+        pytest.fail(f"Unexpected command: {name}")
 
     monkeypatch.setattr(privileged_excessive, "run_check", run)
     result, _ = privileged_excessive.privileged_excessive_check("dc", "user", "secret")
     assert result["enabled_users"] == 1
-    assert commands == ["privileged-users", "privileged-admin-count"]
+    assert commands == ["privileged-enabled-users"]

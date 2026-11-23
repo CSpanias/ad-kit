@@ -85,11 +85,11 @@ PRIV-002:
   title: Large Population of Accounts Marked as Protected
 
   commentary: |
-    A large proportion of domain accounts were returned by the `adminCount=1`
-    query. This attribute is associated with accounts protected by privileged
-    group protections, but it can remain set after an account is no longer a
-    member of a protected group. It is not, by itself, proof of current
-    administrative access.
+    A large proportion of enabled user accounts had the `adminCount` attribute
+    set to `1`. This attribute is associated with accounts protected by
+    privileged group protections, but it can remain set after an account is no
+    longer a member of a protected group. It is not, by itself, proof of
+    current administrative access.
 
     A large population can indicate that privileged access or account
     protection has been assigned more broadly than intended, or that stale
