@@ -53,12 +53,13 @@ class UVInstaller(Installer):
         return "Unknown installation error."
 
 
-    def install(self, tool: Tool) -> None:
+    def install(self, tool: Tool, force: bool = False) -> None:
         """
         Install a UV-managed tool.
 
         Args:
             tool: Tool definition.
+            force: Accepted for consistency; uv installations already reinstall.
         """
 
         existing = (

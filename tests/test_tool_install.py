@@ -1,0 +1,106 @@
+import subprocess
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
+
+import pytest
+from typer.testing import CliRunner
+
+from ad_kit import cli
+from ad_kit.commands.tools import install as install_commands
+from ad_kit.core.exceptions import InstallationError
+from ad_kit.installers import github
+from ad_kit.models import Tool
+
+
+def release_tool():
+    return Tool(
+        name="kerbrute",
+        installer="github_release",
+        description="Kerberos enumeration",
+        repo="CSpanias/kerbrute",
+        asset_pattern="linux_amd64",
+        binary_name="kerbrute",
+        check_command="kerbrute",
+    )
+
+
+@pytest.mark.parametrize("tool", ["kerbrute", "all"])
+def test_install_cli_forwards_force(monkeypatch, tool):
+    install = Mock()
+    monkeypatch.setattr(cli, "install_tool", install)
+
+    result = CliRunner().invoke(cli.app, ["tools", "install", tool, "--force"])
+
+    assert result.exit_code == 0
+    install.assert_called_once_with(tool, force=True)
+
+
+def test_install_all_passes_force_to_each_installer(monkeypatch):
+    tool = release_tool()
+    installer = Mock()
+    monkeypatch.setattr(
+        install_commands, "ToolRegistry", lambda: SimpleNamespace(get_all_tools=lambda: [tool])
+    )
+    monkeypatch.setattr(install_commands, "get_installer", lambda _: installer)
+
+    install_commands.install_tool("all", force=True)
+
+    installer.install.assert_called_once_with(tool, force=True)
+
+
+def test_github_reinstall_replaces_only_managed_path_and_reports_shadowing(
+    monkeypatch, tmp_path
+):
+    managed = tmp_path / "bin"
+    managed.mkdir()
+    external = tmp_path / "external"
+    external.write_bytes(b"old")
+    destination = managed / "kerbrute"
+    destination.symlink_to(external)
+    monkeypatch.setattr(github, "INSTALL_DIR", managed)
+    monkeypatch.setattr(github, "which", lambda _: str(external))
+    warnings = Mock()
+    monkeypatch.setattr(github, "print_warning", warnings)
+
+    installer = github.GitHubReleaseInstaller()
+    release = Mock(return_value={
+        "assets": [{"name": "kerbrute_linux_amd64", "browser_download_url": "https://example.test"}]
+    })
+    monkeypatch.setattr(installer, "_get_latest_release", release)
+
+    def download(command, *, check):
+        assert check
+        Path(command[3]).write_bytes(b"new")
+
+    monkeypatch.setattr(github.subprocess, "run", download)
+
+    installer.install(release_tool())
+    release.assert_not_called()
+    assert destination.is_symlink()
+
+    installer.install(release_tool(), force=True)
+    release.assert_called_once_with("CSpanias/kerbrute")
+    assert destination.read_bytes() == b"new"
+    assert not destination.is_symlink()
+    assert external.read_bytes() == b"old"
+    assert str(external) in warnings.call_args.args[0]
+
+
+def test_github_failed_forced_download_preserves_existing_binary(monkeypatch, tmp_path):
+    destination = tmp_path / "kerbrute"
+    destination.write_bytes(b"old")
+    monkeypatch.setattr(github, "INSTALL_DIR", tmp_path)
+    monkeypatch.setattr(github, "which", lambda _: str(destination))
+    installer = github.GitHubReleaseInstaller()
+    monkeypatch.setattr(installer, "_get_latest_release", lambda _: {
+        "assets": [{"name": "kerbrute_linux_amd64", "browser_download_url": "https://example.test"}]
+    })
+    monkeypatch.setattr(
+        github.subprocess, "run", Mock(side_effect=subprocess.CalledProcessError(1, "wget"))
+    )
+
+    with pytest.raises(InstallationError):
+        installer.install(release_tool(), force=True)
+
+    assert destination.read_bytes() == b"old"

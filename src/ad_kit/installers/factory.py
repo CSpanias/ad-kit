@@ -5,11 +5,12 @@ Responsible for returning the correct installer
 implementation based on the configured installer type.
 """
 
+from ad_kit.installers.base import Installer
 from ad_kit.installers.github import GitHubReleaseInstaller
 from ad_kit.installers.uv import UVInstaller
 
 
-def get_installer(installer_type: str) -> UVInstaller:
+def get_installer(installer_type: str) -> Installer:
     """
     Return an installer implementation.
 

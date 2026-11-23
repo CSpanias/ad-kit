@@ -2,6 +2,7 @@
 GitHub release installer.
 """
 
+import os
 import shutil
 import stat
 import subprocess
@@ -13,7 +14,7 @@ from shutil import which
 import requests
 
 from ad_kit.config import INSTALL_DIR
-from ad_kit.core.console import print_info, print_success
+from ad_kit.core.console import print_info, print_success, print_warning
 from ad_kit.core.exceptions import InstallationError
 from ad_kit.installers.base import Installer
 from ad_kit.models import Tool
@@ -57,6 +58,8 @@ class GitHubReleaseInstaller(Installer):
         Raises:
             InstallationError: If no asset matches.
         """
+        if not tool.asset_pattern:
+            raise InstallationError(tool.name, "No release asset pattern is configured.")
         for asset in assets:
             if tool.asset_pattern in asset["name"]:
                 return asset
@@ -80,11 +83,20 @@ class GitHubReleaseInstaller(Installer):
             binary_path: Path to the downloaded binary.
         """
 
+        if not tool.binary_name:
+            raise InstallationError(tool.name, "No binary name is configured.")
         INSTALL_DIR.mkdir(parents=True, exist_ok=True)
-        binary_path.chmod(binary_path.stat().st_mode | stat.S_IEXEC)
-        shutil.copy2(binary_path, INSTALL_DIR / tool.binary_name)
+        destination = INSTALL_DIR / tool.binary_name
+        with tempfile.NamedTemporaryFile(dir=INSTALL_DIR, delete=False) as temp:
+            temp_path = Path(temp.name)
+        try:
+            shutil.copy2(binary_path, temp_path)
+            temp_path.chmod(temp_path.stat().st_mode | stat.S_IEXEC)
+            os.replace(temp_path, destination)
+        finally:
+            temp_path.unlink(missing_ok=True)
 
-        print_info(f"Installing binary to: {INSTALL_DIR / tool.binary_name}")
+        print_info(f"Installing binary to: {destination}")
 
 
     def _install_from_tarball(
@@ -128,15 +140,20 @@ class GitHubReleaseInstaller(Installer):
             binary,
         )
 
-    def install(self, tool: Tool) -> None:
+    def install(self, tool: Tool, force: bool = False) -> None:
         """
         Install a GitHub release binary.
         """
 
-        # Check if the tool is already installed
-        if tool.check_command and which(tool.check_command):
-            print_info(f"{tool.name} is already installed.")
+        existing = which(tool.check_command) if tool.check_command else None
+        if existing and not force:
+            print_info(f"{tool.name} is already installed at {existing}. Use --force to reinstall.")
             return
+
+        if not tool.repo or not tool.binary_name:
+            raise InstallationError(
+                tool.name, "Release repository or binary name is not configured."
+            )
 
         print_info(f"Installing {tool.name}...")
 
@@ -167,6 +184,21 @@ class GitHubReleaseInstaller(Installer):
                     self._install_binary(tool, download_path)
 
             print_success(f"Successfully installed {tool.name}")
+            if tool.check_command:
+                active = which(tool.check_command)
+                destination = INSTALL_DIR / tool.binary_name
+                if active and Path(active).resolve() != destination.resolve():
+                    print_warning(
+                        f"{active} takes precedence on PATH; {tool.name} may still run "
+                        f"the existing version instead of {destination}."
+                    )
+                elif not active:
+                    print_warning(f"{destination} is not on PATH.")
+                if force and existing:
+                    print_info(
+                        "If your shell still runs the old version, refresh its command cache "
+                        "(bash: hash -r; zsh: rehash)."
+                    )
 
         except Exception as exc:
             raise InstallationError(tool.name, str(exc))

@@ -110,6 +110,11 @@ def install(
         ...,
         help="Tool name or 'all'.",
     ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Reinstall even when a tool is already on PATH.",
+    ),
 ) -> None:
     """
     Install a tool defined in the ad-kit registry.
@@ -120,12 +125,13 @@ def install(
 
     Args:
         tool: Name of the tool to install.
+        force: Reinstall already installed tools.
 
     Examples:
-        ad-kit install netexec
-        ad-kit install all
+        ad-kit tools install netexec
+        ad-kit tools install all
     """
-    install_tool(tool)
+    install_tool(tool, force=force)
 
 #-------------------------------------------------------------------------------
 # ENUM COMMANDS

@@ -16,11 +16,12 @@ class Installer(ABC):
     """
 
     @abstractmethod
-    def install(self, tool: Tool) -> None:
+    def install(self, tool: Tool, force: bool = False) -> None:
         """
         Install a tool.
 
         Args:
             tool: Tool definition to install.
+            force: Reinstall an already installed tool.
         """
         raise NotImplementedError
