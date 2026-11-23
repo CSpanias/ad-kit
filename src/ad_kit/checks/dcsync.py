@@ -59,6 +59,10 @@ def _normalize_principal(name: str) -> str:
     )
 
 
+def is_msol_trustee(trustee: DCSyncTrustee) -> bool:
+    return _normalize_principal(trustee["name"]).startswith("msol_")
+
+
 def _parse_dcsync_aces(output: str) -> list[DCSyncTrustee]:
     output = ANSI_ESCAPE_PATTERN.sub("", output)
     trustees: dict[str, _ParsedTrustee] = {}

@@ -52,12 +52,18 @@ trustees as expected. Selections are stored as SIDs in the current assessment
 session and can be changed on later interactive runs. Selected trustees are
 omitted from the unexpected-principals table and finding; other trustees
 remain visible. Noninteractive runs use saved selections without prompting.
-Names such as `MSOL_` are not automatically trusted. Rerunning `ad-kit enum`
-creates a new session and resets these selections.
+Trustees named `MSOL_*` are automatically excluded. Microsoft Entra Connect
+express setup creates an `MSOL_`-prefixed AD DS Connector account, and password
+hash synchronisation requires both core replication rights. A name prefix
+alone does not verify an account's purpose; review the raw DACL evidence when
+that assumption is uncertain. Rerunning `ad-kit enum` creates a new session
+and resets manual selections.
 
-The table marks the two core replication rights as complete or partial for
-each trustee. This is not an effective-permissions calculation: permissions
-can also be inherited or combined through group membership.
+Only trustees with both core rights are shown in the selection, table and
+finding. Partial rights remain in the raw DACL evidence. This is not an
+effective-permissions calculation: permissions can also be inherited or
+combined through group membership, so hiding partial trustees can miss
+effective access.
 
 ## How it works
 

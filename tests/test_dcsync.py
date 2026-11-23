@@ -92,10 +92,13 @@ def test_expected_trustee_selection_is_saved_by_sid_and_can_be_edited(monkeypatc
     session = {"domain": "example.test"}
     trustees = [
         {
-            "name": "MSOL_example", "sid": f"{DOMAIN_SID}-1001",
+            "name": "service", "sid": f"{DOMAIN_SID}-1001",
             "rights": ["right"], "complete": True,
         },
-        {"name": "UNKNOWN", "sid": f"{DOMAIN_SID}-1002", "rights": ["right"], "complete": False},
+        {"name": "other", "sid": f"{DOMAIN_SID}-1002", "rights": ["right"], "complete": True},
+        {"name": "partial", "sid": f"{DOMAIN_SID}-1003", "rights": ["right"], "complete": False},
+        {"name": "EXAMPLE\\msol_connector", "sid": f"{DOMAIN_SID}-1004",
+         "rights": ["right"], "complete": True},
     ]
     saved = []
     choices_seen = []
@@ -110,12 +113,38 @@ def test_expected_trustee_selection_is_saved_by_sid_and_can_be_edited(monkeypatc
     monkeypatch.setattr(privileged.questionary, "checkbox", checkbox)
     assert privileged._expected_dcsync_sids(session, trustees) == {f"{DOMAIN_SID}-1001"}
     assert saved[-1]["expected_dcsync_sids"] == [f"{DOMAIN_SID}-1001"]
+    assert [choice.value for choice in choices_seen[0]] == [
+        f"{DOMAIN_SID}-1001", f"{DOMAIN_SID}-1002",
+    ]
     assert all(not choice.checked for choice in choices_seen[0])
 
     selected.clear()
     assert privileged._expected_dcsync_sids(session, trustees) == set()
     assert choices_seen[1][0].checked and not choices_seen[1][1].checked
     assert saved[-1]["expected_dcsync_sids"] == []
+
+
+def test_hidden_selected_sids_remain_saved_without_appearing_in_prompt(monkeypatch):
+    session = {"expected_dcsync_sids": [f"{DOMAIN_SID}-1001", f"{DOMAIN_SID}-1002"]}
+    trustees = [
+        {"name": "partial", "sid": f"{DOMAIN_SID}-1001", "rights": [], "complete": False},
+        {"name": "MSOL_service", "sid": f"{DOMAIN_SID}-1002", "rights": [], "complete": True},
+        {"name": "review", "sid": f"{DOMAIN_SID}-1003", "rights": [], "complete": True},
+    ]
+    choices_seen = []
+    monkeypatch.setattr(privileged.sys, "stdin", SimpleNamespace(isatty=lambda: True))
+    monkeypatch.setattr(privileged, "save_session", lambda *_args: None)
+
+    def checkbox(_message, *, choices):
+        choices_seen.extend(choices)
+        return SimpleNamespace(ask=lambda: [])
+
+    monkeypatch.setattr(privileged.questionary, "checkbox", checkbox)
+    assert privileged._expected_dcsync_sids(session, trustees) == {
+        f"{DOMAIN_SID}-1001", f"{DOMAIN_SID}-1002",
+    }
+    assert [choice.value for choice in choices_seen] == [f"{DOMAIN_SID}-1003"]
+    assert session["expected_dcsync_sids"] == [f"{DOMAIN_SID}-1001", f"{DOMAIN_SID}-1002"]
 
 
 def test_expected_sids_apply_noninteractively_and_invalid_state_is_rejected(monkeypatch):
@@ -130,7 +159,7 @@ def test_expected_sids_apply_noninteractively_and_invalid_state_is_rejected(monk
 def test_selection_persists_in_assessment_session(monkeypatch, tmp_path):
     session = {"domain": "example.test"}
     trustee = {
-        "name": "MSOL_example", "sid": f"{DOMAIN_SID}-1001",
+        "name": "service", "sid": f"{DOMAIN_SID}-1001",
         "rights": ["right"], "complete": True,
     }
     monkeypatch.setattr(util, "ARTEFACTS_DIR", tmp_path)
@@ -155,10 +184,14 @@ def test_selected_sid_is_excluded_from_table_and_finding(monkeypatch):
     session = {"dc_ip": "dc", "domain": "example.test", "standard_user": "user"}
     trustees = [
         {
-            "name": "MSOL_example", "sid": f"{DOMAIN_SID}-1001",
+            "name": "expected", "sid": f"{DOMAIN_SID}-1001",
             "rights": ["right"], "complete": True,
         },
-        {"name": "unexpected", "sid": f"{DOMAIN_SID}-1002", "rights": ["right"], "complete": False},
+        {"name": "unexpected", "sid": f"{DOMAIN_SID}-1002", "rights": ["right"], "complete": True},
+        {"name": "partial", "sid": f"{DOMAIN_SID}-1003", "rights": ["right"], "complete": False},
+        {"name": "EXAMPLE\\mSoL_connector", "sid": f"{DOMAIN_SID}-1004",
+         "rights": ["right"], "complete": True},
+        {"name": "msolother", "sid": f"{DOMAIN_SID}-1005", "rights": ["right"], "complete": True},
     ]
     monkeypatch.setattr(privileged, "console", Console(file=output, width=160))
     monkeypatch.setattr(privileged, "print_section", lambda *_args: None)
@@ -183,9 +216,13 @@ def test_selected_sid_is_excluded_from_table_and_finding(monkeypatch):
     )
 
     privileged.run_privileged_group_checks("pw")
-    assert "MSOL_example" not in output.getvalue()
+    assert f"{DOMAIN_SID}-1001" not in output.getvalue()
     assert "unexpected" in output.getvalue()
+    assert "partial" not in output.getvalue()
+    assert "mSoL_connector" not in output.getvalue()
+    assert "msolother" in output.getvalue()
     finding = next(finding for finding in findings if finding.id == "PRIV-005")
-    assert len(finding.evidence) == 1
+    assert len(finding.evidence) == 2
     assert "unexpected" in finding.evidence[0]
-    assert "MSOL_example" not in finding.evidence[0]
+    assert "msolother" in finding.evidence[1]
+    assert all("mSoL_connector" not in item and "partial" not in item for item in finding.evidence)

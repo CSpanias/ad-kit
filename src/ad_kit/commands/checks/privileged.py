@@ -8,7 +8,12 @@ from rich.table import Table
 from ad_kit.checks.adcs import SUPPORTED_ESC_CLASSES, adcs_check
 from ad_kit.checks.builtin_accounts import builtin_accounts_check
 from ad_kit.checks.coercion import coercion_check, extract_hostname
-from ad_kit.checks.dcsync import DCSyncTrustee, dcsync_check, dcsync_findings
+from ad_kit.checks.dcsync import (
+    DCSyncTrustee,
+    dcsync_check,
+    dcsync_findings,
+    is_msol_trustee,
+)
 from ad_kit.checks.delegations import delegation_check
 from ad_kit.checks.kerberoast import kerberoast_check
 from ad_kit.checks.ldap_info import is_sensitive_value, ldap_info_check
@@ -41,20 +46,25 @@ def _expected_dcsync_sids(
     ):
         raise ADKitError("Invalid expected DCSync SID list in assessment session.")
     expected = {sid.upper() for sid in saved}
+    eligible = [
+        trustee for trustee in trustees
+        if trustee["complete"] and not is_msol_trustee(trustee)
+    ]
     if not sys.stdin.isatty():
-        if trustees and "expected_dcsync_sids" not in session_data:
+        if eligible and "expected_dcsync_sids" not in session_data:
             print_info("Run interactively to select expected DCSync trustees.")
         return expected
 
     choices = [
         questionary.Choice(
-            title=f"{trustee['name']} ({trustee['sid']}) — {', '.join(trustee['rights'])}",
+            title=f"{trustee['name']} ({trustee['sid']})",
             value=trustee["sid"].upper(),
             checked=trustee["sid"].upper() in expected,
         )
-        for trustee in trustees
+        for trustee in eligible
     ]
     current_sids = {trustee["sid"].upper() for trustee in trustees}
+    hidden_sids = current_sids - {trustee["sid"].upper() for trustee in eligible}
     choices.extend(
         questionary.Choice(
             title=f"{sid} (not currently observed)", value=sid, checked=True
@@ -69,9 +79,10 @@ def _expected_dcsync_sids(
     ).ask()
     if selected is None:
         raise typer.Abort()
+    selected = set(selected) | (expected & hidden_sids)
     session_data["expected_dcsync_sids"] = sorted(selected)
     save_session(session_data)
-    return set(selected)
+    return selected
 
 
 def run_privileged_group_checks(
@@ -138,7 +149,9 @@ def run_privileged_group_checks(
     expected_dcsync_sids = _expected_dcsync_sids(session_data, dcsync_trustees)
     dcsync_trustees = [
         trustee for trustee in dcsync_trustees
-        if trustee["sid"].upper() not in expected_dcsync_sids
+        if trustee["complete"]
+        and not is_msol_trustee(trustee)
+        and trustee["sid"].upper() not in expected_dcsync_sids
     ]
     record_findings(dcsync_findings(dcsync_trustees))
 
@@ -207,7 +220,6 @@ def run_privileged_group_checks(
     dcsync_table.add_column("Trustee", style="cyan")
     dcsync_table.add_column("SID", style="green")
     dcsync_table.add_column("Replication Rights", style="yellow")
-    dcsync_table.add_column("Core Right Set", style="red")
 
     if dcsync_trustees:
         for trustee in dcsync_trustees:
@@ -215,10 +227,9 @@ def run_privileged_group_checks(
                 trustee["name"],
                 trustee["sid"],
                 ", ".join(trustee["rights"]),
-                "Complete" if trustee["complete"] else "Partial",
             )
     else:
-        dcsync_table.add_row("No unexpected trustees found", "", "", "")
+        dcsync_table.add_row("No unexpected trustees found", "", "")
 
     console.print()
     console.print(dcsync_table)
