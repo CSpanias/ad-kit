@@ -41,7 +41,6 @@ def password_policy_check(
 
     minimum_length = UNKNOWN
     password_history = UNKNOWN
-    maximum_age = UNKNOWN
     minimum_age = UNKNOWN
     complexity = UNKNOWN
     observation_window = UNKNOWN
@@ -57,9 +56,6 @@ def password_policy_check(
 
         elif "Password history length:" in line:
             password_history = (line.split(":")[-1].strip())
-
-        elif "Maximum password age:" in line:
-            maximum_age = (line.split(":", 1)[1].strip())
 
         elif "Minimum password age:" in line:
             minimum_age = (line.split(":", 1)[1].strip())
@@ -80,7 +76,6 @@ def password_policy_check(
     return {
         "minimum_length": minimum_length,
         "password_history": password_history,
-        "maximum_age": maximum_age,
         "minimum_age": minimum_age,
         "complexity": complexity,
         "observation_window": observation_window,
@@ -136,20 +131,6 @@ def password_policy_assessment(
         assessment["minimum_age"] = "[red]✗ Too Short[/red]"
     else:
         assessment["minimum_age"] = "[green]✓ OK[/green]"
-
-    #---------------------------------------------------------------------------
-    # MAXIMUM AGE
-    #---------------------------------------------------------------------------
-
-    maximum_age = policy["maximum_age"].lower()
-
-    maximum_age_minutes = duration_to_minutes(maximum_age)
-    if maximum_age in {"none", "not set"} or maximum_age_minutes == 0:
-        assessment["maximum_age"] = "[yellow]Review (not set)[/yellow]"
-    elif maximum_age_minutes is None:
-        assessment["maximum_age"] = UNKNOWN
-    else:
-        assessment["maximum_age"] = "[green]✓ OK[/green]"
 
     #---------------------------------------------------------------------------
     # COMPLEXITY

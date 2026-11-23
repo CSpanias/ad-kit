@@ -159,12 +159,43 @@ def test_mixed_policy_reports_only_known_weaknesses(monkeypatch):
     assert "minimum-password-length" in render_html(findings)
 
 
+@pytest.mark.parametrize("maximum_age", ["42 days", "Not Set", "unexpected", None])
+def test_maximum_age_is_not_assessed_or_displayed(monkeypatch, maximum_age):
+    output = io.StringIO()
+    raw_policy = (
+        "Minimum password length: 14\n"
+        "Password history length: 5\n"
+        "Minimum password age: 1 day\n"
+        "Domain Password Complex: 1\n"
+        "Reset Account Lockout Counter: 30 minutes\n"
+        "Locked Account Duration: 30 minutes\n"
+        "Account Lockout Threshold: 5\n"
+    )
+    if maximum_age is not None:
+        raw_policy += f"Maximum password age: {maximum_age}\n"
+    monkeypatch.setattr(passwords, "run_check", lambda *_args: raw_policy)
+    monkeypatch.setattr(policy, "console", Console(file=output, width=120))
+    monkeypatch.setattr(policy, "print_section", lambda _title: None)
+    monkeypatch.setattr(policy, "require_session", lambda: {"dc_ip": "dc", "standard_user": "user"})
+    monkeypatch.setattr(policy, "progress", no_progress)
+    monkeypatch.setattr(
+        policy, "record_findings", lambda _findings: pytest.fail("unexpected finding")
+    )
+    monkeypatch.setattr(policy, "record_incomplete", lambda *_args: pytest.fail("unexpected gap"))
+
+    parsed = passwords.password_policy_check("dc", "user", "password")
+    assert "maximum_age" not in parsed
+    assert "maximum_age" not in passwords.password_policy_assessment(parsed)
+    policy.run_password_policy_checks("password")
+    assert "Maximum Age" not in output.getvalue()
+    assert "Minimum Age" in output.getvalue()
+
+
 def _assess_policy(**overrides):
     values = {
         "minimum_length": "12",
         "password_history": "5",
         "minimum_age": "1 day",
-        "maximum_age": "42 days",
         "complexity": "Enabled",
         "observation_window": "30 minutes",
         "lockout_duration": "30 minutes",
@@ -212,10 +243,9 @@ def test_zero_lockout_threshold_does_not_flag_inactive_settings(monkeypatch):
     assert "observation window" not in findings[0].remediation
 
 
-def test_manual_unlock_and_unset_expiry_are_not_automatically_weak(monkeypatch):
-    values, assessed = _assess_policy(lockout_duration="0 minutes", maximum_age="None")
+def test_manual_unlock_is_not_automatically_weak(monkeypatch):
+    values, assessed = _assess_policy(lockout_duration="0 minutes")
     assert "Manual unlock" in assessed["lockout_duration"]
-    assert "Review" in assessed["maximum_age"]
     findings, incomplete = _run_policy(monkeypatch, values)
     assert findings == []
     assert incomplete == []

@@ -28,7 +28,6 @@ baseline:
 | Minimum password length | at least 12 characters |
 | Password history | at least 2 remembered passwords |
 | Minimum password age | at least 1 day |
-| Maximum password age | reported for review; an unset value is not a finding by itself |
 | Password complexity | enabled |
 | Lockout threshold | 1 to 10 attempts |
 | Lockout duration | at least 30 minutes |
@@ -45,9 +44,10 @@ NetExec may also render an indefinite duration as `Not Set`, but its output
 can represent more than one raw LDAP value. When lockout is enabled, ad-kit
 shows `Review (not set)` and records an incomplete check; verify the raw
 `lockoutDuration` attribute before concluding how long accounts remain locked.
-When maximum password age is unset, review the organisation's approach to
-compromise-triggered resets and other controls rather than assuming periodic
-expiry is required.
+For example, NetExec's duration converter has mapped both `-2147483648` and
+`-9223372036854775808` to `Not Set`.
+Maximum password age is not assessed or displayed. NetExec's unmodified command
+output, including any maximum-age value it reports, remains in the evidence file.
 
 The finding's commentary, recommendations, and references are selected for
 the settings below the ad-kit baseline; compliant or unknown settings do not
@@ -61,8 +61,6 @@ password guessing:
 
 - **Minimum length, history, and complexity** make passwords harder to guess
   and to recycle.
-- **Maximum age** controls how long a password remains valid; modern guidance
-  does not universally require periodic password changes.
 - **Minimum age** prevents a user cycling passwords immediately to defeat
   password history.
 - **Lockout threshold** is the number of failed attempts that lock an account.

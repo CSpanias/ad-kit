@@ -128,7 +128,7 @@ def run_password_policy_checks(
     displayed in tabular format.
 
     Assessed settings include password length, password history, complexity
-    requirements, account lockout configuration, and password age settings.
+    requirements, account lockout configuration, and minimum password age.
     """
 
     session_data = require_session()
@@ -164,12 +164,6 @@ def run_password_policy_checks(
         "Password History",
         password_policy["password_history"],
         assessment["password_history"],
-    )
-
-    table.add_row(
-        "Maximum Age",
-        password_policy["maximum_age"],
-        assessment["maximum_age"],
     )
 
     table.add_row(
