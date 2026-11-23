@@ -56,7 +56,7 @@ rusthound:
 
 kerbrute:
   installer: github_release
-  repo: ropnop/kerbrute
+  repo: CSpanias/kerbrute
   asset_pattern: linux_amd64
   binary_name: kerbrute
   check_command: kerbrute

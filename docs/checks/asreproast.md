@@ -111,7 +111,7 @@ affected account also holds privileged group membership (see ASREP-002).
 - [`GetNPUsers.py`](https://github.com/fortra/impacket/blob/master/examples/GetNPUsers.py) (Impacket): used by this check.
 - [NetExec](https://github.com/Pennyw0rth/NetExec): `nxc ldap <dc> -u users.txt -p '' --asreproast <outfile>`.
 - [Rubeus](https://github.com/GhostPack/Rubeus): `Rubeus.exe asreproast /format:hashcat`.
-- [Kerbrute](https://github.com/ropnop/kerbrute): user enumeration.
+- [Kerbrute](https://github.com/CSpanias/kerbrute): user enumeration.
 - [hashcat](https://github.com/hashcat/hashcat): `hashcat -m 18200`.
 - [John the Ripper](https://github.com/openwall/john): `john --format=krb5asrep`.
 
