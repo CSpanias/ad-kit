@@ -17,7 +17,7 @@ from ad_kit.core.checks import (
     format_check_evidence,
     warn_test_artifact_remaining,
 )
-from ad_kit.core.console import console, print_section
+from ad_kit.core.console import console, object_text, print_section
 from ad_kit.core.exceptions import ADKitError
 from ad_kit.core.findings import load_finding, load_finding_definition
 from ad_kit.core.util import progress, require_collected_data, require_session
@@ -65,12 +65,18 @@ def run_local_admin_checks(
 
     table.add_column("Setting", style="cyan")
     table.add_column("Value", style="green")
+    table.add_column("Object", style="yellow")
 
-    table.add_row("Hosts", str(len(local_admin_results["hosts"])))
+    table.add_row(
+        "Hosts",
+        str(len(local_admin_results["hosts"])),
+        object_text(local_admin_results["hosts"]),
+    )
 
     table.add_row(
         "Domain Controllers",
         str(len(local_admin_results["domain_controllers"])),
+        object_text(local_admin_results["domain_controllers"]),
     )
 
     console.print(table)
@@ -651,5 +657,13 @@ def run_pre2k_checks(
     )
 
     console.print(table)
+
+    if findings and pre2k_results["accounts"]:
+        accounts = Table(title="Identified Pre-Created Accounts")
+        accounts.add_column("Object", style="cyan")
+        for account in pre2k_results["accounts"]:
+            accounts.add_row(object_text([account]))
+        console.print()
+        console.print(accounts)
 
     record_findings(findings)

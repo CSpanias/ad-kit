@@ -32,6 +32,7 @@ ad-kit finds accounts configured with unconstrained delegation
 protocol transition (`--find-delegation`). It excludes Domain Controller machine
 accounts and the Azure AD Kerberos trust object, then flags delegated accounts
 that are also members of a monitored privileged group.
+The results table lists affected accounts alongside each delegation count.
 
 ## How it works
 

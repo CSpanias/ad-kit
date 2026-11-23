@@ -8,7 +8,10 @@ Checks implemented within this module are intended to identify accounts
 susceptible to Kerberoasting attacks.
 """
 
+import re
+
 from ad_kit.core.checks import run_check
+from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
 from ad_kit.core.privileged import get_privileged_users
@@ -75,34 +78,42 @@ def kerberoast_check(
 
         return results, findings
 
-    accounts = []
+    lines = output.splitlines()
+    header_index = None
+    header = None
+    for index, line in enumerate(lines):
+        header = re.match(
+            r"^ServicePrincipalName\s+(?P<name>Name)\s+(?P<member>MemberOf)\s+PasswordLastSet\b",
+            line,
+        )
+        if header:
+            header_index = index
+            break
+    if header is None or header_index is None:
+        raise CheckExecutionError(
+            "kerberoast", [], stderr="Could not parse the GetUserSPNs account table."
+        )
 
-    for line in output.splitlines():
-
-        line = line.strip()
-
-        if (
-            not line
-            or line.startswith("Impacket")
-            or line.startswith("ServicePrincipalName")
-            or line.startswith("---")
-        ):
+    accounts = set()
+    for line in lines[header_index + 1:]:
+        if not line.strip():
+            if accounts:
+                break
             continue
-
-        # Typical output: # SQLSvc MSSQLSvc/sql01.domain.local:1433 ...
-        parts = line.split()
-
-        if not parts:
+        if line.startswith("-"):
             continue
+        if line.startswith("[") or len(line) < header.start("member"):
+            break
+        account = line[header.start("name"):header.start("member")].strip()
+        if account:
+            accounts.add(account)
 
-        account = parts[0]
+    if not accounts:
+        raise CheckExecutionError(
+            "kerberoast", [], stderr="The GetUserSPNs account table contained no readable accounts."
+        )
 
-        if account == "Name" or account.startswith("$krb5tgs$"):
-            continue
-
-        accounts.append(account)
-
-    accounts = sorted(set(accounts))
+    accounts = sorted(accounts)
 
     results["accounts"] = accounts
     results["account_count"] = len(accounts)
@@ -120,7 +131,7 @@ def kerberoast_check(
             )
 
             finding.evidence.append(
-                "A Kerberos service ticket was successfully requested for "
+                "A Kerberos service ticket was requested for "
                 f"'{account}'."
             )
 
@@ -156,7 +167,7 @@ def kerberoast_check(
                 )
 
                 finding.evidence.append(
-                    "A Kerberos service ticket was successfully requested for "
+                    "A Kerberos service ticket was requested for "
                     f"'{account}'."
                 )
 

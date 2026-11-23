@@ -35,9 +35,12 @@ ad-kit collects account attributes:
 - `get-userPassword` - the `userPassword` attribute.
 - `get-unixUserPassword` - the `unixUserPassword` attribute.
 
-Description and info values are compared against a list of sensitive keywords
-(password, secret, credential, token, VPN, SSH, RDP, SQL, and similar).
-Password-attribute values are reported when returned by the modules.
+Description and info values are checked for whole credential-related terms,
+such as password, secret, credential, and token. Generic service names such as
+SQL and VPN are not treated as matches. These terms still require review and
+can produce false positives. Returned password attributes are also reported.
+The console lists affected accounts and attributes without printing their
+values; finding evidence and the saved command output retain the details.
 
 ## How it works
 

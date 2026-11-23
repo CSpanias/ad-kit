@@ -2,6 +2,8 @@
 LDAP information exposure assessment checks.
 """
 
+import re
+
 from ad_kit.core.checks import run_check
 from ad_kit.core.util import track_items
 
@@ -14,10 +16,11 @@ LDAP_SENSITIVE_KEYWORDS = (
     "token",
     "apikey",
     "api key",
-    "vpn",
-    "ssh",
-    "rdp",
-    "sql",
+)
+
+LDAP_SENSITIVE_PATTERN = re.compile(
+    r"(?<!\w)(?:" + "|".join(re.escape(word) for word in LDAP_SENSITIVE_KEYWORDS) + r")s?(?!\w)",
+    re.IGNORECASE,
 )
 
 def ldap_info_check(
@@ -172,9 +175,4 @@ def is_sensitive_value(
         False.
     """
 
-    value = value.lower()
-
-    return any(
-        keyword in value
-        for keyword in LDAP_SENSITIVE_KEYWORDS
-    )
+    return LDAP_SENSITIVE_PATTERN.search(value) is not None

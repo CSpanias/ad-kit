@@ -1,8 +1,10 @@
+import re
+
 from rich.table import Table
 
 from ad_kit.checks.adcs import SUPPORTED_ESC_CLASSES, adcs_check
 from ad_kit.checks.builtin_accounts import builtin_accounts_check
-from ad_kit.checks.coercion import coercion_check
+from ad_kit.checks.coercion import coercion_check, extract_hostname
 from ad_kit.checks.dcsync import dcsync_check
 from ad_kit.checks.delegations import delegation_check
 from ad_kit.checks.kerberoast import kerberoast_check
@@ -12,8 +14,12 @@ from ad_kit.checks.privileged_excessive import (
     PRIVILEGED_GROUP_THRESHOLD,
     privileged_excessive_check,
 )
-from ad_kit.core.checks import load_dc_hostnames
-from ad_kit.core.console import console, print_info, print_section
+from ad_kit.core.checks import (
+    capture_check_evidence,
+    format_check_evidence,
+    load_dc_hostnames,
+)
+from ad_kit.core.console import console, object_text, print_info, print_section
 from ad_kit.core.findings import load_finding, load_finding_definition
 from ad_kit.core.util import progress, require_session
 from ad_kit.reporting.results import record_findings
@@ -119,6 +125,25 @@ def run_privileged_group_checks(
 
     console.print(table)
 
+    excessive_members = [
+        (group, data["members"])
+        for group, data in privileged_results["groups"].items()
+        if data["percentage"] >= PRIVILEGED_GROUP_THRESHOLD and data["members"]
+    ]
+    if (
+        admin_count["percentage"] >= ADMIN_COUNT_THRESHOLD
+        and admin_count["members"]
+    ):
+        excessive_members.append(("adminCount=1 accounts", admin_count["members"]))
+    if excessive_members:
+        members_table = Table(title="Accounts Requiring Review")
+        members_table.add_column("Group / Indicator", style="cyan")
+        members_table.add_column("Object", style="yellow")
+        for group, members in excessive_members:
+            members_table.add_row(group, object_text(members))
+        console.print()
+        console.print(members_table)
+
     account_table = Table(title="Built-in Account Status")
     account_table.add_column("Account", style="cyan")
     account_table.add_column("sAMAccountName", style="green")
@@ -200,15 +225,18 @@ def run_delegation_checks(
 
     table.add_column("Setting", style="cyan")
     table.add_column("Value", style="green")
+    table.add_column("Object", style="yellow")
 
     table.add_row(
         "Unconstrained Delegation",
         str(len(delegation_results["unconstrained"])),
+        object_text(delegation_results["unconstrained"]),
     )
 
     table.add_row(
         "Protocol Transition",
         str(len(delegation_results["protocol_transition"])),
+        object_text(delegation_results["protocol_transition"]),
     )
 
     console.print(table)
@@ -251,10 +279,12 @@ def run_kerberoast_checks(
 
     table.add_column("Setting", style="cyan")
     table.add_column("Value", style="green")
+    table.add_column("Object", style="yellow")
 
     table.add_row(
         "Kerberoastable Accounts",
         str(kerberoast_results["account_count"]),
+        object_text(kerberoast_results["accounts"]),
     )
 
     console.print(table)
@@ -297,6 +327,7 @@ def run_adcs_checks(
 
     table.add_column("ESC Path", style="cyan")
     table.add_column("Count", style="green")
+    table.add_column("Object", style="yellow")
 
     for esc in SUPPORTED_ESC_CLASSES:
 
@@ -305,7 +336,7 @@ def run_adcs_checks(
         if count == 0:
             continue
 
-        table.add_row(esc, str(count))
+        table.add_row(esc, str(count), object_text(adcs_results[esc]))
 
     console.print(table)
 
@@ -394,6 +425,31 @@ def run_ldap_info_checks(
 
     console.print(table)
 
+    exposed_accounts = [
+        (user, attribute) for user, _, attribute in sensitive_attributes
+    ]
+    for attribute, lines in (
+        ("userPassword", ldap_info_results["user_passwords"]),
+        ("unixUserPassword", ldap_info_results["unix_passwords"]),
+    ):
+        for line in lines:
+            match = re.search(
+                r"\bUser:\s*(.*?)\s+" + re.escape(attribute) + r":",
+                line,
+                re.IGNORECASE,
+            )
+            if match and match.group(1).strip():
+                exposed_accounts.append((match.group(1).strip(), attribute))
+
+    if exposed_accounts:
+        detail_table = Table(title="Affected LDAP Attributes")
+        detail_table.add_column("Object", style="cyan")
+        detail_table.add_column("Attribute", style="yellow")
+        for user, attribute in sorted(set(exposed_accounts)):
+            detail_table.add_row(object_text([user]), attribute)
+        console.print()
+        console.print(detail_table)
+
     attributes = {attribute for _, _, attribute in sensitive_attributes}
     if ldap_info_results["user_passwords"]:
         attributes.add("userPassword")
@@ -449,7 +505,7 @@ def run_coercion_checks(
 
         std_pass = authenticate_standard_user()
 
-    with progress("Reviewing coercion attack paths..."):
+    with capture_check_evidence() as evidence, progress("Reviewing coercion attack paths..."):
 
         coercion_results = (
             coercion_check(
@@ -464,15 +520,18 @@ def run_coercion_checks(
 
     table.add_column("Setting", style="cyan")
     table.add_column("Value", style="green")
+    table.add_column("Object", style="yellow")
 
     table.add_row(
         "Coercible DCs",
         str(len(coercion_results["coercion_dcs"])),
+        object_text(list(coercion_results["coercion_dcs"])),
     )
 
     table.add_row(
         "DCs with Print Spooler",
         str(len(coercion_results["spooler_dcs"])),
+        object_text(coercion_results["spooler_dcs"]),
     )
 
     console.print(table)
@@ -497,5 +556,27 @@ def run_coercion_checks(
             )
 
         findings.append(finding)
+
+    if findings:
+        for name, marker, hosts in (
+            ("coercion-plus", "VULNERABLE,", coercion_results["coercion_dcs"]),
+            ("coercion-webdav", "WebClient Service enabled", coercion_results["coercion_dcs"]),
+            ("coercion-spooler", "Spooler service enabled", coercion_results["spooler_dcs"]),
+        ):
+            record = next((item for item in evidence if item.name == name), None)
+            if record is None:
+                continue
+            line = next(
+                (
+                    line for line in record.stdout.splitlines()
+                    if marker in line and extract_hostname(line) in hosts
+                ),
+                None,
+            )
+            if line:
+                print_section("Authentication Coercion - Command Evidence")
+                console.print(format_check_evidence(record, line), markup=False, highlight=False)
+                console.print()
+                break
 
     record_findings(findings)

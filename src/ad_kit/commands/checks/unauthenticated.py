@@ -21,7 +21,7 @@ from ad_kit.core.checks import (
     load_dc_hostnames,
     load_domain_computers,
 )
-from ad_kit.core.console import console, print_info, print_section, print_warning
+from ad_kit.core.console import console, object_text, print_info, print_section, print_warning
 from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.findings import load_finding
 from ad_kit.core.util import (
@@ -225,6 +225,7 @@ def run_tombstone_checks(
     table.add_column("Domain Controller", style="cyan")
     table.add_column("Deleted Objects", style="yellow")
     table.add_column("Standard User Access", style="green")
+    table.add_column("Named Objects", style="yellow")
 
     for result in results:
         deleted_objects = result["deleted_objects"]
@@ -236,6 +237,11 @@ def run_tombstone_checks(
                 else "N/A"
             ),
             result["status"],
+            object_text(
+                result["sam_account_names"]
+                if deleted_objects is not None and deleted_objects > 0
+                else []
+            ),
         )
 
     console.print(table)
@@ -697,14 +703,17 @@ def run_asreproast_checks(
 
     table.add_column("Setting", style="cyan")
     table.add_column("Value", style="green")
+    table.add_column("Object", style="yellow")
 
     table.add_row(
         "AS-REP Roastable Accounts",
         str(asrep_results["account_count"]),
+        object_text(asrep_results["accounts"]),
     )
     table.add_row(
         "Privileged AS-REP Roastable Accounts",
         str(len(privileged_accounts)) if privileged_assessed else "Unknown",
+        object_text(privileged_accounts) if privileged_assessed else "Unknown",
     )
 
     console.print(table)

@@ -21,6 +21,10 @@ nxc ldap <dc_ip> -u <username> -p <password> -M pre2k
 
 ## What it checks
 
+When the check produces a finding, the console lists identified pre-created
+accounts. These names do not establish which individual accounts obtained a
+ticket.
+
 ad-kit finds pre-created computer accounts and attempts to request a Ticket
 Granting Ticket (TGT) using the default machine-account password.
 

@@ -30,6 +30,7 @@ flag set (the "Do not require Kerberos pre-authentication" option), extracts the
 affected account names from the returned AS-REP hashes, and, when a Standard
 User password is available, checks whether any affected account belongs to a
 monitored privileged group.
+The results table lists the affected and confirmed privileged accounts.
 
 ## How it works
 

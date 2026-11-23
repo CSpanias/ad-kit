@@ -25,6 +25,7 @@ GetUserSPNs.py <domain>/<username>:<password> -dc-ip <dc_ip> -request -outputfil
 ad-kit enumerates SPN-associated accounts and requests their Kerberos service
 tickets, then cross-references the results against the monitored privileged
 groups.
+The results table lists the affected account names alongside the count.
 
 ## How it works
 

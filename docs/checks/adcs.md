@@ -23,6 +23,9 @@ The supported ESC classes (ESC1, ESC8, ESC15) are documented in Certipy's [Privi
 
 ## What it checks
 
+The results table lists the certificate templates or Certification Authorities
+associated with each detected ESC classification.
+
 ad-kit enumerates certificate templates and Certification Authorities and
 detects ESC classes. It detects the common ESC classes (ESC1, ESC2, ESC3, ESC4,
 ESC6, ESC8, ESC9, ESC10, ESC13, ESC15, ESC16, ESC17) and reports findings for

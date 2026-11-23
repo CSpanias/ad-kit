@@ -31,6 +31,10 @@ Privileged group membership and the domain DACL are read in-process using Impack
 
 ## What it checks
 
+When a group or the `adminCount=1` indicator exceeds its review threshold, the
+console lists its returned members. `adminCount=1` can be stale and does not
+by itself confirm current privileged access.
+
 ad-kit:
 
 - Compares membership of high-privilege groups against the number of enabled

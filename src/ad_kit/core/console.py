@@ -5,8 +5,14 @@ Provides consistent Rich-based output across the application.
 """
 
 from rich.console import Console
+from rich.text import Text
 
 console = Console()
+
+
+def object_text(objects: list[str]) -> Text:
+    return Text("\n".join(objects) if objects else "-")
+
 
 def print_info(message: str) -> None:
     """
