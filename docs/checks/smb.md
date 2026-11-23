@@ -54,11 +54,12 @@ The null-session column shows **Permitted** when the explicit empty-credential
 login succeeds without a Guest marker, **Guest session** when NetExec reports
 a Guest mapping, and **Denied** for recognised authentication rejection
 statuses. **Unknown** means the result was inconclusive; it does not prove
-anonymous access is disabled. For enumeration, **Not attempted** means the
-login was denied. **Incomplete** means the check did not produce a
-complete result. Counts reflect objects
-reported by NetExec, not whether the shares are readable. Partially returned
-account counts are marked as incomplete.
+anonymous access is disabled. For enumeration, **Denied** means the
+empty-credential login was denied, so enumeration was not attempted; it is not
+a separate share or user enumeration result. **Incomplete** means the check
+did not produce a complete result. Counts reflect objects reported by NetExec,
+not whether the shares are readable. Partially returned account counts are
+marked as incomplete.
 
 For confirmed anonymous-enumeration findings, the console displays one current-run sample:
 up to ten anonymous user rows from a Domain Controller where available,

@@ -81,7 +81,7 @@ def _enumeration_excerpt(output: str, kind: str) -> tuple[str, bool]:
 
 def _show_anonymous_evidence(
     records: list[CheckEvidence], results: list[dict], protocol: str
-) -> None:
+) -> bool:
     sample: tuple[str, tuple[str, str], list[CheckEvidence]] | None = None
     best_rank = 3
     for result in results:
@@ -116,7 +116,7 @@ def _show_anonymous_evidence(
 
     if sample is None:
         console.print()
-        return
+        return False
     host, names, selected = sample
     console.print(f"\nAnonymous evidence - {host}\n", markup=False)
     for record in selected:
@@ -136,6 +136,7 @@ def _show_anonymous_evidence(
             format_check_evidence(record, excerpt), markup=False, highlight=False
         )
         console.print()
+    return True
 
 
 def run_ldap_checks() -> None:
@@ -297,7 +298,7 @@ def _anonymous_count(
         return f"Incomplete ({count} observed)"
     if count is not None:
         return str(count)
-    return "Not attempted" if null_auth is False else "Incomplete"
+    return "[green]✓ Denied[/green]" if null_auth is False else "Incomplete"
 
 
 def _check_share_access(
@@ -461,6 +462,9 @@ def run_smb_checks(
         )
 
     console.print(dc_table)
+    dc_evidence_shown = _show_anonymous_evidence(
+        evidence, [result for result in dc_results if result in anonymous_enumeration], "smb"
+    )
 
     print_section("SMB Checks - Hosts")
 
@@ -483,11 +487,10 @@ def run_smb_checks(
         )
 
     console.print(host_table)
-    _show_anonymous_evidence(
-        evidence,
-        [result for result in dc_results + host_results if result in anonymous_enumeration],
-        "smb",
-    )
+    if not dc_evidence_shown:
+        _show_anonymous_evidence(
+            evidence, [result for result in host_results if result in anonymous_enumeration], "smb"
+        )
 
     share_access_results = []
     share_failed_hosts = []
