@@ -285,14 +285,18 @@ def run_tombstone_checks(
 
     record_findings(findings)
 
-def _null_session_status(null_auth: bool | None, guest_auth: bool = False) -> str:
-    if guest_auth:
-        return "[yellow]⚠ Guest session[/yellow]"
-    if null_auth is True:
-        return "[red]✗ Permitted[/red]"
-    if null_auth is False:
-        return "[green]✓ Denied[/green]"
-    return "[yellow]⚠ Unknown[/yellow]"
+def _verified_enumeration_status(result: dict) -> str:
+    users = result["anonymous_users"]
+    verified = result["anonymous_shares"] is not None or (
+        users is not None
+        and (users > 0 or result.get("anonymous_users_complete", False))
+    )
+    if verified:
+        if result.get("guest_auth", False):
+            return "Guest"
+        if result["null_auth"] is True:
+            return "Permitted"
+    return "Denied / unverified"
 
 
 def _anonymous_count(
@@ -342,7 +346,6 @@ def run_smb_checks(
         session_data, "domain_computers_exported", "Domain computer"
     )
 
-    smb_results = []
     findings = []
 
     smb_signing_disabled = []
@@ -354,6 +357,9 @@ def run_smb_checks(
 
     hosts = load_domain_computers()
     dcs = {dc.rstrip(".").casefold() for dc in load_dc_hostnames()}
+    targets = unique_hosts(hosts)
+    dc_targets = [host for host in targets if host.rstrip(".").casefold() in dcs]
+    host_targets = [host for host in targets if host.rstrip(".").casefold() not in dcs]
 
     def check_host(host: str) -> tuple[str, dict | None, str | None, list[CheckEvidence]]:
         with capture_check_evidence() as captured:
@@ -367,10 +373,17 @@ def run_smb_checks(
                 return host, None, str(exc), captured
             return host, result, None, captured
 
-    with capture_check_evidence() as evidence, progress("Checking SMB configuration..."):
-        checked = parallel_items(
-            unique_hosts(hosts), "SMB configuration hosts", check_host
-        )
+    def check_configuration_batch(
+        batch: list[str], label: str
+    ) -> tuple[list[dict], list[CheckEvidence]]:
+        if not batch:
+            return [], []
+        batch_results = []
+        with (
+            capture_check_evidence() as evidence,
+            progress(f"Checking SMB configuration for {label}..."),
+        ):
+            checked = parallel_items(batch, f"SMB configuration {label}", check_host)
         for host, result, error, captured in checked:
             evidence.extend(captured)
             if error is not None:
@@ -404,7 +417,8 @@ def run_smb_checks(
                 continue
             is_dc = host.rstrip(".").casefold() in dcs
             if (result["null_auth"] or result.get("guest_auth", False)) and (
-                result["anonymous_shares"] is None
+                result["anonymous_incomplete"]
+                or result["anonymous_shares"] is None
                 or (
                     is_dc
                     and not result.get(
@@ -414,30 +428,10 @@ def run_smb_checks(
             ):
                 anonymous_failed_hosts.append(result["host"])
 
-            smb_results.append(result)
+            batch_results.append(result)
+        return batch_results, evidence
 
-    dc_results = []
-    host_results = []
-
-    for result in smb_results:
-
-        if result["signing"] == "[red]✗ Disabled[/red]":
-
-            smb_signing_disabled.append(result["host"])
-
-        if result["smbv1"] == "[red]✗ Enabled[/red]":
-
-            smbv1_enabled.append(result["host"])
-
-        if result["anonymous_shares"] or result["anonymous_users"]:
-            anonymous_enumeration.append(result)
-
-        host = result["host"].rstrip(".").casefold()
-
-        if host in dcs:
-            dc_results.append(result)
-        else:
-            host_results.append(result)
+    dc_results, dc_evidence = check_configuration_batch(dc_targets, "Domain Controllers")
 
     print_section("SMB Checks - Domain Controllers")
 
@@ -446,7 +440,7 @@ def run_smb_checks(
     dc_table.add_column("Host", style="cyan")
     dc_table.add_column("Signing", style="green")
     dc_table.add_column("SMBv1", style="green")
-    dc_table.add_column("Null Session", style="yellow")
+    dc_table.add_column("Empty-Credential Enumeration", style="yellow")
     dc_table.add_column("Anon Shares (count)", style="yellow")
     dc_table.add_column("Anon Users (count)", style="yellow")
 
@@ -456,7 +450,7 @@ def run_smb_checks(
             result["host"],
             result["signing"],
             result["smbv1"],
-            _null_session_status(result["null_auth"], result.get("guest_auth", False)),
+            _verified_enumeration_status(result),
             _anonymous_count(result["anonymous_shares"], result["null_auth"]),
             _anonymous_count(
                 result["anonymous_users"],
@@ -467,34 +461,81 @@ def run_smb_checks(
 
     console.print(dc_table)
     dc_evidence_shown = _show_anonymous_evidence(
-        evidence, [result for result in dc_results if result in anonymous_enumeration], "smb"
+        dc_evidence,
+        [
+            result for result in dc_results
+            if result["anonymous_shares"] or result["anonymous_users"]
+        ],
+        "smb",
     )
+
+    host_results, host_evidence = check_configuration_batch(host_targets, "hosts")
 
     print_section("SMB Checks - Hosts")
 
     host_table = Table()
 
-    host_table.add_column("Host", style="cyan")
-    host_table.add_column("Signing", style="green")
-    host_table.add_column("SMBv1", style="green")
-    host_table.add_column("Null Session", style="yellow")
-    host_table.add_column("Anon Shares (count)", style="yellow")
+    host_table.add_column("Check", style="cyan")
+    host_table.add_column("Status", style="yellow")
+    host_table.add_column("Hosts", justify="right")
 
-    for result in host_results:
-
-        host_table.add_row(
-            result["host"],
-            result["signing"],
-            result["smbv1"],
-            _null_session_status(result["null_auth"], result.get("guest_auth", False)),
-            _anonymous_count(result["anonymous_shares"], result["null_auth"]),
+    for label, key in (("SMB Signing", "signing"), ("SMBv1", "smbv1")):
+        enabled_status = "[green]✓ Enabled[/green]" if key == "signing" else "[red]✗ Enabled[/red]"
+        disabled_status = (
+            "[red]✗ Disabled[/red]" if key == "signing" else "[green]✓ Disabled[/green]"
         )
+        enabled = sum(result[key] == enabled_status for result in host_results)
+        disabled = sum(result[key] == disabled_status for result in host_results)
+        host_table.add_row(label, "Enabled", str(enabled))
+        host_table.add_row(label, "Disabled", str(disabled))
+        host_table.add_row(label, "Unknown", str(len(host_targets) - enabled - disabled))
+
+    statuses = [_verified_enumeration_status(result) for result in host_results]
+    permitted = statuses.count("Permitted")
+    guest = statuses.count("Guest")
+    host_table.add_row("Empty-Credential Enumeration", "Permitted", str(permitted))
+    host_table.add_row("Empty-Credential Enumeration", "Guest", str(guest))
+    host_table.add_row(
+        "Empty-Credential Enumeration", "Denied / unverified",
+        str(len(host_targets) - permitted - guest),
+    )
 
     console.print(host_table)
+    if unknown_hosts:
+        count = len({host.casefold() for host in unknown_hosts})
+        print_warning(
+            "SMB configuration could not be fully assessed on "
+            f"{count} {count_form(count, 'host', 'hosts')}. "
+            "See the HTML report for details."
+        )
+
+    if anonymous_failed_hosts:
+        count = len({host.casefold() for host in anonymous_failed_hosts})
+        print_warning(
+            "SMB anonymous enumeration could not be completed on "
+            f"{count} {count_form(count, 'host', 'hosts')}. "
+            "See the HTML report for details."
+        )
+
     if not dc_evidence_shown:
         _show_anonymous_evidence(
-            evidence, [result for result in host_results if result in anonymous_enumeration], "smb"
+            host_evidence,
+            [
+                result for result in host_results
+                if result["anonymous_shares"] or result["anonymous_users"]
+            ],
+            "smb",
         )
+    else:
+        console.print()
+
+    for result in dc_results + host_results:
+        if result["signing"] == "[red]✗ Disabled[/red]":
+            smb_signing_disabled.append(result["host"])
+        if result["smbv1"] == "[red]✗ Enabled[/red]":
+            smbv1_enabled.append(result["host"])
+        if result["anonymous_shares"] or result["anonymous_users"]:
+            anonymous_enumeration.append(result)
 
     share_access_results = []
     share_failed_hosts = []
@@ -572,25 +613,11 @@ def run_smb_checks(
             "Full command output is available in the evidence directory."
         )
 
-    if unknown_hosts:
-
-        print_warning(
-            "SMB configuration could not be fully assessed on "
-            f"{len({host.casefold() for host in unknown_hosts})} host(s). "
-            "See the HTML report for details."
-        )
-
-    if anonymous_failed_hosts:
-        print_warning(
-            "SMB anonymous enumeration could not be completed on "
-            f"{len({host.casefold() for host in anonymous_failed_hosts})} host(s). "
-            "See the HTML report for details."
-        )
-
     if share_failed_hosts:
+        count = len({host.casefold() for host in share_failed_hosts})
         print_warning(
             "SMB share-access checks could not be completed on "
-            f"{len({host.casefold() for host in share_failed_hosts})} host(s). "
+            f"{count} {count_form(count, 'host', 'hosts')}. "
             "See the HTML report for details."
         )
 

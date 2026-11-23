@@ -16,6 +16,7 @@ def isolate_reports(monkeypatch, tmp_path):
 @pytest.mark.parametrize("admin", [False, True])
 def test_authentication_success_is_followed_by_blank_line(monkeypatch, admin):
     output = io.StringIO()
+    prompts = []
     console = Console(file=output)
     monkeypatch.setattr(credentials, "console", console)
     monkeypatch.setattr(credentials, "print_success", lambda message: console.print(message))
@@ -24,12 +25,15 @@ def test_authentication_success_is_followed_by_blank_line(monkeypatch, admin):
     })
     monkeypatch.setattr(credentials, "progress", lambda *_args: nullcontext())
     monkeypatch.setattr(credentials, "validate_credentials", lambda *_args: "valid")
-    monkeypatch.setattr(credentials.typer, "prompt", lambda *_args, **_kwargs: "test")
+    monkeypatch.setattr(
+        credentials.typer, "prompt", lambda label, **_kwargs: prompts.append(label) or "test"
+    )
 
     if admin:
         credentials.authenticate_domain_admin()
     else:
         credentials.authenticate_standard_user()
+        assert prompts == ["Enter the Standard User password"]
     assert output.getvalue().endswith("Authentication succeeded.\n\n")
 
 

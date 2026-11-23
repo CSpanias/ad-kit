@@ -107,12 +107,15 @@ def _parse_share_count(output: str) -> int | None:
             re.IGNORECASE,
         )
     )
-    if share_list_count:
-        return max(share_list_count, len(_parse_share_rows(output)))
+    share_row_count = len(_parse_share_rows(output))
+    if share_list_count or share_row_count:
+        return max(share_list_count, share_row_count)
+    if re.search(r"error enumerating shares", output, re.IGNORECASE):
+        return None
     if re.search(r"shares returned:\s*\[\s*\]", output, re.IGNORECASE):
         return 0
     if _has_share_table(output):
-        return len(_parse_share_rows(output))
+        return 0
     return None
 
 
@@ -317,6 +320,10 @@ def smb_configuration_check(
             incomplete.append(str(exc))
         else:
             anonymous_shares = _parse_share_count(enumeration_output)
+            if anonymous_shares is not None and re.search(
+                r"error enumerating shares", enumeration_output, re.IGNORECASE
+            ):
+                incomplete.append("Share enumeration reported an error; see evidence")
             if enumerate_users:
                 anonymous_users, anonymous_users_complete = _parse_user_count(
                     enumeration_output

@@ -54,8 +54,8 @@ def test_smb_keeps_successes_and_reports_each_incomplete_host(monkeypatch, tmp_p
     monkeypatch.setattr(unauthenticated, "smb_share_access_check", writable)
     unauthenticated.run_smb_checks("secret")
     assert len(warnings) == 2
-    assert "SMB configuration could not be fully assessed on 1 host(s)" in warnings[0]
-    assert "SMB share-access checks could not be completed on 1 host(s)" in warnings[1]
+    assert "SMB configuration could not be fully assessed on 1 host" in warnings[0]
+    assert "SMB share-access checks could not be completed on 1 host" in warnings[1]
     assert all("smb-B" not in warning and "smb-writable-A" not in warning for warning in warnings)
     results.write_reports(tmp_path)
     report = (tmp_path / "ad-kit_findings_all.html").read_text(encoding="utf-8")
@@ -95,11 +95,55 @@ def test_smb_summarises_multiple_partial_and_unknown_hosts(monkeypatch, tmp_path
     monkeypatch.setattr(unauthenticated, "smb_share_access_check", lambda *_args: ([], []))
     unauthenticated.run_smb_checks("secret")
     assert len(warnings) == 1
-    assert "2 host(s)" in warnings[0]
+    assert "2 hosts" in warnings[0]
     assert len(results._incomplete) == 2
     assert "SMB configuration - A: Unknown: signing, SMBv1, anonymous access" in results._incomplete
     assert "SMB configuration - B: Unknown: signing" in results._incomplete
     assert (tmp_path / "findings-smb-unknown-hosts.txt").read_text().splitlines() == ["A", "B"]
+    results.reset()
+
+
+def test_smb_configuration_warnings_precede_share_access(monkeypatch, tmp_path):
+    results.reset()
+    output = io.StringIO()
+    console = Console(file=output, width=160)
+    monkeypatch.setattr(unauthenticated, "console", console)
+    monkeypatch.setattr(unauthenticated, "print_section", lambda title: print(title, file=output))
+    monkeypatch.setattr(
+        unauthenticated, "print_warning", lambda message: print(message, file=output)
+    )
+    monkeypatch.setattr(unauthenticated, "progress", no_progress)
+    monkeypatch.setattr(unauthenticated, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user", "domain_computers_exported": True,
+    })
+    monkeypatch.setattr(unauthenticated, "load_domain_computers", lambda: ["A", "B"])
+    monkeypatch.setattr(unauthenticated, "load_dc_hostnames", lambda: [])
+    monkeypatch.setattr(unauthenticated, "get_artefacts_dir", lambda: tmp_path)
+
+    def configuration(host, _dc, *, enumerate_users):
+        if host == "B":
+            raise failure("smb-B")
+        return {
+            "host": host, "signing": "[green]✓ Enabled[/green]",
+            "smbv1": "[green]✓ Disabled[/green]", "null_auth": True,
+            "anonymous_shares": 1, "anonymous_users": None,
+            "anonymous_incomplete": ["enumeration failed"],
+        }
+
+    def share_access(*_args):
+        text = output.getvalue()
+        assert text.index("SMB Checks - Hosts") < text.index("SMB configuration could not")
+        assert "SMB anonymous enumeration could not" in text
+        assert "SMB Checks - Share Access" not in text
+        return [], ["share-access failed"]
+
+    monkeypatch.setattr(unauthenticated, "smb_configuration_check", configuration)
+    monkeypatch.setattr(unauthenticated, "smb_share_access_check", share_access)
+    unauthenticated.run_smb_checks("secret")
+    text = output.getvalue()
+    assert text.index("SMB Checks - Share Access") < text.index(
+        "SMB share-access checks could not"
+    )
     results.reset()
 
 
@@ -141,8 +185,8 @@ def test_smb_omits_hosts_without_usable_results_but_retains_coverage(monkeypatch
     unauthenticated.run_smb_checks("secret")
     tables = output.getvalue().split("SMB Checks - Share Access")[0]
     assert all(host not in tables for host in ("OFFLINE", "DC-FAIL", "FILTERED"))
-    assert "PARTIAL" in tables and "AVAILABLE" in tables
-    assert any("PARTIAL" in line and "Unknown" in line for line in tables.splitlines())
+    assert "PARTIAL" not in tables and "AVAILABLE" not in tables
+    assert "SMB Signing" in tables and "Unknown" in tables
     assert sorted(share_hosts) == sorted(hosts)
     for host in ("OFFLINE", "DC-FAIL", "FILTERED", "PARTIAL"):
         assert any(f"SMB configuration - {host}:" in entry for entry in results._incomplete)
@@ -199,7 +243,7 @@ def test_smb_summarises_anonymous_enumeration_failures(monkeypatch, tmp_path):
     monkeypatch.setattr(smb, "run_check", run)
     unauthenticated.run_smb_checks("secret")
     assert len(warnings) == 1
-    assert "SMB anonymous enumeration could not be completed on 2 host(s)" in warnings[0]
+    assert "SMB anonymous enumeration could not be completed on 2 hosts" in warnings[0]
     assert len(results._incomplete) == 2
     assert "SMB anonymous enumeration - A" in results._incomplete[0]
     assert "SMB anonymous enumeration - B" in results._incomplete[1]

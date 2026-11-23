@@ -26,12 +26,14 @@ The anonymous enumeration commands run when the empty-credential login
 succeeds, including when it is mapped to a Guest session. User enumeration is
 restricted to discovered Domain Controllers.
 The share-access checks use the Standard User account and are prompted only
-when needed. Configuration and share access are checked across hosts
-concurrently, with four workers by default; use `--workers` to choose between
-one and 16. Share access is checked once per host. The console groups shares
-by host and reported permissions, omitting read-only `IPC$` and `print$`
-entries. Writable entries for these shares remain visible. Full command output
-remains in the evidence directory, and the omission does not affect findings.
+when needed. SMB configuration is checked on Domain Controllers first, and
+their results are displayed before the remaining hosts are checked. Each batch
+and the subsequent share-access checks use up to four workers by default; use
+`--workers` to choose between one and 16. Share access is checked once per
+host. The console groups shares by host and reported permissions, omitting
+read-only `IPC$` and `print$` entries. Writable entries for these shares remain
+visible. Full command output remains in the evidence directory, and the
+omission does not affect findings.
 
 ## What it checks
 
@@ -39,7 +41,8 @@ ad-kit records:
 
 - **SMB signing** - required or not.
 - **SMBv1** - enabled or not.
-- **Null session** - whether NetExec reports an anonymous SMB session.
+- **Empty-credential enumeration** - whether share or user enumeration was
+  verified after an anonymous or Guest-mapped SMB session.
 - **Anonymous enumeration** - share counts on all hosts and account counts
   on Domain Controllers, when enumeration succeeds.
 - **Share access** - readable and write-related share permissions reported for
@@ -50,16 +53,17 @@ The signing, SMBv1, and anonymous checks are unauthenticated. The
 share-access checks use the Standard User account and are prompted only when
 needed.
 
-The null-session column shows **Permitted** when the explicit empty-credential
-login succeeds without a Guest marker, **Guest session** when NetExec reports
-a Guest mapping, and **Denied** for recognised authentication rejection
-statuses. **Unknown** means the result was inconclusive; it does not prove
-anonymous access is disabled. For enumeration, **Denied** means the
-empty-credential login was denied, so enumeration was not attempted; it is not
-a separate share or user enumeration result. **Incomplete** means the check
-did not produce a complete result. Counts reflect objects reported by NetExec,
-not whether the shares are readable. Partially returned account counts are
-marked as incomplete.
+The host configuration table shows counts for signing and SMBv1 instead of
+individual hosts. Unknown counts include hosts without usable results. Its
+empty-credential enumeration counts distinguish **Permitted** from **Guest**
+and **Denied / unverified**. The DC table uses the same enumeration status.
+Enumeration is verified when a share or user listing completes, even if it is
+empty, or when partial user results contain observed accounts. **Denied /
+unverified** includes explicit authentication denials as well as errors and
+other inconclusive results; it does not prove that access was denied.
+Incomplete checks are also recorded in the HTML report. Enumeration counts
+reflect objects reported by NetExec, not whether shares are readable.
+Partially returned account counts are marked as incomplete.
 
 For confirmed anonymous-enumeration findings, the console displays one current-run sample:
 up to ten anonymous user rows from a Domain Controller where available,
@@ -69,11 +73,12 @@ for other hosts remains in the evidence directory.
 
 If a host or an individual enumeration command fails, ad-kit retains confirmed
 results from other checks and hosts. The console summarises affected host
-counts; individual incomplete checks are listed in the HTML report. Hosts
-without any usable SMB configuration result are omitted from the configuration
-tables; this does not establish whether they are offline, filtered, or otherwise
-unreachable. Hosts with partially confirmed results remain visible, and the
-share-access checks still attempt every discovered host.
+counts beside the relevant configuration or share-access results; individual
+incomplete checks are listed in the HTML report. Domain
+Controllers without usable SMB configuration results are omitted from the DC
+table. Their absence does not establish whether they are offline, filtered,
+or otherwise unreachable. The share-access checks still attempt every
+discovered host.
 
 ## How it works
 

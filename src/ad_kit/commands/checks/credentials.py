@@ -26,7 +26,7 @@ def authenticate_standard_user() -> str:
     while True:
 
         std_pass = typer.prompt(
-            "Standard User Password",
+            "Enter the Standard User password",
             hide_input=True,
         )
 

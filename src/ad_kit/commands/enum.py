@@ -591,7 +591,7 @@ def run_enumeration() -> None:
         if validate_std:
 
             std_user = typer.prompt("Standard User Username")
-            std_pass = typer.prompt("Standard User Password", hide_input=True)
+            std_pass = typer.prompt("Enter the Standard User password", hide_input=True)
 
         console.print()
 
