@@ -44,8 +44,19 @@ SMB each display one anonymous enumeration sample with up to ten result rows;
 the checks still cover every target. Known passwords are redacted; review
 other potentially sensitive output before sharing screenshots.
 
-The current run writes `ad-kit/ad-kit_findings.html` and 
-`ad-kit/ad-kit_findings.json`.
+Report filenames identify the checks in the current run:
+
+- `ad-kit/ad-kit_findings_all.html` and `.json` for a full run, including
+  runs with exclusions.
+- `ad-kit/ad-kit_findings_privileged.html` and `.json` for a single check.
+- `ad-kit/ad-kit_findings_ldap_smb.html` and `.json` for selected checks,
+  using their names in execution order. Repeated names appear once in the
+  filename.
+
+With `--csacyber`, XML is written instead of JSON using the same suffix. With
+`--dc`, the separate DC XML adds `-dc` before the extension. Each run replaces
+only the matching HTML and selected export; an older export in the other format
+is not removed.
 
 When a command or host check cannot be completed, ad-kit preserves confirmed
 findings and lists incomplete checks in the console and HTML report. The JSON
@@ -56,9 +67,8 @@ The HTML report is self-contained and has **Copy Markdown** buttons for each
 finding and for its individual commentary, evidence, and remediation sections. 
 Affected assets are included in commentary, and references in remediation. 
 
-Individual commentary and remediation copies omit their section titles; the 
-full finding copy includes them. Each run replaces the HTML and JSON exports, 
-including when running selected checks.
+Individual section copies omit their section titles; the full finding copy
+includes them.
 
 ## Available Checks
 

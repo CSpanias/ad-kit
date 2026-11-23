@@ -46,9 +46,12 @@ ad-kit check run ldap pass-pol smb
 Each assessment run generates:
 
 - Console output (Rich tables)
-- Offline HTML findings report (`ad-kit/ad-kit_findings.html`)
-- JSON integration export (`ad-kit/ad-kit_findings.json`)
+- Offline HTML findings report (`ad-kit/ad-kit_findings_all.html` for a full run)
+- JSON integration export (`ad-kit/ad-kit_findings_all.json` for a full run)
 - Evidence files (`ad-kit/evidence/`)
+
+Selected runs use their check names instead of `all`. With `--csacyber`,
+SureFormat XML is written instead of JSON.
 
 ## Stage 4: Retrieve Artefacts
 

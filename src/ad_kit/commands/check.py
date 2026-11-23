@@ -197,7 +197,12 @@ def run_selected_checks(
             std_pass,
         )
 
-    results.write_reports(get_artefacts_dir(), domain=domain, dc=dc.strip() if dc else None)
+    run_name = "_".join(dict.fromkeys(
+        module for module in modules if module in AVAILABLE_CHECKS
+    )) or "selected"
+    results.write_reports(
+        get_artefacts_dir(), run_name=run_name, domain=domain, dc=dc.strip() if dc else None
+    )
 
 
 def run_checks(

@@ -49,6 +49,7 @@ Thumbs.db
 engagements/
 
 # Tool output
+/ad-kit/ad-kit_findings_*
 output/
 loot/
 reports/

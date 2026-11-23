@@ -177,18 +177,18 @@ def test_run_exports_all_findings_without_markdown_files(monkeypatch, tmp_path):
     )
 
     check.run_selected_checks(["test-report"])
-    report = (tmp_path / "ad-kit_findings.html").read_text(encoding="utf-8")
-    data = json.loads((tmp_path / "ad-kit_findings.json").read_text(encoding="utf-8"))
+    report = (tmp_path / "ad-kit_findings_test-report.html").read_text(encoding="utf-8")
+    data = json.loads((tmp_path / "ad-kit_findings_test-report.json").read_text(encoding="utf-8"))
     assert "SMB-001 - Mapped" in report and "OTHER-001 - Unmapped" in report
     assert [item["id"] for item in data["findings"]] == ["OTHER-001", "SMB-001"]
     assert list(tmp_path.glob("findings-*.md")) == [old_markdown]
     assert old_markdown.read_text(encoding="utf-8") == "previous report"
 
     check.run_selected_checks([])
-    assert "No findings were generated." in (tmp_path / "ad-kit_findings.html").read_text(
+    assert "No findings were generated." in (tmp_path / "ad-kit_findings_selected.html").read_text(
         encoding="utf-8"
     )
-    assert json.loads((tmp_path / "ad-kit_findings.json").read_text(encoding="utf-8")) == {
+    assert json.loads((tmp_path / "ad-kit_findings_selected.json").read_text(encoding="utf-8")) == {
         "findings": []
     }
 
@@ -205,11 +205,54 @@ def test_full_run_writes_reports(monkeypatch, tmp_path):
 
     check.run_checks()
 
-    assert "SMB-001 - Mapped" in (tmp_path / "ad-kit_findings.html").read_text(encoding="utf-8")
+    assert "SMB-001 - Mapped" in (tmp_path / "ad-kit_findings_all.html").read_text(encoding="utf-8")
     assert not list(tmp_path.glob("findings-*.md"))
-    assert json.loads((tmp_path / "ad-kit_findings.json").read_text(encoding="utf-8"))[
+    assert json.loads((tmp_path / "ad-kit_findings_all.json").read_text(encoding="utf-8"))[
         "findings"
     ][0]["id"] == "SMB-001"
+
+
+def test_selected_check_reports_preserve_other_runs(monkeypatch, tmp_path):
+    monkeypatch.setattr(check, "get_artefacts_dir", lambda: tmp_path)
+    for module in ("ldap", "smb"):
+        monkeypatch.setitem(
+            check.AVAILABLE_CHECKS, module, check.CheckDefinition(
+                lambda password, name=module: (
+                    results.record_findings([Finding(name, name, name, "")]), password
+                )[1],
+                False,
+            )
+        )
+    full_report = tmp_path / "ad-kit_findings_all.html"
+    full_xml = tmp_path / "ad-kit_findings_all.xml"
+    full_report.write_text("full report", encoding="utf-8")
+    full_xml.write_text("full xml", encoding="utf-8")
+
+    check.run_selected_checks(["ldap", "smb"])
+    combined = tmp_path / "ad-kit_findings_ldap_smb.html"
+    assert "ldap - ldap" in combined.read_text(encoding="utf-8")
+    assert "smb - smb" in combined.read_text(encoding="utf-8")
+    assert (tmp_path / "ad-kit_findings_ldap_smb.json").exists()
+    assert not (tmp_path / "ad-kit_findings_ldap_smb.xml").exists()
+    check.run_selected_checks(["ldap"])
+    assert (tmp_path / "ad-kit_findings_ldap.html").exists()
+    assert combined.exists()
+    assert full_report.read_text(encoding="utf-8") == "full report"
+    assert full_xml.read_text(encoding="utf-8") == "full xml"
+
+
+def test_excluded_checks_are_not_in_report_filename(monkeypatch, tmp_path):
+    monkeypatch.setattr(check, "get_artefacts_dir", lambda: tmp_path)
+    for module in ("ldap", "smb"):
+        monkeypatch.setitem(
+            check.AVAILABLE_CHECKS, module, check.CheckDefinition(lambda password: password, False)
+        )
+
+    result = CliRunner().invoke(app, ["check", "run", "ldap", "smb", "--exclude", "smb"])
+
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "ad-kit_findings_ldap.html").exists()
+    assert not (tmp_path / "ad-kit_findings_ldap_smb.html").exists()
 
 
 @pytest.mark.parametrize(

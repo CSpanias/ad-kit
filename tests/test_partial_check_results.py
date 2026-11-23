@@ -58,7 +58,7 @@ def test_smb_keeps_successes_and_reports_each_incomplete_host(monkeypatch, tmp_p
     assert "SMB share-access checks could not be completed on 1 host(s)" in warnings[1]
     assert all("smb-B" not in warning and "smb-writable-A" not in warning for warning in warnings)
     results.write_reports(tmp_path)
-    report = (tmp_path / "ad-kit_findings.html").read_text(encoding="utf-8")
+    report = (tmp_path / "ad-kit_findings_all.html").read_text(encoding="utf-8")
     assert "SMB-001" in report and "SMB-004" in report
     assert "Incomplete checks" in report
     assert "SMB configuration - B" in report
@@ -254,7 +254,7 @@ def test_asrep_finding_survives_privileged_lookup_failure(monkeypatch, tmp_path)
     monkeypatch.setattr(unauthenticated, "asreproast_privileged_check", failed_lookup)
     unauthenticated.run_asreproast_checks("secret")
     results.write_reports(tmp_path)
-    report = (tmp_path / "ad-kit_findings.html").read_text(encoding="utf-8")
+    report = (tmp_path / "ad-kit_findings_all.html").read_text(encoding="utf-8")
     assert "ASREP-001" in report
     assert "AS-REP privileged membership" in report
     results.reset()
@@ -278,7 +278,7 @@ def test_privileged_finding_survives_later_subcheck_failure(monkeypatch, tmp_pat
     with pytest.raises(CheckExecutionError):
         privileged.run_privileged_group_checks("secret")
     results.write_reports(tmp_path)
-    assert "PRIV-001" in (tmp_path / "ad-kit_findings.html").read_text(encoding="utf-8")
+    assert "PRIV-001" in (tmp_path / "ad-kit_findings_all.html").read_text(encoding="utf-8")
     results.reset()
 
 
@@ -327,7 +327,9 @@ def test_skipped_module_is_listed_in_report(monkeypatch, tmp_path):
         check.AVAILABLE_CHECKS, "failed-test", check.CheckDefinition(failed, False)
     )
     check.run_selected_checks(["successful-test", "failed-test"])
-    report = (tmp_path / "ad-kit_findings.html").read_text(encoding="utf-8")
+    report = (tmp_path / "ad-kit_findings_successful-test_failed-test.html").read_text(
+        encoding="utf-8"
+    )
     assert "SMB-001" in report
     assert "Incomplete checks" in report and "failed-test" in report
     results.reset()

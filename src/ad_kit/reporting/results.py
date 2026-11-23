@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from ad_kit.core.finding import Finding
 from ad_kit.core.console import print_warning
+from ad_kit.core.finding import Finding
 from ad_kit.reporting import html, json, sureformat
 
 _findings: list[Finding] = []
@@ -33,23 +33,26 @@ def record_incomplete(
         print_warning(f"Incomplete: {entry}")
 
 
-def write_reports(directory: Path, *, domain: str | None = None, dc: str | None = None) -> None:
+def write_reports(
+    directory: Path, *, run_name: str = "all", domain: str | None = None, dc: str | None = None
+) -> None:
     """Write the full HTML report and the selected integration export."""
-    html.write_report(_findings, directory / "ad-kit_findings.html", _incomplete)
+    basename = f"ad-kit_findings_{run_name}"
+    html.write_report(_findings, directory / f"{basename}.html", _incomplete)
     if _incomplete:
         print_warning(
             f"Assessment incomplete: {len(_incomplete)} coverage gap(s). "
             "See the HTML report for details."
         )
     if domain is None:
-        json.write_findings(directory / "ad-kit_findings.json")
+        json.write_findings(directory / f"{basename}.json")
         return
 
     findings = json.get_findings()
     domain_findings = [
         f for f in findings if dc is None or f["id"] not in sureformat.DC_FINDING_IDS
     ]
-    sureformat.write_findings(directory / "ad-kit_findings.xml", domain.lower(), domain_findings)
+    sureformat.write_findings(directory / f"{basename}.xml", domain.lower(), domain_findings)
     if dc is not None:
         dc_findings = [f for f in findings if f["id"] in sureformat.DC_FINDING_IDS]
-        sureformat.write_findings(directory / "ad-kit_findings-dc.xml", dc, dc_findings)
+        sureformat.write_findings(directory / f"{basename}-dc.xml", dc, dc_findings)

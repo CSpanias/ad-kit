@@ -2,11 +2,12 @@ from ad_kit.commands import check
 from ad_kit.core.exceptions import CheckExecutionError
 
 
-def test_selected_checks_skip_failed_check_and_continue(monkeypatch):
+def test_selected_checks_skip_failed_check_and_continue(monkeypatch, tmp_path):
     printed = []
     calls = []
 
     monkeypatch.setattr(check, "print_error", lambda message: printed.append(message))
+    monkeypatch.setattr(check, "get_artefacts_dir", lambda: tmp_path)
 
     def passing(std_pass=None):
         calls.append("passing")

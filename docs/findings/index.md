@@ -42,14 +42,18 @@ LDAP-001:
 
 ## Report Output
 
-Each run writes `ad-kit/ad-kit_findings.html`, where each finding or its
-individual commentary, evidence, and remediation sections can be copied as
-Markdown. Affected assets are included in commentary and references in
-remediation. By default, it also writes `ad-kit/ad-kit_findings.json` for
+Each run writes an HTML report, such as `ad-kit/ad-kit_findings_all.html` for a
+full run or `ad-kit/ad-kit_findings_privileged.html` for one check. Each finding
+or its individual commentary, evidence, and remediation sections can be copied
+as Markdown. Affected assets are included in commentary and references in
+remediation. By default, it also writes a JSON file with the same suffix for
 integration, containing the YAML ID and commentary for every finding. With
 `--csacyber`, SureFormat XML is written instead of JSON; it maps YAML IDs to
 platform IDs and warns about findings without a mapping. The exports contain
-findings from the current run only. The domain hostname in the XML is
-lowercase; a separately supplied DC label is preserved as entered.
+findings from the current run only. Multiple selected checks use their names
+in execution order as the suffix. A run replaces files with the same suffix
+and format; older files in other formats are left untouched. The domain
+hostname in the XML is lowercase; a separately supplied DC label is preserved
+as entered.
 
 Evidence is stored in `ad-kit/evidence/`.

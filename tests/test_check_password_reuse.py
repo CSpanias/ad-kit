@@ -8,6 +8,11 @@ from ad_kit.commands import check
 from ad_kit.commands.checks import credentials
 
 
+@pytest.fixture(autouse=True)
+def isolate_reports(monkeypatch, tmp_path):
+    monkeypatch.setattr(check, "get_artefacts_dir", lambda: tmp_path)
+
+
 @pytest.mark.parametrize("admin", [False, True])
 def test_authentication_success_is_followed_by_blank_line(monkeypatch, admin):
     output = io.StringIO()

@@ -38,7 +38,7 @@ def test_sureformat_export_matches_adapter_and_optional_dc_split(monkeypatch, tm
 
     check.run_selected_checks(["fake"], csacyber=True, dc=dc)
 
-    root, item, service, vulnerabilities = _vulnerabilities(tmp_path / "ad-kit_findings.xml")
+    root, item, service, vulnerabilities = _vulnerabilities(tmp_path / "ad-kit_findings_fake.xml")
     assert root.attrib == {"source": "SureFormat", "version": "1.0.0"}
     assert item.attrib == {"ipaddress": "", "hostname": "example.com"}
     assert service.attrib == {"name": "", "port": "", "protocol": "tcp"}
@@ -50,9 +50,9 @@ def test_sureformat_export_matches_adapter_and_optional_dc_split(monkeypatch, tm
     assert protected.findtext("information") == "Protected details."
     smb = next(v for v in vulnerabilities if v.attrib["id"] == "SC-7704")
     assert smb.findtext("information") == "SMB signing details."
-    assert (tmp_path / "ad-kit_findings.html").exists()
-    assert not (tmp_path / "ad-kit_findings.json").exists()
-    dc_path = tmp_path / "ad-kit_findings-dc.xml"
+    assert (tmp_path / "ad-kit_findings_fake.html").exists()
+    assert not (tmp_path / "ad-kit_findings_fake.json").exists()
+    dc_path = tmp_path / "ad-kit_findings_fake-dc.xml"
     if dc:
         _, dc_item, _, dc_vulnerabilities = _vulnerabilities(dc_path)
         assert dc_item.attrib["hostname"] == dc
@@ -101,7 +101,7 @@ def test_sureformat_exports_builtin_administrator_finding(tmp_path):
 
 
 def test_full_run_exports_xml_without_replacing_previous_json(monkeypatch, tmp_path):
-    previous_json = tmp_path / "ad-kit_findings.json"
+    previous_json = tmp_path / "ad-kit_findings_all.json"
     previous_json.write_text("previous output", encoding="utf-8")
     monkeypatch.setattr(check, "get_artefacts_dir", lambda: tmp_path)
     monkeypatch.setattr(check, "require_session", lambda: {"domain": "example.com"})
@@ -114,7 +114,7 @@ def test_full_run_exports_xml_without_replacing_previous_json(monkeypatch, tmp_p
 
     check.run_checks(csacyber=True)
 
-    _, _, _, vulnerabilities = _vulnerabilities(tmp_path / "ad-kit_findings.xml")
+    _, _, _, vulnerabilities = _vulnerabilities(tmp_path / "ad-kit_findings_all.xml")
     assert [v.attrib["id"] for v in vulnerabilities] == ["SC-6643"]
     assert previous_json.read_text(encoding="utf-8") == "previous output"
 
@@ -134,12 +134,34 @@ def test_cli_creates_domain_and_dc_xml_from_session(monkeypatch, tmp_path):
     result = CliRunner().invoke(app, ["check", "ldap", "--csacyber", "--dc", "dc.example.com"])
 
     assert result.exit_code == 0, result.output
-    _, domain_item, _, domain_vulnerabilities = _vulnerabilities(tmp_path / "ad-kit_findings.xml")
-    _, dc_item, _, dc_vulnerabilities = _vulnerabilities(tmp_path / "ad-kit_findings-dc.xml")
+    _, domain_item, _, domain_vulnerabilities = _vulnerabilities(
+        tmp_path / "ad-kit_findings_ldap.xml"
+    )
+    _, dc_item, _, dc_vulnerabilities = _vulnerabilities(tmp_path / "ad-kit_findings_ldap-dc.xml")
     assert domain_item.attrib["hostname"] == "example.com"
     assert not domain_vulnerabilities
     assert dc_item.attrib["hostname"] == "dc.example.com"
     assert [v.attrib["id"] for v in dc_vulnerabilities] == ["SC-1000"]
+
+
+def test_selected_checks_xml_uses_all_selected_names(monkeypatch, tmp_path):
+    monkeypatch.setattr(check, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(check, "require_session", lambda: {"domain": "example.com"})
+    for module, finding_id in (("ldap", "LDAP-001"), ("smb", "SMB-001")):
+        monkeypatch.setitem(
+            check.AVAILABLE_CHECKS, module, check.CheckDefinition(
+                lambda password, name=finding_id: (
+                    results.record_findings([Finding(name, name, name, "")]), password
+                )[1],
+                False,
+            )
+        )
+
+    check.run_selected_checks(["ldap", "smb"], csacyber=True)
+    assert (tmp_path / "ad-kit_findings_ldap_smb.html").exists()
+    _, _, _, vulnerabilities = _vulnerabilities(tmp_path / "ad-kit_findings_ldap_smb.xml")
+    assert [v.attrib["id"] for v in vulnerabilities] == ["SC-6080", "SC-7704"]
+    assert not (tmp_path / "ad-kit_findings_ldap_smb.json").exists()
 
 
 @pytest.mark.parametrize(
