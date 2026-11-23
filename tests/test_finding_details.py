@@ -212,12 +212,14 @@ def test_other_checks_show_known_affected_objects(monkeypatch, kind):
     assert expected in output.getvalue()
 
 
-def test_privileged_members_are_shown_only_for_indicators_needing_review(monkeypatch):
+def test_privileged_summary_omits_member_list(monkeypatch):
     output = io.StringIO()
+    findings = [object()]
+    recorded_findings = []
     monkeypatch.setattr(privileged, "console", Console(file=output, width=160))
     monkeypatch.setattr(privileged, "print_section", lambda *_args: None)
     monkeypatch.setattr(privileged, "progress", lambda *_args: nullcontext())
-    monkeypatch.setattr(privileged, "record_findings", lambda *_args: None)
+    monkeypatch.setattr(privileged, "record_findings", recorded_findings.append)
     monkeypatch.setattr(privileged, "require_session", lambda: {
         "dc_ip": "dc", "domain": "example.test", "standard_user": "user",
     })
@@ -227,7 +229,7 @@ def test_privileged_members_are_shown_only_for_indicators_needing_review(monkeyp
             "Enterprise Admins": {"member_count": 1, "percentage": 1.0, "members": ["bob"]},
         },
         "admin_count": {"member_count": 1, "percentage": 25.0, "members": ["stale"]},
-    }, []))
+    }, findings))
     monkeypatch.setattr(privileged, "builtin_accounts_check", lambda *_args: ({
         "administrator": {"enabled": False, "account_name": "administrator"},
         "guest": {"enabled": False, "account_name": "guest"},
@@ -236,5 +238,8 @@ def test_privileged_members_are_shown_only_for_indicators_needing_review(monkeyp
     monkeypatch.setattr(privileged, "dcsync_check", lambda *_args: [])
     privileged.run_privileged_group_checks("pw")
     text = output.getvalue()
-    assert "alice" in text and "stale" in text
-    assert "bob" not in text
+    assert "Domain Admins" in text and "adminCount=1 accounts" in text
+    assert "Excessive" in text and "Review" in text
+    assert "Accounts Requiring Review" not in text
+    assert all(member not in text for member in ("alice", "bob", "stale"))
+    assert findings in recorded_findings

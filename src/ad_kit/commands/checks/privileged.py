@@ -178,25 +178,6 @@ def run_privileged_group_checks(
 
     console.print(table)
 
-    excessive_members = [
-        (group, data["members"])
-        for group, data in privileged_results["groups"].items()
-        if data["percentage"] >= PRIVILEGED_GROUP_THRESHOLD and data["members"]
-    ]
-    if (
-        admin_count["percentage"] >= ADMIN_COUNT_THRESHOLD
-        and admin_count["members"]
-    ):
-        excessive_members.append(("adminCount=1 accounts", admin_count["members"]))
-    if excessive_members:
-        members_table = Table(title="Accounts Requiring Review")
-        members_table.add_column("Group / Indicator", style="cyan")
-        members_table.add_column("Object", style="yellow")
-        for group, members in excessive_members:
-            members_table.add_row(group, object_text(members))
-        console.print()
-        console.print(members_table)
-
     account_table = Table(title="Built-in Account Status")
     account_table.add_column("Account", style="cyan")
     account_table.add_column("sAMAccountName", style="green")
