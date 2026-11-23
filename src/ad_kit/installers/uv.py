@@ -61,6 +61,8 @@ class UVInstaller(Installer):
             tool: Tool definition.
             force: Accepted for consistency; uv installations already reinstall.
         """
+        if not tool.source:
+            raise InstallationError(tool.name, "No installation source is configured.")
 
         existing = (
             which(tool.check_command)

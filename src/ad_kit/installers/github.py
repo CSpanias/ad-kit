@@ -10,6 +10,7 @@ import tarfile
 import tempfile
 from pathlib import Path
 from shutil import which
+from typing import TypedDict
 
 import requests
 
@@ -20,13 +21,22 @@ from ad_kit.installers.base import Installer
 from ad_kit.models import Tool
 
 
+class ReleaseAsset(TypedDict):
+    name: str
+    browser_download_url: str
+
+
+class Release(TypedDict):
+    assets: list[ReleaseAsset]
+
+
 class GitHubReleaseInstaller(Installer):
     """
     Install tools distributed through GitHub Releases.
     """
 
 
-    def _get_latest_release(self, repo: str) -> dict:
+    def _get_latest_release(self, repo: str) -> Release:
         """
         Retrieve the latest GitHub release.
         """
@@ -37,14 +47,27 @@ class GitHubReleaseInstaller(Installer):
 
         response.raise_for_status()
 
-        return response.json()
+        data: object = response.json()
+        if not isinstance(data, dict) or not isinstance(data.get("assets"), list):
+            raise ValueError(f"GitHub release for {repo} has an invalid assets list.")
+
+        assets: list[ReleaseAsset] = []
+        for asset in data["assets"]:
+            if not isinstance(asset, dict):
+                raise ValueError(f"GitHub release for {repo} contains an invalid asset.")
+            name = asset.get("name")
+            url = asset.get("browser_download_url")
+            if not isinstance(name, str) or not name or not isinstance(url, str) or not url:
+                raise ValueError(f"GitHub release for {repo} contains an invalid asset.")
+            assets.append({"name": name, "browser_download_url": url})
+        return {"assets": assets}
 
 
     def _find_asset(
         self,
         tool: Tool,
-        assets: list[dict],
-    ) -> dict:
+        assets: list[ReleaseAsset],
+    ) -> ReleaseAsset:
         """
         Find a matching release asset.
 

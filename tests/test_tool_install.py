@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 from ad_kit import cli
 from ad_kit.commands.tools import install as install_commands
 from ad_kit.core.exceptions import InstallationError
-from ad_kit.installers import github
+from ad_kit.installers import github, uv
 from ad_kit.models import Tool
 
 
@@ -104,3 +104,54 @@ def test_github_failed_forced_download_preserves_existing_binary(monkeypatch, tm
         installer.install(release_tool(), force=True)
 
     assert destination.read_bytes() == b"old"
+
+
+@pytest.mark.parametrize("data", [
+    None,
+    {},
+    {"assets": None},
+    {"assets": ["invalid"]},
+    {"assets": [{"name": "kerbrute_linux_amd64"}]},
+    {"assets": [{"name": "", "browser_download_url": "https://example.test"}]},
+    {"assets": [{"name": "kerbrute_linux_amd64", "browser_download_url": None}]},
+])
+def test_github_invalid_release_metadata_is_reported(monkeypatch, data):
+    response = Mock()
+    response.json.return_value = data
+    monkeypatch.setattr(github.requests, "get", Mock(return_value=response))
+
+    with pytest.raises(ValueError, match="GitHub release.*invalid"):
+        github.GitHubReleaseInstaller()._get_latest_release("CSpanias/kerbrute")
+
+    response.raise_for_status.assert_called_once()
+
+
+def test_github_release_metadata_preserves_asset_details(monkeypatch):
+    response = Mock()
+    response.json.return_value = {
+        "tag_name": "v1.0.4",
+        "assets": [{
+            "name": "kerbrute_linux_amd64",
+            "browser_download_url": "https://example.test/kerbrute",
+            "size": 123,
+        }],
+    }
+    monkeypatch.setattr(github.requests, "get", Mock(return_value=response))
+
+    release = github.GitHubReleaseInstaller()._get_latest_release("CSpanias/kerbrute")
+
+    assert release == {"assets": [{
+        "name": "kerbrute_linux_amd64",
+        "browser_download_url": "https://example.test/kerbrute",
+    }]}
+
+
+def test_uv_missing_source_fails_before_running_command(monkeypatch):
+    tool = Tool(name="example", installer="uv", description="Example")
+    run = Mock()
+    monkeypatch.setattr(uv.subprocess, "run", run)
+
+    with pytest.raises(InstallationError, match="No installation source is configured"):
+        uv.UVInstaller().install(tool)
+
+    run.assert_not_called()
