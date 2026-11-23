@@ -1,6 +1,31 @@
+import io
+from contextlib import nullcontext
+
 import pytest
+from rich.console import Console
 
 from ad_kit.commands import check
+from ad_kit.commands.checks import credentials
+
+
+@pytest.mark.parametrize("admin", [False, True])
+def test_authentication_success_is_followed_by_blank_line(monkeypatch, admin):
+    output = io.StringIO()
+    console = Console(file=output)
+    monkeypatch.setattr(credentials, "console", console)
+    monkeypatch.setattr(credentials, "print_success", lambda message: console.print(message))
+    monkeypatch.setattr(credentials, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user",
+    })
+    monkeypatch.setattr(credentials, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(credentials, "validate_credentials", lambda *_args: "valid")
+    monkeypatch.setattr(credentials.typer, "prompt", lambda *_args, **_kwargs: "test")
+
+    if admin:
+        credentials.authenticate_domain_admin()
+    else:
+        credentials.authenticate_standard_user()
+    assert output.getvalue().endswith("Authentication succeeded.\n\n")
 
 
 def test_check_all_reuses_smb_password_for_asreproast(monkeypatch):

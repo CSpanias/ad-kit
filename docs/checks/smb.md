@@ -16,14 +16,15 @@ ad-kit check smb
 ad-kit runs NetExec against the discovered hosts:
 
 ```bash
-nxc smb <host> --dns-server <dc_ip>
+nxc smb <host> -u '' -p '' --dns-server <dc_ip>
 nxc smb <host> -u '' -p '' --shares --dns-server <dc_ip>
 nxc smb <dc> -u '' -p '' --shares --users --dns-server <dc_ip>
 nxc smb <host> -u <username> -p <password> --shares --dns-server <dc_ip>
 ```
 
-The anonymous enumeration commands run only when NetExec reports a null
-session. User enumeration is restricted to discovered Domain Controllers.
+The anonymous enumeration commands run when the empty-credential login
+succeeds, including when it is mapped to a Guest session. User enumeration is
+restricted to discovered Domain Controllers.
 The share-access checks use the Standard User account and are prompted only
 when needed. Configuration and share access are checked across hosts
 concurrently, with four workers by default; use `--workers` to choose between
@@ -49,10 +50,12 @@ The signing, SMBv1, and anonymous checks are unauthenticated. The
 share-access checks use the Standard User account and are prompted only when
 needed.
 
-The null-session column shows **Permitted** when NetExec reports a null
-session, and **Not confirmed** otherwise. The latter does not prove anonymous
-access is disabled. For enumeration, **Not attempted** means NetExec did not
-report a null session. **Incomplete** means the check did not produce a
+The null-session column shows **Permitted** when the explicit empty-credential
+login succeeds without a Guest marker, **Guest session** when NetExec reports
+a Guest mapping, and **Denied** for recognised authentication rejection
+statuses. **Unknown** means the result was inconclusive; it does not prove
+anonymous access is disabled. For enumeration, **Not attempted** means the
+login was denied. **Incomplete** means the check did not produce a
 complete result. Counts reflect objects
 reported by NetExec, not whether the shares are readable. Partially returned
 account counts are marked as incomplete.

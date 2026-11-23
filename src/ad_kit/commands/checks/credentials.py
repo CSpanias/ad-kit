@@ -42,6 +42,7 @@ def authenticate_standard_user() -> str:
 
         if status == "valid":
             print_success("Authentication succeeded.")
+            console.print()
             return std_pass
 
         if status == "locked":
@@ -99,6 +100,7 @@ def authenticate_domain_admin() -> tuple[str, str]:
         if status == "valid":
 
             print_success("Authentication succeeded.")
+            console.print()
 
             return da_user, da_pass
 

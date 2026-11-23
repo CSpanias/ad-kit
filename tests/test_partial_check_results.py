@@ -131,7 +131,10 @@ def test_smb_omits_hosts_without_usable_results_but_retains_coverage(monkeypatch
         if name == "smb-PARTIAL":
             return "SMB PARTIAL 445 PARTIAL (signing:False)"
         if name == "smb-AVAILABLE":
-            return "SMB AVAILABLE 445 AVAILABLE (signing:True) (SMBv1:False)"
+            return (
+                "SMB AVAILABLE 445 AVAILABLE (signing:True) (SMBv1:False)\n"
+                "SMB AVAILABLE 445 AVAILABLE [-] EXAMPLE\\: STATUS_LOGON_FAILURE"
+            )
         return ""
 
     monkeypatch.setattr(smb, "run_check", run)
@@ -157,7 +160,10 @@ def test_failed_anonymous_enumeration_keeps_smb_configuration(monkeypatch):
     def run(name, _command, **_kwargs):
         if name.startswith("smb-anonymous"):
             raise failure(name)
-        return "SMB dc 445 HOST (signing:False) (SMBv1:False) (null auth:True)"
+        return (
+            "SMB dc 445 HOST (signing:False) (SMBv1:False)\n"
+            "SMB dc 445 HOST [+] EXAMPLE\\:"
+        )
 
     monkeypatch.setattr(smb, "run_check", run)
     result = smb.smb_configuration_check("host", "dc")
@@ -185,7 +191,10 @@ def test_smb_summarises_anonymous_enumeration_failures(monkeypatch, tmp_path):
     def run(name, _command, **_kwargs):
         if name.startswith("smb-anonymous"):
             raise failure(name)
-        return "SMB dc 445 HOST (signing:True) (SMBv1:False) (null auth:True)"
+        return (
+            "SMB dc 445 HOST (signing:True) (SMBv1:False)\n"
+            "SMB dc 445 HOST [+] EXAMPLE\\:"
+        )
 
     monkeypatch.setattr(smb, "run_check", run)
     unauthenticated.run_smb_checks("secret")

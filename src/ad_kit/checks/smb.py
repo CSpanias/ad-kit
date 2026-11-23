@@ -155,6 +155,25 @@ def _parse_user_count(output: str) -> tuple[int | None, bool]:
     return (user_count if user_count else None), False
 
 
+def _parse_empty_credential_login(output: str) -> tuple[bool | None, bool]:
+    for line in output.splitlines():
+        payload = _smb_log_payload(line)
+        if payload is None:
+            continue
+        if re.match(r"^\[\+\]\s+\S*\\:\S*(?:\s|$)", payload):
+            guest = bool(re.search(r"\(guest\)", payload, re.IGNORECASE))
+            return (None if guest else True), guest
+        if re.match(
+            r"^\[-\]\s+\S*\\:\S*\s+STATUS_"
+            r"(?:LOGON_FAILURE|ACCESS_DENIED|ACCOUNT_RESTRICTION|NO_SUCH_USER|"
+            r"ACCOUNT_DISABLED|ACCOUNT_LOCKED_OUT|LOGON_TYPE_NOT_GRANTED)\b",
+            payload,
+            re.IGNORECASE,
+        ):
+            return False, False
+    return None, False
+
+
 def smb_share_access_check(
     host: str,
     dc_ip: str,
@@ -253,14 +272,13 @@ def smb_configuration_check(
 
     output = run_check(
         f"smb-{host}",
-        ["nxc", "smb", host, "--dns-server", dc_ip],
+        ["nxc", "smb", host, "-u", "", "-p", "", "--dns-server", dc_ip],
         show_progress=False,
     )
 
     signing = "[yellow]⚠ Unknown[/yellow]"
     smbv1 = "[yellow]⚠ Unknown[/yellow]"
-    null_auth: bool | None = None
-    host_info_seen = False
+    null_auth, guest_auth = _parse_empty_credential_login(output)
 
     for line in output.splitlines():
 
@@ -271,29 +289,15 @@ def smb_configuration_check(
 
         if signing_match and signing_match.group(1).strip() in {"true", "false"}:
             signing = signing_match.group(1).strip()
-            host_info_seen = True
 
         if smbv1_match and smbv1_match.group(1).strip() in {"true", "false", "none"}:
             smbv1 = smbv1_match.group(1).strip()
-            host_info_seen = True
-
-        null_auth_match = re.search(r"null auth:([^)]*)", line)
-        if null_auth_match:
-            null_auth_value = null_auth_match.group(1).strip()
-
-            if null_auth_value == "true":
-                null_auth = True
-            elif null_auth_value == "false":
-                null_auth = False
-
-    if null_auth is None and host_info_seen:
-        null_auth = False
 
     anonymous_shares: int | None = None
     anonymous_users: int | None = None
     anonymous_users_complete = False
     incomplete: list[str] = []
-    if null_auth:
+    if null_auth or guest_auth:
         command = [
             "nxc", "smb", host,
             "-u", "",
@@ -347,6 +351,7 @@ def smb_configuration_check(
         "signing": signing,
         "smbv1": smbv1,
         "null_auth": null_auth,
+        "guest_auth": guest_auth,
         "anonymous_shares": anonymous_shares,
         "anonymous_users": anonymous_users,
         "anonymous_users_complete": anonymous_users_complete,

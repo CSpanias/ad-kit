@@ -89,7 +89,7 @@ def _show_anonymous_evidence(
         permitted = (
             result["anonymous_bind"] == "[red]✗ Permitted[/red]"
             if protocol == "ldap"
-            else result["null_auth"] is True
+            else result["null_auth"] is True or result.get("guest_auth", False)
         )
         if not permitted:
             continue
@@ -280,10 +280,14 @@ def run_tombstone_checks(
 
     record_findings(findings)
 
-def _null_session_status(null_auth: bool | None) -> str:
+def _null_session_status(null_auth: bool | None, guest_auth: bool = False) -> str:
+    if guest_auth:
+        return "[yellow]⚠ Guest session[/yellow]"
     if null_auth is True:
         return "[red]✗ Permitted[/red]"
-    return "[yellow]⚠ Not confirmed[/yellow]"
+    if null_auth is False:
+        return "[green]✓ Denied[/green]"
+    return "[yellow]⚠ Unknown[/yellow]"
 
 
 def _anonymous_count(
@@ -378,7 +382,10 @@ def run_smb_checks(
                 for value, label in (
                     (result["signing"] == "[yellow]⚠ Unknown[/yellow]", "signing"),
                     (result["smbv1"] == "[yellow]⚠ Unknown[/yellow]", "SMBv1"),
-                    (result["null_auth"] is None, "anonymous access"),
+                    (
+                        result["null_auth"] is None and not result.get("guest_auth", False),
+                        "anonymous access",
+                    ),
                 )
                 if value
             ]
@@ -391,7 +398,7 @@ def run_smb_checks(
             if len(unknown) == 3:
                 continue
             is_dc = host.rstrip(".").casefold() in dcs
-            if result["null_auth"] and (
+            if (result["null_auth"] or result.get("guest_auth", False)) and (
                 result["anonymous_shares"] is None
                 or (
                     is_dc
@@ -444,7 +451,7 @@ def run_smb_checks(
             result["host"],
             result["signing"],
             result["smbv1"],
-            _null_session_status(result["null_auth"]),
+            _null_session_status(result["null_auth"], result.get("guest_auth", False)),
             _anonymous_count(result["anonymous_shares"], result["null_auth"]),
             _anonymous_count(
                 result["anonymous_users"],
@@ -471,7 +478,7 @@ def run_smb_checks(
             result["host"],
             result["signing"],
             result["smbv1"],
-            _null_session_status(result["null_auth"]),
+            _null_session_status(result["null_auth"], result.get("guest_auth", False)),
             _anonymous_count(result["anonymous_shares"], result["null_auth"]),
         )
 
@@ -606,16 +613,24 @@ def run_smb_checks(
             host = result["host"]
             share_count = result["anonymous_shares"]
             user_count = result["anonymous_users"]
+            access = (
+                "SMB access mapped to Guest with empty credentials"
+                if result.get("guest_auth", False)
+                else "Unauthenticated SMB access"
+            )
 
             if share_count:
                 finding.evidence.append(
-                    f"Unauthenticated SMB access on '{host}' enumerated "
+                    f"{access} on '{host}' enumerated "
                     f"{share_count} share(s)."
                 )
 
             if user_count:
+                account_access = (
+                    access if result.get("guest_auth", False) else "Unauthenticated SAMR access"
+                )
                 finding.evidence.append(
-                    f"Unauthenticated SAMR access on '{host}' returned "
+                    f"{account_access} on '{host}' returned "
                     f"{user_count} account(s), as reported by NetExec."
                 )
 
