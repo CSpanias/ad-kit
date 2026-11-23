@@ -200,37 +200,50 @@ def run_selected_checks(
     results.write_reports(get_artefacts_dir(), domain=domain, dc=dc.strip() if dc else None)
 
 
-def run_checks(*, csacyber: bool = False, dc: str | None = None) -> None:
+def run_checks(
+    *, csacyber: bool = False, dc: str | None = None, exclude: set[str] | None = None
+) -> None:
     """Execute all assessment checks in the established workflow order."""
+    excluded = exclude or set()
+    unknown = excluded.difference(AVAILABLE_CHECKS)
+    if unknown:
+        raise ValueError("Unknown check(s): " + ", ".join(sorted(unknown)))
+    if not set(AVAILABLE_CHECKS).difference(excluded):
+        raise ValueError("At least one check must remain.")
+
     domain = _export_domain(csacyber, dc)
     results.reset()
 
-    _run_step("ldap", lambda: run_ldap_checks(), None)
-    std_pass = _run_step("smb", lambda: run_smb_checks(), None)
-    std_pass = _run_authed("asreproast", run_asreproast_checks, std_pass)
+    std_pass = None
+    if "ldap" not in excluded:
+        _run_step("ldap", lambda: run_ldap_checks(), None)
+    if "smb" not in excluded:
+        std_pass = _run_step("smb", lambda: run_smb_checks(), None)
+    if "asreproast" not in excluded:
+        std_pass = _run_authed("asreproast", run_asreproast_checks, std_pass)
 
-    if std_pass is None:
-        std_pass = authenticate_standard_user()
-
-    std_pass = _run_authed("local-admin", run_local_admin_checks, std_pass)
-    std_pass = _run_authed("pass-pol", run_password_policy_checks, std_pass)
-    std_pass = _run_authed(
-        "password-not-required", run_password_not_required_checks, std_pass
+    authenticated_checks = (
+        ("local-admin", run_local_admin_checks),
+        ("pass-pol", run_password_policy_checks),
+        ("password-not-required", run_password_not_required_checks),
+        ("password-never-expires", run_password_never_expires_checks),
+        ("maq", run_maq_checks),
+        ("dns", run_dns_checks),
+        ("pre2k", run_pre2k_checks),
+        ("nopac", run_nopac_checks),
+        ("scriptPath", run_scriptpath_checks),
+        ("privileged", run_privileged_group_checks),
+        ("delegation", run_delegation_checks),
+        ("kerberoast", run_kerberoast_checks),
+        ("adcs", run_adcs_checks),
+        ("ldap-info", run_ldap_info_checks),
+        ("tombstone", run_tombstone_checks),
+        ("coercion", run_coercion_checks),
     )
-    std_pass = _run_authed(
-        "password-never-expires", run_password_never_expires_checks, std_pass
-    )
-    std_pass = _run_authed("maq", run_maq_checks, std_pass)
-    std_pass = _run_authed("dns", run_dns_checks, std_pass)
-    std_pass = _run_authed("pre2k", run_pre2k_checks, std_pass)
-    std_pass = _run_authed("nopac", run_nopac_checks, std_pass)
-    std_pass = _run_authed("scriptPath", run_scriptpath_checks, std_pass)
-    std_pass = _run_authed("privileged", run_privileged_group_checks, std_pass)
-    std_pass = _run_authed("delegation", run_delegation_checks, std_pass)
-    std_pass = _run_authed("kerberoast", run_kerberoast_checks, std_pass)
-    std_pass = _run_authed("adcs", run_adcs_checks, std_pass)
-    std_pass = _run_authed("ldap-info", run_ldap_info_checks, std_pass)
-    std_pass = _run_authed("tombstone", run_tombstone_checks, std_pass)
-    std_pass = _run_authed("coercion", run_coercion_checks, std_pass)
+    for module, runner in authenticated_checks:
+        if module not in excluded:
+            if std_pass is None:
+                std_pass = authenticate_standard_user()
+            std_pass = _run_authed(module, runner, std_pass)
 
     results.write_reports(get_artefacts_dir(), domain=domain, dc=dc.strip() if dc else None)

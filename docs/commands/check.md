@@ -11,6 +11,10 @@ ad-kit check all
 # Execute one or more selected assessment modules
 ad-kit check run ldap smb pass-pol
 
+# Skip checks; repeat --exclude for multiple names
+ad-kit check all --exclude smb --exclude dns
+ad-kit check --exclude ldap run ldap smb
+
 # Limit concurrent target checks; 1 runs them sequentially
 ad-kit check --workers 2 run ldap smb
 ad-kit check smb --workers 8
@@ -19,6 +23,10 @@ ad-kit check smb --workers 8
 Modules are executed in the order provided. Checks requiring a Standard User 
 account will prompt for credentials once and reuse them across subsequent 
 checks. Some checks (e.g., MAQ) may prompt for DA credentials.
+
+`--exclude` accepts the exact check names listed below and can be repeated.
+It is available before or after `all`, `run`, and individual check commands.
+Unknown names and excluding every selected check are errors.
 
 Checks show progress through known targets, groups, script paths or queries where
 available. Counts represent items processed, including incomplete checks.

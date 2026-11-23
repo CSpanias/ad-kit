@@ -1,3 +1,5 @@
+import pytest
+
 from ad_kit.commands import check
 
 
@@ -127,3 +129,39 @@ def test_selected_checks_does_not_add_extra_blank_line_prints(monkeypatch):
     check.run_selected_checks(["ldap", "smb"])
 
     assert printed == []
+
+
+def test_check_all_exclusions_preserve_order_and_authentication(monkeypatch):
+    calls = []
+    exclude = set(check.AVAILABLE_CHECKS) - {"ldap", "asreproast", "maq", "dns"}
+    exclude.add("dns")
+
+    monkeypatch.setattr(check, "run_ldap_checks", lambda: calls.append(("ldap", None)))
+    monkeypatch.setattr(
+        check, "run_asreproast_checks",
+        lambda password: calls.append(("asreproast", password)),
+    )
+    monkeypatch.setattr(check, "run_maq_checks", lambda password: calls.append(("maq", password)))
+    monkeypatch.setattr(
+        check, "run_dns_checks", lambda _password: pytest.fail("excluded DNS check ran")
+    )
+    monkeypatch.setattr(
+        check, "authenticate_standard_user", lambda: calls.append(("auth", None)) or "secret"
+    )
+    monkeypatch.setattr(check.results, "write_reports", lambda *_args, **_kwargs: None)
+
+    check.run_checks(exclude=exclude)
+    assert calls == [
+        ("ldap", None), ("asreproast", None), ("auth", None), ("maq", "secret"),
+    ]
+
+
+def test_check_all_with_only_unauthenticated_check_skips_password_prompt(monkeypatch):
+    calls = []
+    monkeypatch.setattr(check, "run_ldap_checks", lambda: calls.append("ldap"))
+    monkeypatch.setattr(
+        check, "authenticate_standard_user", lambda: pytest.fail("unexpected password prompt")
+    )
+    monkeypatch.setattr(check.results, "write_reports", lambda *_args, **_kwargs: None)
+    check.run_checks(exclude=set(check.AVAILABLE_CHECKS) - {"ldap"})
+    assert calls == ["ldap"]

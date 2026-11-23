@@ -174,6 +174,9 @@ def check_callback(
         None, "--workers", min=1, max=16,
         help="Parallel check workers (1-16; default: 4).",
     ),
+    exclude: list[str] | None = typer.Option(
+        None, "--exclude", help="Exclude a check by name; repeat for multiple checks.",
+    ),
 ) -> None:
     """
     Execute assessment checks.
@@ -181,14 +184,30 @@ def check_callback(
     If no specific check module is supplied, all assessment checks are executed.
     """
 
-    ctx.obj = (csacyber, dc, workers)
+    ctx.obj = (csacyber, dc, workers, exclude or [])
     if ctx.invoked_subcommand is None:
-        _run_check_command(None, csacyber, dc, workers or 4)
+        _run_check_command(None, csacyber, dc, workers or 4, exclude or [])
 
 
 def _run_check_command(
-    modules: list[str] | None, csacyber: bool, dc: str | None, workers: int
+    modules: list[str] | None, csacyber: bool, dc: str | None, workers: int,
+    exclude: list[str],
 ) -> None:
+    excluded = set(exclude)
+    unknown = excluded.difference(AVAILABLE_CHECKS)
+    if unknown:
+        raise typer.BadParameter(
+            "Unknown check(s): " + ", ".join(sorted(unknown)), param_hint="--exclude"
+        )
+    remaining = [
+        name for name in (modules if modules is not None else AVAILABLE_CHECKS)
+        if name not in excluded
+    ]
+    if not remaining or (excluded and not any(name in AVAILABLE_CHECKS for name in remaining)):
+        raise typer.BadParameter("At least one check must remain.", param_hint="--exclude")
+    if modules is not None:
+        modules = remaining
+
     with check_workers(workers):
         if csacyber or dc is not None:
             try:
@@ -196,19 +215,26 @@ def _run_check_command(
             except (ValueError, RuntimeError) as exc:
                 raise typer.BadParameter(str(exc)) from exc
             if modules is None:
-                check.run_checks(csacyber=csacyber, dc=dc)
+                if excluded:
+                    check.run_checks(csacyber=csacyber, dc=dc, exclude=excluded)
+                else:
+                    check.run_checks(csacyber=csacyber, dc=dc)
             else:
                 check.run_selected_checks(modules, csacyber=csacyber, dc=dc)
         elif modules is None:
-            check.run_checks()
+            if excluded:
+                check.run_checks(exclude=excluded)
+            else:
+                check.run_checks()
         else:
             check.run_selected_checks(modules)
 
 
 def _check_options(
-    ctx: typer.Context, csacyber: bool, dc: str | None, workers: int | None
-) -> tuple[bool, str | None, int]:
-    parent_csacyber, parent_dc, parent_workers = ctx.parent.obj
+    ctx: typer.Context, csacyber: bool, dc: str | None, workers: int | None,
+    exclude: list[str] | None,
+) -> tuple[bool, str | None, int, list[str]]:
+    parent_csacyber, parent_dc, parent_workers, parent_exclude = ctx.parent.obj
     if dc is not None and parent_dc is not None:
         raise typer.BadParameter("Specify --dc only once.")
     if workers is not None and parent_workers is not None:
@@ -217,6 +243,7 @@ def _check_options(
         csacyber or parent_csacyber,
         dc if dc is not None else parent_dc,
         workers if workers is not None else parent_workers or 4,
+        parent_exclude + (exclude or []),
     )
 
 #-------------------------------------------------------------------------------
@@ -236,12 +263,15 @@ def check_all(
         None, "--workers", min=1, max=16,
         help="Parallel check workers (1-16; default: 4).",
     ),
+    exclude: list[str] | None = typer.Option(
+        None, "--exclude", help="Exclude a check by name; repeat for multiple checks.",
+    ),
 ) -> None:
     """
     Execute all assessment checks.
     """
 
-    _run_check_command(None, *_check_options(ctx, csacyber, dc, workers))
+    _run_check_command(None, *_check_options(ctx, csacyber, dc, workers, exclude))
 
 #-------------------------------------------------------------------------------
 # CHECK COMMANDS (generated dynamically from AVAILABLE_CHECKS)
@@ -261,8 +291,11 @@ def _make_check_command(module_name: str):
             None, "--workers", min=1, max=16,
             help="Parallel check workers (1-16; default: 4).",
         ),
+        exclude: list[str] | None = typer.Option(
+            None, "--exclude", help="Exclude a check by name; repeat for multiple checks.",
+        ),
     ) -> None:
-        _run_check_command([module_name], *_check_options(ctx, csacyber, dc, workers))
+        _run_check_command([module_name], *_check_options(ctx, csacyber, dc, workers, exclude))
 
     run_check.__name__ = (
         f"check_{module_name.replace('-', '_').replace('.', '_')}"
@@ -297,6 +330,9 @@ def selected(
         None, "--workers", min=1, max=16,
         help="Parallel check workers (1-16; default: 4).",
     ),
+    exclude: list[str] | None = typer.Option(
+        None, "--exclude", help="Exclude a check by name; repeat for multiple checks.",
+    ),
 ) -> None:
     """
     Execute one or more specified assessment modules.
@@ -310,7 +346,7 @@ def selected(
             Assessment modules to execute.
     """
 
-    _run_check_command(modules, *_check_options(ctx, csacyber, dc, workers))
+    _run_check_command(modules, *_check_options(ctx, csacyber, dc, workers, exclude))
 
 
 if __name__ == "__main__":
