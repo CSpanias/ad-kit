@@ -200,8 +200,8 @@ def test_cli_rejects_invalid_or_duplicate_worker_limits(monkeypatch, args):
     ("args", "expected_modules", "expected_exclusions"),
     [
         (["check", "--exclude", "ldap"], None, {"ldap"}),
-        (["check", "all", "--exclude", "smb", "--exclude", "dns"], None, {"smb", "dns"}),
-        (["check", "--exclude", "ldap", "all", "--exclude", "dns"], None, {"ldap", "dns"}),
+        (["check", "all", "--exclude", "ldap,smb"], None, {"ldap", "smb"}),
+        (["check", "--exclude", "ldap, smb", "all"], None, {"ldap", "smb"}),
         (["check", "run", "ldap", "smb", "--exclude", "ldap"], ["smb"], set()),
         (["check", "--exclude", "dns", "smb"], ["smb"], set()),
     ],
@@ -219,29 +219,42 @@ def test_cli_excludes_checks(monkeypatch, args, expected_modules, expected_exclu
     assert calls == [(expected_modules, expected_exclusions)]
 
 
-def test_cli_exclusions_combine_with_export_and_worker_options(monkeypatch):
+@pytest.mark.parametrize("args", [
+    [
+        "check", "--workers", "8", "--exclude", "ldap,smb",
+        "all", "--csacyber", "--dc", "example.com DCs",
+    ],
+    [
+        "check", "all", "--csacyber", "--dc", "example.com DCs",
+        "--workers", "8", "--exclude", "ldap,smb",
+    ],
+])
+def test_cli_exclusions_combine_with_export_and_worker_options(monkeypatch, args):
     calls = []
     monkeypatch.setattr(check, "require_session", lambda: {"domain": "example.com"})
     monkeypatch.setattr(
         check, "run_checks",
         lambda **kwargs: calls.append((util._check_workers.get(), kwargs)),
     )
-    result = CliRunner().invoke(app, [
-        "check", "--workers", "2", "--exclude", "ldap",
-        "all", "--csacyber", "--dc", "dc.example.com",
-    ])
+    result = CliRunner().invoke(app, args)
     assert result.exit_code == 0, result.output
-    assert calls == [(2, {
-        "csacyber": True, "dc": "dc.example.com", "exclude": {"ldap"},
+    assert calls == [(8, {
+        "csacyber": True, "dc": "example.com DCs", "exclude": {"ldap", "smb"},
     })]
 
 
 @pytest.mark.parametrize("args", [
     ["check", "all", "--exclude", "smbb"],
+    ["check", "all", "--exclude", "ldap,unknown"],
+    ["check", "all", "--exclude", "ldap,,smb"],
+    ["check", "all", "--exclude", "ldap,"],
+    ["check", "all", "--exclude", " "],
+    ["check", "all", "--exclude", "ldap", "--exclude", "smb"],
+    ["check", "--exclude", "ldap", "all", "--exclude", "smb"],
     ["check", "run", "ldap", "--exclude", "ldap"],
     ["check", "run", "ldap", "not-a-check", "--exclude", "ldap"],
     ["check", "--exclude", "smb", "smb"],
-    ["check", "all", *[arg for name in check.AVAILABLE_CHECKS for arg in ("--exclude", name)]],
+    ["check", "all", "--exclude", ",".join(check.AVAILABLE_CHECKS)],
 ])
 def test_cli_rejects_invalid_or_empty_exclusions_before_running(monkeypatch, args):
     monkeypatch.setattr(check, "run_checks", lambda **_kwargs: pytest.fail("checks ran"))

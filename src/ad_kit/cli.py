@@ -175,7 +175,7 @@ def check_callback(
         help="Parallel check workers (1-16; default: 4).",
     ),
     exclude: list[str] | None = typer.Option(
-        None, "--exclude", help="Exclude a check by name; repeat for multiple checks.",
+        None, "--exclude", help="Exclude checks using a comma-separated list of names.",
     ),
 ) -> None:
     """
@@ -193,7 +193,14 @@ def _run_check_command(
     modules: list[str] | None, csacyber: bool, dc: str | None, workers: int,
     exclude: list[str],
 ) -> None:
-    excluded = set(exclude)
+    if len(exclude) > 1:
+        raise typer.BadParameter(
+            "Specify --exclude once with comma-separated check names.", param_hint="--exclude"
+        )
+    names = [name.strip() for value in exclude for name in value.split(",")]
+    if any(not name for name in names):
+        raise typer.BadParameter("Check names cannot be empty.", param_hint="--exclude")
+    excluded = set(names)
     unknown = excluded.difference(AVAILABLE_CHECKS)
     if unknown:
         raise typer.BadParameter(
@@ -264,7 +271,7 @@ def check_all(
         help="Parallel check workers (1-16; default: 4).",
     ),
     exclude: list[str] | None = typer.Option(
-        None, "--exclude", help="Exclude a check by name; repeat for multiple checks.",
+        None, "--exclude", help="Exclude checks using a comma-separated list of names.",
     ),
 ) -> None:
     """
@@ -292,7 +299,7 @@ def _make_check_command(module_name: str):
             help="Parallel check workers (1-16; default: 4).",
         ),
         exclude: list[str] | None = typer.Option(
-            None, "--exclude", help="Exclude a check by name; repeat for multiple checks.",
+            None, "--exclude", help="Exclude checks using a comma-separated list of names.",
         ),
     ) -> None:
         _run_check_command([module_name], *_check_options(ctx, csacyber, dc, workers, exclude))
@@ -331,7 +338,7 @@ def selected(
         help="Parallel check workers (1-16; default: 4).",
     ),
     exclude: list[str] | None = typer.Option(
-        None, "--exclude", help="Exclude a check by name; repeat for multiple checks.",
+        None, "--exclude", help="Exclude checks using a comma-separated list of names.",
     ),
 ) -> None:
     """
