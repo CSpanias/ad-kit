@@ -16,22 +16,21 @@ ad-kit check delegation
 ad-kit runs NetExec against the Domain Controller:
 
 ```bash
-nxc ldap <dc_ip> -u <username> -p <password> --trusted-for-delegation
 nxc ldap <dc_ip> -u <username> -p <password> --find-delegation
 ```
 
-The `--trusted-for-delegation` flag corresponds to NetExec's
-[unconstrained delegation](https://www.netexec.wiki/ldap-protocol/unconstrained-delegation)
-module, and `--find-delegation` to
+The `--find-delegation` flag corresponds to NetExec's
 [find misconfigured delegation](https://www.netexec.wiki/ldap-protocol/find-misconfigured-delegation).
+Use an up-to-date NetExec version: older versions may omit unconstrained
+delegation when an account also has constrained delegation configured.
 
 ## What it checks
 
-ad-kit finds accounts configured with unconstrained delegation
-(`--trusted-for-delegation`) and accounts with constrained delegation and
-protocol transition (`--find-delegation`). It excludes Domain Controller machine
-accounts and the Azure AD Kerberos trust object, then flags delegated accounts
-that are also members of a monitored privileged group.
+ad-kit finds enabled accounts configured with unconstrained delegation and
+accounts with constrained delegation and protocol transition
+(`--find-delegation`). Disabled accounts are not included. It excludes Domain
+Controller machine accounts and the Azure AD Kerberos trust object, then flags
+delegated accounts that are also members of a monitored privileged group.
 The results table lists affected accounts alongside each delegation count.
 
 ## How it works

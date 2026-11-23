@@ -9,7 +9,10 @@ configurations that may facilitate impersonation attacks, privilege escalation,
 or compromise of privileged accounts.
 """
 
-from ad_kit.core.checks import load_dc_hostnames, run_check
+import re
+
+from ad_kit.core.checks import ANSI_ESCAPE_PATTERN, load_dc_hostnames, run_check
+from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
 from ad_kit.core.privileged import get_privileged_users
@@ -17,6 +20,86 @@ from ad_kit.core.privileged import get_privileged_users
 IGNORED_DELEGATION_ACCOUNTS = {
         "azureadkerberos$",
     }
+
+NXC_LDAP_LINE = re.compile(r"^\s*LDAP\s+\S+\s+\d+\s+\S+\s+(.*)$")
+DELEGATION_ROW = re.compile(
+    r"^(.*?)\s+(Unconstrained|Constrained w/ Protocol Transition|"
+    r"Resource-Based Constrained|Constrained)\s+.+$"
+)
+
+
+def parse_delegation_output(output: str) -> tuple[set[str], set[str]]:
+    unconstrained: set[str] = set()
+    protocol_transition: set[str] = set()
+    type_column = None
+    row_count = 0
+    no_entries = False
+
+    for line in ANSI_ESCAPE_PATTERN.sub("", output).splitlines():
+        if "Skipping item, cannot process due to error" in line:
+            raise CheckExecutionError(
+                "delegation-find", [], stderr="NetExec could not process a delegation entry."
+            )
+        if "[-]" in line:
+            if "No entries found!" in line:
+                no_entries = True
+                continue
+            raise CheckExecutionError(
+                "delegation-find", [], stderr="NetExec reported an error; see delegation-find.txt."
+            )
+
+        match = NXC_LDAP_LINE.match(line)
+        if not match:
+            continue
+        payload = match.group(1).rstrip()
+        if "[+]" in payload or "[*]" in payload:
+            continue
+        if re.match(r"^AccountName\s+AccountType\s+DelegationType\s+DelegationRightsTo", payload):
+            type_column = payload.index("AccountType")
+            continue
+        if type_column is None or re.fullmatch(r"[-\s]+", payload):
+            continue
+
+        row = DELEGATION_ROW.fullmatch(payload)
+        if row is None:
+            raise CheckExecutionError(
+                "delegation-find", [], stderr="Could not parse a NetExec delegation table row."
+            )
+        identity = row.group(1)
+        standard_type = re.fullmatch(r"(.+?)\s+(Person|Computer)", identity)
+        if standard_type:
+            account, account_type = standard_type.groups()
+        elif len(identity) > type_column and identity[type_column - 1].isspace():
+            account = identity[:type_column].strip()
+            account_type = identity[type_column:].strip()
+        else:
+            parts = re.split(r"\s{2,}", identity, maxsplit=1)
+            if len(parts) != 2:
+                parts = identity.rsplit(None, 1)
+            if len(parts) != 2:
+                raise CheckExecutionError(
+                    "delegation-find", [], stderr="Could not parse a NetExec delegation account."
+                )
+            account, account_type = parts
+        if not account or not account_type:
+            raise CheckExecutionError(
+                "delegation-find", [], stderr="Could not parse a NetExec delegation account."
+            )
+        row_count += 1
+        if row.group(2) == "Unconstrained":
+            unconstrained.add(account)
+        elif row.group(2) == "Constrained w/ Protocol Transition":
+            protocol_transition.add(account)
+
+    if (type_column is None or not row_count) and not no_entries:
+        raise CheckExecutionError(
+            "delegation-find", [], stderr="Could not parse the NetExec delegation table."
+        )
+    if no_entries and row_count:
+        raise CheckExecutionError(
+            "delegation-find", [], stderr="NetExec returned conflicting delegation results."
+        )
+    return unconstrained, protocol_transition
 
 
 def delegation_check(
@@ -68,9 +151,9 @@ def delegation_check(
         for dc in load_dc_hostnames()
     }
 
-    # Unconstrained Delegation
+    # NetExec reports enabled delegation entries for both checks in one table.
     output = run_check(
-        "delegation-unconstrained",
+        "delegation-find",
         [
             "nxc",
             "ldap",
@@ -79,39 +162,20 @@ def delegation_check(
             username,
             "-p",
             password,
-            "--trusted-for-delegation",
+            "--find-delegation",
         ],
     )
 
-    unconstrained_accounts: set[str] = set()
-
-    for line in output.splitlines():
-
-        if (
-            "[+]" in line
-            or "[*]" in line
-            or not line.strip()
-        ):
-            continue
-
-        account = line.split()[-1].strip()
-
-        if not account:
-            continue
-
-        # Ignore Domain Controllers
-        if account.endswith("$"):
-
-            hostname = account.rstrip("$").lower()
-
-            if hostname in dc_hostnames:
-                continue
-
-        # Ignore the Azure AD Kerberos Trust computer object
-        if account.lower() in IGNORED_DELEGATION_ACCOUNTS:
-            continue
-
-        unconstrained_accounts.add(account)
+    unconstrained_accounts, protocol_transition_accounts = parse_delegation_output(output)
+    unconstrained_accounts = {
+        account for account in unconstrained_accounts
+        if account.lower() not in IGNORED_DELEGATION_ACCOUNTS
+        and not (account.endswith("$") and account.rstrip("$").lower() in dc_hostnames)
+    }
+    protocol_transition_accounts = {
+        account for account in protocol_transition_accounts
+        if account.lower() not in IGNORED_DELEGATION_ACCOUNTS
+    }
 
     results["unconstrained"] = sorted(unconstrained_accounts)
 
@@ -133,52 +197,6 @@ def delegation_check(
             for account in unconstrained_accounts
             if account.lower() in privileged_users
         ]
-
-    # Constrained Delegation with Protocol Transition
-    output = run_check(
-        "delegation-find",
-        [
-            "nxc",
-            "ldap",
-            dc_ip,
-            "-u",
-            username,
-            "-p",
-            password,
-            "--find-delegation",
-        ],
-    )
-
-    protocol_transition_accounts: set[str] = set()
-
-    for line in output.splitlines():
-
-        if (
-            "[+]" in line
-            or "[*]" in line
-            or not line.strip()
-            or "AccountName" in line
-            or "--------" in line
-        ):
-            continue
-
-        if "Constrained w/ Protocol Transition" not in line:
-            continue
-
-        parts = line.split()
-
-        if len(parts) < 6:
-            continue
-
-        # NetExec prepends: LDAP <IP> <PORT> <HOST> before the delegation 
-        # table columns.
-        account = parts[4]
-
-        # Ignore the Azure AD Kerberos Trust computer object
-        if account.lower() in IGNORED_DELEGATION_ACCOUNTS:
-            continue
-
-        protocol_transition_accounts.add(account)
 
     results["protocol_transition"] = sorted(protocol_transition_accounts)
 

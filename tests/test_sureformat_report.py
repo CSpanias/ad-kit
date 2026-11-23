@@ -87,6 +87,16 @@ def test_sureformat_combines_findings_with_the_same_platform_id(tmp_path):
     assert vulnerabilities[1].findtext("information") == "Privileged membership."
 
 
+def test_sureformat_exports_builtin_administrator_finding(tmp_path):
+    path = tmp_path / "test.xml"
+    sureformat.write_findings(path, "example.test", [
+        {"id": "PRIV-004", "description": "Built-in Administrator enabled."},
+    ])
+    _, _, _, vulnerabilities = _vulnerabilities(path)
+    assert [v.attrib["id"] for v in vulnerabilities] == ["SC-4958"]
+    assert vulnerabilities[0].findtext("information") == "Built-in Administrator enabled."
+
+
 def test_full_run_exports_xml_without_replacing_previous_json(monkeypatch, tmp_path):
     previous_json = tmp_path / "ad-kit_findings.json"
     previous_json.write_text("previous output", encoding="utf-8")

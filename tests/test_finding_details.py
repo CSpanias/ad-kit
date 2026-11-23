@@ -4,7 +4,7 @@ from contextlib import contextmanager, nullcontext
 import pytest
 from rich.console import Console
 
-from ad_kit.checks import kerberoast
+from ad_kit.checks import delegations, kerberoast
 from ad_kit.checks.ldap_info import is_sensitive_value
 from ad_kit.commands.checks import policy, privileged, unauthenticated
 from ad_kit.core.checks import CheckEvidence
@@ -73,6 +73,74 @@ def test_kerberoast_empty_result_is_not_a_parse_error(monkeypatch, tmp_path):
     monkeypatch.setattr(kerberoast, "get_artefacts_dir", lambda: tmp_path)
     result, findings = kerberoast.kerberoast_check("dc", "example.test", "user", "pw")
     assert result["accounts"] == [] and findings == []
+
+
+def test_delegation_parses_enabled_accounts_from_netexec_table(monkeypatch):
+    prefix = "LDAP 10.0.0.1 389 DC01 "
+
+    def row(account, kind, delegation, rights):
+        return prefix + f"{account:<15} {kind:<15} {delegation:<35} {rights}"
+
+    output = "\n".join([
+        prefix + "[+] EXAMPLE\\user:[REDACTED]",
+        row("AccountName", "AccountType", "DelegationType", "DelegationRightsTo"),
+        row("-" * 15, "-" * 15, "-" * 35, "-" * 40),
+        row("SQL Service", "Person", "Unconstrained", "N/A"),
+        row("very-long-service-account", "Person", "Unconstrained", "N/A"),
+        row("fifteenlettersx  service", "Person", "Unconstrained", "N/A"),
+        row("SQL Service", "Person", "Constrained w/ Protocol Transition", "HTTP/web"),
+        row("DC01$", "Computer", "Unconstrained", "N/A"),
+        row("AzureADKerberos$", "Computer", "Unconstrained", "N/A"),
+        row("other", "Person", "Constrained", "HTTP/web"),
+        row("rbcd", "Computer", "Resource-Based Constrained", "server$"),
+    ])
+    calls = []
+
+    def run(name, command):
+        calls.append((name, command))
+        return output
+
+    monkeypatch.setattr(delegations, "run_check", run)
+    monkeypatch.setattr(delegations, "load_dc_hostnames", lambda: ["dc01.example.test"])
+    monkeypatch.setattr(delegations, "get_privileged_users", lambda *_args: {"sql service"})
+    result, findings = delegations.delegation_check("dc", "user", "pw")
+    assert len(calls) == 1 and calls[0][1][-1] == "--find-delegation"
+    assert result == {
+        "unconstrained": [
+            "SQL Service", "fifteenlettersx  service", "very-long-service-account"
+        ],
+        "protocol_transition": ["SQL Service"],
+    }
+    assert [finding.id for finding in findings] == ["DELEG-001", "DELEG-002", "DELEG-003"]
+
+
+@pytest.mark.parametrize("output", [
+    "",
+    "LDAP 10.0.0.1 389 DC01 [-] [REMOVED] Use --find-delegation instead.",
+    "LDAP 10.0.0.1 389 DC01 [-] LDAP search failed",
+    "LDAP 10.0.0.1 389 DC01 AccountName     AccountType     DelegationType"
+    "                      DelegationRightsTo\n"
+    "LDAP 10.0.0.1 389 DC01 malformed table row",
+    "LDAP 10.0.0.1 389 DC01 [-] No entries found!\n"
+    "LDAP 10.0.0.1 389 DC01 Skipping item, cannot process due to error",
+])
+def test_delegation_rejects_failed_or_unrecognised_output(output):
+    with pytest.raises(CheckExecutionError):
+        delegations.parse_delegation_output(output)
+
+
+def test_delegation_accepts_netexec_empty_result():
+    output = "LDAP 10.0.0.1 389 DC01 [-] No entries found!"
+    assert delegations.parse_delegation_output(output) == (set(), set())
+
+
+def test_delegation_parses_older_dynamic_width_netexec_table():
+    prefix = "LDAP 10.0.0.1 389 DC01 "
+    header = f"{'AccountName':<30} {'AccountType':<16} {'DelegationType':<35} DelegationRightsTo"
+    row = f"{'service account':<30} {'Person':<16} {'Unconstrained':<35} N/A"
+    assert delegations.parse_delegation_output(prefix + header + "\n" + prefix + row) == (
+        {"service account"}, set()
+    )
 
 
 @pytest.mark.parametrize("kind", ["delegation", "kerberoast", "asreproast"])
