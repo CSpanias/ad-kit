@@ -1,6 +1,8 @@
 import io
+import threading
 from contextlib import nullcontext
 
+import pytest
 from rich.console import Console
 
 from ad_kit.checks import smb
@@ -9,83 +11,143 @@ from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.reporting import results
 
 
-def _share_output(rows):
+def _share_output(rows, permission_width=22):
     prefix = "SMB host 445 HOST "
     lines = [
         prefix + "Enumerated shares",
-        prefix + f"{'Share':<15} {'Permissions':<22} Remark",
-        prefix + f"{'-----':<15} {'-----------':<22} ------",
+        prefix + f"{'Share':<15} {'Permissions':<{permission_width}} Remark",
+        prefix + f"{'-----':<15} {'-----------':<{permission_width}} ------",
     ]
     lines.extend(
-        prefix + f"{name:<15} {permissions:<22} {remark}"
+        prefix + f"{name:<15} {permissions:<{permission_width}} {remark}"
         for name, permissions, remark in rows
     )
     return "\n".join(lines)
 
 
-def test_share_access_combines_read_and_write_without_losing_names(monkeypatch):
+@pytest.mark.parametrize("permission_width", [15, 22])
+def test_share_access_uses_one_command_and_ignores_inaccessible_shares(
+    monkeypatch, permission_width
+):
     calls = []
 
-    def run(name, command, sensitive_values):
-        calls.append((name, command, sensitive_values))
-        if command[command.index("--shares") + 1] == "READ":
-            return _share_output([
-                ("Compressor In", "READ", "A remark"),
-                ("Compressor Out", "READ,WRITE", "Output"),
-                ("Long READ share name", "READ,WRITE (ACL)", ""),
-            ])
+    def run(name, command, sensitive_values, *, show_progress):
+        calls.append((name, command, sensitive_values, show_progress))
         return _share_output([
+            ("Compressor In", "READ", "A remark"),
             ("Compressor Out", "READ,WRITE", "Output"),
             ("Long READ share name", "READ,WRITE (ACL)", ""),
             ("[Write Only]", "WRITE (SUBDIR)", ""),
-        ])
+            ("Denied", "", "READ"),
+            ("Very long denied WRITE", "", "WRITE                  remark"),
+            ("Denied too", "", ""),
+        ], permission_width)
 
     monkeypatch.setattr(smb, "run_check", run)
-    shares, complete = smb.smb_share_access_check("host", "dc", "user", "secret")
-    assert complete
+    shares, errors = smb.smb_share_access_check("host", "dc", "user", "secret")
+    assert not errors
     assert shares == [
         {"name": "Compressor In", "permissions": ("READ",)},
         {"name": "Compressor Out", "permissions": ("READ", "WRITE")},
         {"name": "Long READ share name", "permissions": ("READ", "WRITE (ACL)")},
         {"name": "[Write Only]", "permissions": ("WRITE (SUBDIR)",)},
     ]
-    assert [command[command.index("--shares") + 1] for _, command, _ in calls] == [
-        "READ", "WRITE"
-    ]
-    assert all(secrets == ["secret"] for _, _, secrets in calls)
+    assert len(calls) == 1
+    assert calls[0][1][calls[0][1].index("--shares") + 1] == "--dns-server"
+    assert calls[0][2:] == (["secret"], False)
 
 
-def test_share_access_preserves_read_results_when_write_check_fails(monkeypatch):
-    results.reset()
-
-    def run(name, command, sensitive_values):
-        if command[command.index("--shares") + 1] == "WRITE":
-            raise CheckExecutionError(name, [], returncode=1)
-        return _share_output([("Read Only", "READ", "")])
+def test_share_access_reports_command_failure(monkeypatch):
+    def run(name, command, sensitive_values, *, show_progress):
+        raise CheckExecutionError(name, [], returncode=1)
 
     monkeypatch.setattr(smb, "run_check", run)
-    shares, complete = smb.smb_share_access_check("host", "dc", "user", "secret")
-    assert shares == [{"name": "Read Only", "permissions": ("READ",)}]
-    assert not complete
-    assert any("SMB share access - host" in entry for entry in results._incomplete)
-    results.reset()
-
-
-def test_share_access_records_unparseable_and_failed_output(monkeypatch):
-    results.reset()
-
-    def run(name, command, sensitive_values):
-        if command[command.index("--shares") + 1] == "READ":
-            return _share_output([("share", "UNEXPECTED", "")])
-        return "SMB host 445 HOST [-] Error enumerating shares"
-
-    monkeypatch.setattr(smb, "run_check", run)
-    shares, complete = smb.smb_share_access_check("host", "dc", "user", "secret")
+    shares, errors = smb.smb_share_access_check("host", "dc", "user", "secret")
     assert shares == []
-    assert not complete
-    assert any("Could not parse a READ" in entry for entry in results._incomplete)
-    assert any("No complete WRITE" in entry for entry in results._incomplete)
-    results.reset()
+    assert errors and "smb-share-access-host" in errors[0]
+
+
+def test_share_access_preserves_confirmed_results_and_reports_unknown_rows(monkeypatch):
+    def run(name, command, sensitive_values, *, show_progress):
+        return _share_output([
+            ("Read Only", "READ", ""),
+            ("share", "UNEXPECTED", ""),
+            ("other", "UNKNOWN (try '--no-smbv1')", ""),
+        ])
+
+    monkeypatch.setattr(smb, "run_check", run)
+    shares, errors = smb.smb_share_access_check("host", "dc", "user", "secret")
+    assert shares == [{"name": "Read Only", "permissions": ("READ",)}]
+    assert any("Could not parse" in error for error in errors)
+    assert any("Unknown share permissions" in error for error in errors)
+
+
+def test_share_access_reports_missing_table(monkeypatch):
+    monkeypatch.setattr(
+        smb, "run_check",
+        lambda *_args, **_kwargs: "SMB host 445 HOST [-] Error enumerating shares",
+    )
+    shares, errors = smb.smb_share_access_check("host", "dc", "user", "secret")
+    assert shares == []
+    assert errors and "No complete share listing" in errors[0]
+
+
+def test_share_access_marks_partial_table_incomplete(monkeypatch):
+    output = (
+        _share_output([("Read Only", "READ", "")])
+        + "\nSMB host 445 HOST [-] share enumeration failed"
+    )
+    monkeypatch.setattr(smb, "run_check", lambda *_args, **_kwargs: output)
+    shares, errors = smb.smb_share_access_check("host", "dc", "user", "secret")
+    assert shares == [{"name": "Read Only", "permissions": ("READ",)}]
+    assert errors and "reported an error" in errors[0]
+
+
+def test_share_access_does_not_guess_ambiguous_permissions(monkeypatch):
+    output = _share_output([
+        ("Long share with READ            in name", "WRITE", "remark"),
+    ], permission_width=15)
+    monkeypatch.setattr(smb, "run_check", lambda *_args, **_kwargs: output)
+    shares, errors = smb.smb_share_access_check("host", "dc", "user", "secret")
+    assert shares == []
+    assert errors and "Could not parse" in errors[0]
+
+
+def test_parallel_share_checks_are_bounded_and_keep_host_order(monkeypatch):
+    barrier = threading.Barrier(4)
+    lock = threading.Lock()
+    active = 0
+    peak = 0
+    started = []
+    main_thread = threading.get_ident()
+    progress_threads = []
+
+    def check(host, *_args):
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+            started.append(host)
+        if host in {"A", "B", "C", "D"}:
+            barrier.wait(timeout=5)
+        with lock:
+            active -= 1
+        return [{"name": host, "permissions": ("READ",)}], []
+
+    def track(items, _label):
+        for item in items:
+            progress_threads.append(threading.get_ident())
+            yield item
+
+    monkeypatch.setattr(unauthenticated, "smb_share_access_check", check)
+    monkeypatch.setattr(unauthenticated, "track_items", track)
+    checked = unauthenticated._check_share_access(
+        ["A", "B", "C", "D", "E", "a."], "dc", "user", "secret"
+    )
+    assert peak == 4
+    assert sorted(started) == ["A", "B", "C", "D", "E"]
+    assert [host for host, _, _ in checked] == ["A", "B", "C", "D", "E"]
+    assert progress_threads == [main_thread] * 5
 
 
 def test_share_table_and_finding_only_include_write_related_permissions(monkeypatch, tmp_path):
@@ -108,7 +170,7 @@ def test_share_table_and_finding_only_include_write_related_permissions(monkeypa
     monkeypatch.setattr(unauthenticated, "smb_share_access_check", lambda *_args: ([
         {"name": "Read Only", "permissions": ("READ",)},
         {"name": "Writable", "permissions": ("READ", "WRITE")},
-    ], True))
+    ], []))
 
     unauthenticated.run_smb_checks("secret")
     table = output.getvalue().split("SMB Checks - Share Access", 1)[1]

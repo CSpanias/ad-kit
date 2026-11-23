@@ -1,4 +1,5 @@
 import re
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 
 from rich.table import Table
 from rich.text import Text
@@ -9,6 +10,7 @@ from ad_kit.checks.asreproast import (
 )
 from ad_kit.checks.ldap import ldap_check
 from ad_kit.checks.smb import (
+    ShareAccess,
     smb_configuration_check,
     smb_share_access_check,
 )
@@ -79,6 +81,8 @@ def _enumeration_excerpt(output: str, kind: str) -> tuple[str, bool]:
 def _show_anonymous_evidence(
     records: list[CheckEvidence], results: list[dict], protocol: str
 ) -> None:
+    sample: tuple[str, tuple[str, str], list[CheckEvidence]] | None = None
+    best_rank = 3
     for result in results:
         host = result["dc_hostname"] if protocol == "ldap" else result["host"]
         permitted = (
@@ -96,23 +100,39 @@ def _show_anonymous_evidence(
         selected = [record for record in records if record.name in names]
         if not selected:
             continue
-        console.print(f"\nAnonymous evidence - {host}", markup=False)
-        for record in selected:
-            if record.name == names[0]:
-                excerpt = record.stdout
-            else:
-                excerpt, found = _enumeration_excerpt(record.stdout, "users")
-                if not found and protocol == "smb":
-                    excerpt, found = _enumeration_excerpt(record.stdout, "shares")
-                if not found:
-                    lines = record.stdout.splitlines()
-                    excerpt = "\n".join(lines[:10])
-                    if len(lines) > 10:
-                        excerpt += "\n... Additional output omitted."
-                    excerpt += "\nNo user or share rows confirmed in this output."
-            console.print(
-                format_check_evidence(record, excerpt), markup=False, highlight=False
-            )
+        enumeration = next((record for record in selected if record.name == names[1]), None)
+        rank = 2
+        if enumeration:
+            if _enumeration_excerpt(enumeration.stdout, "users")[1]:
+                rank = 0
+            elif protocol == "smb" and _enumeration_excerpt(enumeration.stdout, "shares")[1]:
+                rank = 1
+        if rank < best_rank:
+            sample = (host, names, selected)
+            best_rank = rank
+            if rank == 0:
+                break
+
+    if sample is None:
+        return
+    host, names, selected = sample
+    console.print(f"\nAnonymous evidence - {host}\n", markup=False)
+    for record in selected:
+        if record.name == names[0]:
+            excerpt = record.stdout
+        else:
+            excerpt, found = _enumeration_excerpt(record.stdout, "users")
+            if not found and protocol == "smb":
+                excerpt, found = _enumeration_excerpt(record.stdout, "shares")
+            if not found:
+                lines = record.stdout.splitlines()
+                excerpt = "\n".join(lines[:10])
+                if len(lines) > 10:
+                    excerpt += "\n... Additional output omitted."
+                excerpt += "\nNo user or share rows confirmed in this output."
+        console.print(
+            format_check_evidence(record, excerpt), markup=False, highlight=False
+        )
 
 
 def run_ldap_checks() -> None:
@@ -266,6 +286,41 @@ def _anonymous_count(
     return "Not attempted" if null_auth is False else "Incomplete"
 
 
+def _check_share_access(
+    hosts: list[str], dc_ip: str, username: str, password: str
+) -> list[tuple[str, list[ShareAccess], list[str]]]:
+    unique_hosts = []
+    seen = set()
+    for host in hosts:
+        key = host.rstrip(".").casefold()
+        if key not in seen:
+            unique_hosts.append(host)
+            seen.add(key)
+    checked: dict[str, tuple[list[ShareAccess], list[str]]] = {}
+    work = iter(unique_hosts)
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        pending: dict[Future[tuple[list[ShareAccess], list[str]]], str] = {}
+
+        def submit_next() -> None:
+            host = next(work, None)
+            if host is not None:
+                pending[executor.submit(
+                    smb_share_access_check, host, dc_ip, username, password
+                )] = host
+
+        for _ in range(min(4, len(unique_hosts))):
+            submit_next()
+
+        for _ in track_items(range(len(unique_hosts)), "SMB share-access hosts"):
+            future = next(as_completed(pending))
+            host = pending.pop(future)
+            checked[host] = future.result()
+            submit_next()
+
+    return [(host, *checked[host]) for host in unique_hosts]
+
+
 def run_smb_checks(
     std_pass: str | None = None,
 ) -> str | None:
@@ -318,14 +373,6 @@ def run_smb_checks(
             except CheckExecutionError as exc:
                 record_incomplete("SMB configuration", host, str(exc), notify=False)
                 unknown_hosts.append(host)
-                smb_results.append({
-                    "host": host,
-                    "signing": "[yellow]⚠ Unknown[/yellow]",
-                    "smbv1": "[yellow]⚠ Unknown[/yellow]",
-                    "null_auth": None,
-                    "anonymous_shares": None,
-                    "anonymous_users": None,
-                })
                 continue
 
             unknown = [
@@ -343,6 +390,8 @@ def run_smb_checks(
                     "SMB configuration", host, f"Unknown: {', '.join(unknown)}",
                     notify=False,
                 )
+            if len(unknown) == 3:
+                continue
             is_dc = host.rstrip(".").casefold() in dcs
             if result["null_auth"] and (
                 result["anonymous_shares"] is None
@@ -407,7 +456,6 @@ def run_smb_checks(
         )
 
     console.print(dc_table)
-    _show_anonymous_evidence(evidence, dc_results, "smb")
 
     print_section("SMB Checks - Hosts")
 
@@ -430,7 +478,7 @@ def run_smb_checks(
         )
 
     console.print(host_table)
-    _show_anonymous_evidence(evidence, host_results, "smb")
+    _show_anonymous_evidence(evidence, dc_results + host_results, "smb")
 
     share_access_results = []
     share_failed_hosts = []
@@ -449,16 +497,16 @@ def run_smb_checks(
             if share_checks_run:
                 with progress("Checking SMB share access..."):
 
-                    for host in track_items(hosts, "SMB share-access hosts"):
-
-                        shares, complete = smb_share_access_check(
-                            host,
-                            session_data["dc_ip"],
-                            standard_user,
-                            std_pass,
-                        )
-                        if not complete:
+                    for host, shares, errors in _check_share_access(
+                        hosts,
+                        session_data["dc_ip"],
+                        standard_user,
+                        std_pass,
+                    ):
+                        if errors:
                             share_failed_hosts.append(host)
+                            for error in errors:
+                                record_incomplete("SMB share access", host, error, notify=False)
 
                         if shares:
                             share_access_results.append({

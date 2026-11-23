@@ -22,9 +22,9 @@ External commands without measurable progress display an activity indicator
 instead; they may continue running between progress updates.
 
 MAQ and DNS display current-run command evidence after their tables. LDAP and
-SMB display anonymous enumeration excerpts with up to ten result rows. Known
-passwords are redacted; review other potentially sensitive output before
-sharing screenshots.
+SMB each display one anonymous enumeration sample with up to ten result rows;
+the checks still cover every target. Known passwords are redacted; review
+other potentially sensitive output before sharing screenshots.
 
 The current run writes `ad-kit/ad-kit_findings.html` and 
 `ad-kit/ad-kit_findings.json`.

@@ -10,7 +10,7 @@ import re
 import shlex
 import subprocess
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
@@ -297,6 +297,8 @@ def run_check(
     name: str,
     command: list[str],
     sensitive_values: list[str] | None = None,
+    *,
+    show_progress: bool = True,
 ) -> str:
     """
     Execute an assessment check and preserve evidence.
@@ -316,6 +318,9 @@ def run_check(
 
         sensitive_values:
             Command values to redact from progress output and saved evidence.
+
+        show_progress:
+            Whether to display an individual command activity indicator.
 
     Returns:
         Command standard output.
@@ -358,7 +363,8 @@ def run_check(
         else:
             display_command.append(argument)
 
-    with progress(f"Running {' '.join(display_command)}"):
+    activity = progress(f"Running {' '.join(display_command)}") if show_progress else nullcontext()
+    with activity:
         try:
             result = subprocess.run(command, capture_output=True, text=True)
         except FileNotFoundError as exc:

@@ -19,14 +19,15 @@ ad-kit runs NetExec against the discovered hosts:
 nxc smb <host> --dns-server <dc_ip>
 nxc smb <host> -u '' -p '' --shares --dns-server <dc_ip>
 nxc smb <dc> -u '' -p '' --shares --users --dns-server <dc_ip>
-nxc smb <host> -u <username> -p <password> --shares READ --dns-server <dc_ip>
-nxc smb <host> -u <username> -p <password> --shares WRITE --dns-server <dc_ip>
+nxc smb <host> -u <username> -p <password> --shares --dns-server <dc_ip>
 ```
 
 The anonymous enumeration commands run only when NetExec reports a null
 session. User enumeration is restricted to discovered Domain Controllers.
 The share-access checks use the Standard User account and are prompted only
-when needed.
+when needed. Share access is checked once per host, with up to four hosts
+checked concurrently. Only rows with reported READ or write-related
+permissions are displayed.
 
 ## What it checks
 
@@ -53,14 +54,19 @@ complete result. Counts reflect objects
 reported by NetExec, not whether the shares are readable. Partially returned
 account counts are marked as incomplete.
 
-For confirmed null sessions, the console displays the current-run NetExec
-command and up to ten anonymous user rows per Domain Controller, falling back
-to share rows when user rows are unavailable. Other hosts display share rows.
-An excerpt without rows does not establish that enumeration was denied.
+For confirmed null sessions, the console displays one current-run sample:
+up to ten anonymous user rows from a Domain Controller where available,
+falling back to share rows from a controller or another host. An excerpt
+without rows does not establish that enumeration was denied. Captured evidence
+for other hosts remains in the evidence directory.
 
 If a host or an individual enumeration command fails, ad-kit retains confirmed
 results from other checks and hosts. The console summarises affected host
-counts; individual incomplete checks are listed in the HTML report.
+counts; individual incomplete checks are listed in the HTML report. Hosts
+without any usable SMB configuration result are omitted from the configuration
+tables; this does not establish whether they are offline, filtered, or otherwise
+unreachable. Hosts with partially confirmed results remain visible, and the
+share-access checks still attempt every discovered host.
 
 ## How it works
 

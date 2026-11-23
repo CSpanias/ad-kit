@@ -23,8 +23,9 @@ nxc ldap <controller> -u '' -p '' --users
 The user enumeration command runs when NetExec reports a successful anonymous
 bind. A search failure does not prove that the bind was rejected, and an empty
 result does not confirm that enumeration was denied.
-The console shows current-run command evidence for successful binds, including
-up to ten user rows when available.
+The console shows one current-run anonymous bind sample, including up to ten
+user rows when available. It prefers a controller that returned user rows;
+evidence for every controller remains in the evidence directory.
 
 ## What it checks
 

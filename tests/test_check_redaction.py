@@ -101,3 +101,20 @@ def test_redaction_handles_overlapping_passwords(monkeypatch, tmp_path):
     with checks.capture_check_evidence() as captured:
         checks.run_check("overlap", ["tool", "-p", "foo", "PASSWORD=foobar"])
     assert captured[0].stdout == "[REDACTED] [REDACTED]"
+
+
+def test_suppressed_command_progress_still_writes_redacted_evidence(monkeypatch, tmp_path):
+    monkeypatch.setattr(checks, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        checks, "progress", lambda *_args: pytest.fail("unexpected command progress")
+    )
+    monkeypatch.setattr(
+        checks.subprocess, "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command, 0, stdout="secret", stderr=""
+        ),
+    )
+    checks.run_check("quiet", ["tool", "-p", "secret"], show_progress=False)
+    evidence = (tmp_path / "evidence" / "quiet.txt").read_text(encoding="utf-8")
+    assert "secret" not in evidence
+    assert "[REDACTED]" in evidence

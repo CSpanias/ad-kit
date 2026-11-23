@@ -21,14 +21,16 @@ _SHARE_PERMISSIONS = re.compile(
 )
 
 
-def _smb_log_payload(line: str) -> str | None:
+def _smb_log_payload(line: str, *, keep_padding: bool = False) -> str | None:
     line = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", line)
     match = re.match(
         r"^\s*SMB\s+\S+\s+\d+\s+\S+\s+(.*)$",
         line,
         re.IGNORECASE,
     )
-    return match.group(1).strip() if match else None
+    if not match:
+        return None
+    return match.group(1) if keep_padding else match.group(1).strip()
 
 
 def _is_user_table_header(row: str) -> bool:
@@ -49,7 +51,7 @@ def _parse_share_rows(output: str) -> list[str]:
         if not in_share_table:
             continue
 
-        row = _smb_log_payload(line)
+        row = _smb_log_payload(line, keep_padding=True)
         if row is None:
             continue
 
@@ -61,10 +63,10 @@ def _parse_share_rows(output: str) -> list[str]:
                 table_header_seen = True
             continue
 
-        if not row or re.fullmatch(r"[-\s]+", row):
+        if not row.strip() or re.fullmatch(r"[-\s]+", row):
             continue
 
-        row_lower = row.lower()
+        row_lower = row.lower().strip()
         if (
             _is_user_table_header(row)
             or row.startswith(("[+]", "[-]", "[*]", "[!]"))
@@ -83,6 +85,17 @@ def _has_share_table(output: str) -> bool:
         for line in output.splitlines()
         if (row := _smb_log_payload(line)) is not None
     )
+
+
+def _share_column_widths(output: str) -> tuple[int, int] | None:
+    for line in output.splitlines():
+        row = _smb_log_payload(line, keep_padding=True)
+        if row is None or not re.match(r"^Share\s+Permissions\s+Remark", row, re.I):
+            continue
+        permission_start = row.lower().index("permissions")
+        remark_start = row.lower().index("remark", permission_start)
+        return permission_start - 1, remark_start - permission_start - 1
+    return None
 
 
 def _parse_share_count(output: str) -> int | None:
@@ -148,65 +161,69 @@ def smb_share_access_check(
     dc_ip: str,
     username: str,
     password: str,
-) -> tuple[list[ShareAccess], bool]:
+) -> tuple[list[ShareAccess], list[str]]:
     """Return NetExec-reported share access without writing to shares."""
 
+    evidence_name = f"smb-share-access-{host}"
+    try:
+        output = run_check(
+            evidence_name,
+            [
+                "nxc", "smb", host,
+                "-u", username,
+                "-p", password,
+                "--shares",
+                "--dns-server", dc_ip,
+            ],
+            sensitive_values=[password],
+            show_progress=False,
+        )
+    except CheckExecutionError as exc:
+        return [], [str(exc)]
+
+    if not _has_share_table(output):
+        return [], [f"No complete share listing; see {evidence_name}.txt"]
+    widths = _share_column_widths(output)
+    if widths is None:
+        return [], [f"Unrecognised share table format; see {evidence_name}.txt"]
+    name_width, permission_width = widths
+
     shares: dict[str, ShareAccess] = {}
-    complete = True
-    for access, label in (("READ", "readable"), ("WRITE", "writable")):
-        evidence_name = f"smb-{label}-shares-{host}"
-        try:
-            output = run_check(
-                evidence_name,
-                [
-                    "nxc", "smb", host,
-                    "-u", username,
-                    "-p", password,
-                    "--shares", access,
-                    "--dns-server", dc_ip,
-                ],
-                sensitive_values=[password],
-            )
-        except CheckExecutionError as exc:
-            record_incomplete("SMB share access", host, str(exc), notify=False)
-            complete = False
+    errors = []
+    table_output = re.split(r"enumerated shares", output, maxsplit=1, flags=re.I)[1]
+    if "[-]" in table_output:
+        errors.append(f"Share enumeration reported an error; see {evidence_name}.txt")
+    for row in _parse_share_rows(output):
+        if re.match(rf"^.{{{name_width},}}? {{{permission_width + 1}}}", row):
             continue
-
-        if not _has_share_table(output):
-            record_incomplete(
-                "SMB share access", host,
-                f"No complete {access} share listing; see {evidence_name}.txt",
-                notify=False,
-            )
-            complete = False
+        candidates: list[tuple[str, tuple[str, ...]]] = []
+        for match in _SHARE_PERMISSIONS.finditer(row):
+            permissions = match.group("permissions")
+            before = row[:match.start()]
+            if match.start() < name_width + 1 or not before.endswith(" "):
+                continue
+            name = before.rstrip()
+            if not name or (len(name) < name_width and match.start() != name_width + 1):
+                continue
+            if len(name) >= name_width and before.endswith("  "):
+                continue
+            padding = max(0, permission_width - len(permissions))
+            after = row[match.end():]
+            if len(after) < padding or after[:padding] != " " * padding:
+                continue
+            if len(after) > padding and after[padding] != " ":
+                continue
+            reported = tuple(permissions.split(","))
+            candidates.append((name, reported))
+        if len(candidates) != 1:
+            errors.append(f"Could not parse a share result; see {evidence_name}.txt")
             continue
-
-        for row in _parse_share_rows(output):
-            for match in _SHARE_PERMISSIONS.finditer(row):
-                permissions = match.group("permissions")
-                end = match.end("permissions")
-                if match.start("permissions") < 16:
-                    continue
-                if len(permissions) < 22 and end < len(row) and row[end:end + 2] != "  ":
-                    continue
-                name = row[:match.start("permissions")].rstrip()
-                reported = tuple(permissions.split(","))
-                if not name or not any(item.startswith(access) for item in reported):
-                    continue
-                previous = shares.get(name.casefold())
-                combined = tuple(dict.fromkeys(
-                    (previous["permissions"] if previous else ()) + reported
-                ))
-                shares[name.casefold()] = {"name": name, "permissions": combined}
-                break
-            else:
-                record_incomplete(
-                    "SMB share access", host,
-                    f"Could not parse a {access} share result; see {evidence_name}.txt",
-                    notify=False,
-                )
-                complete = False
-    return list(shares.values()), complete
+        name, reported = candidates[0]
+        if any(item.startswith("UNKNOWN") for item in reported):
+            errors.append(f"Unknown share permissions; see {evidence_name}.txt")
+            continue
+        shares[name.casefold()] = {"name": name, "permissions": reported}
+    return list(shares.values()), errors
 
 
 def smb_configuration_check(
@@ -252,13 +269,12 @@ def smb_configuration_check(
         signing_match = re.search(r"signing:([^)]*)", line)
         smbv1_match = re.search(r"smbv1:([^)]*)", line)
 
-        if signing_match:
+        if signing_match and signing_match.group(1).strip() in {"true", "false"}:
             signing = signing_match.group(1).strip()
+            host_info_seen = True
 
-        if smbv1_match:
+        if smbv1_match and smbv1_match.group(1).strip() in {"true", "false", "none"}:
             smbv1 = smbv1_match.group(1).strip()
-
-        if signing_match or smbv1_match:
             host_info_seen = True
 
         null_auth_match = re.search(r"null auth:([^)]*)", line)
