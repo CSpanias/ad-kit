@@ -1,6 +1,6 @@
 import pytest
 
-from ad_kit.checks import coercion, ldap_info, nopac
+from ad_kit.checks import coercion, ldap_info, local_admin, nopac
 from ad_kit.core import util
 from ad_kit.core.exceptions import CheckExecutionError
 
@@ -81,6 +81,24 @@ def test_failed_target_is_counted_as_processed(monkeypatch):
     assert (tracker.completed, tracker.total) == (2, 2)
 
 
+def test_local_admin_uses_one_bulk_command_with_progress(monkeypatch, tmp_path):
+    (tmp_path / "domain-computers.txt").write_text("host.example.test\n", encoding="utf-8")
+    calls = []
+    monkeypatch.setattr(local_admin, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(local_admin, "load_dc_hostnames", lambda: ["DC01"])
+
+    def run(name, command, **kwargs):
+        calls.append((name, command, kwargs))
+        return "SMB 10.0.0.1 445 DC01 [+] user:*** (Pwn3d!)"
+
+    monkeypatch.setattr(local_admin, "run_check", run)
+    result = local_admin.local_admin_check("dc", "example.test", "user", "password")
+    assert result["domain_controllers"] == ["DC01"]
+    assert len(calls) == 1
+    assert calls[0][0] == "local-admin-access"
+    assert calls[0][2] == {"nxc_progress": True}
+
+
 @pytest.mark.parametrize(
     ("module", "names", "modules"),
     [
@@ -101,7 +119,8 @@ def test_query_batches_track_each_command(monkeypatch, tmp_path, module, names, 
     monkeypatch.setattr(util, "Progress", FakeProgress)
     calls = []
     monkeypatch.setattr(
-        module, "run_check", lambda name, command: calls.append((name, command)) or ""
+        module, "run_check",
+        lambda name, command, **kwargs: calls.append((name, command, kwargs)) or "",
     )
     if module is coercion:
         monkeypatch.setattr(coercion, "load_dc_hostnames", lambda: [])
@@ -110,7 +129,11 @@ def test_query_batches_track_each_command(monkeypatch, tmp_path, module, names, 
     else:
         ldap_info.ldap_info_check("dc", "user", "password")
 
-    assert [name for name, _ in calls] == names
-    assert [command[-1] for _, command in calls] == modules
+    assert [name for name, _, _ in calls] == names
+    assert [command[-1] for _, command, _ in calls] == modules
+    assert all(
+        kwargs == ({"nxc_progress": True} if module is coercion else {})
+        for _, _, kwargs in calls
+    )
     tracker = FakeProgress.instances[-1]
     assert (tracker.completed, tracker.total) == (len(names), len(names))

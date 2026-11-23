@@ -67,6 +67,7 @@ def coercion_check(
         run_check(
             name,
             ["nxc", "smb", targets, "-u", username, "-p", password, "-M", module],
+            nxc_progress=True,
         )
         for name, module in track_items(modules, "Coercion modules")
     ]

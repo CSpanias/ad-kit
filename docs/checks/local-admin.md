@@ -24,6 +24,10 @@ Then it attempts an SMB login with the Standard User against each host:
 nxc smb <hosts_file> -u <username> -p <password>
 ```
 
+For interactive multi-host scans, ad-kit displays NetExec's progress when
+available. Otherwise, it keeps the activity spinner. NetExec controls its own
+thread count; ad-kit's `--workers` does not limit this bulk scan.
+
 ## What it checks
 
 ad-kit attempts an SMB login with the Standard User against each host and

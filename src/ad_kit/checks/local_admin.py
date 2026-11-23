@@ -84,6 +84,7 @@ def local_admin_check(
             "-p",
             password,
         ],
+        nxc_progress=True,
     )
 
     dc_hostnames = {dc.lower() for dc in load_dc_hostnames()}

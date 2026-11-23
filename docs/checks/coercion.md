@@ -22,6 +22,10 @@ nxc smb <targets> -u <username> -p <password> -M coerce_plus
 nxc smb <targets> -u <username> -p <password> -M webdav
 ```
 
+For interactive multi-host scans, ad-kit displays NetExec's progress when
+available; otherwise, it keeps the activity spinner. NetExec controls its own
+thread count; ad-kit's `--workers` does not limit these bulk scans.
+
 ## What it checks
 
 ad-kit reports whether the Print Spooler service is enabled (`spooler`), which

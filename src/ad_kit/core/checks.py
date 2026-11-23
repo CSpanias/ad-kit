@@ -6,16 +6,21 @@ including evidence management, credential validation, command execution, and
 helper functions for loading enumerated Active Directory assets.
 """
 
+import codecs
+import os
 import re
 import shlex
 import subprocess
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 
-from ad_kit.core.console import print_warning
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
+
+from ad_kit.core.console import console, print_warning
 from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.util import get_artefacts_dir, progress
 
@@ -33,6 +38,10 @@ PASSWORD_POLICY_BASELINE = {
 }
 
 DOMAIN_SID_PATTERN = re.compile(r"\b(S-1-5-21-(?:\d+-){2}\d+)\b(?!-\d)", re.IGNORECASE)
+ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+NXC_PROGRESS_PATTERN = re.compile(
+    r"^Running nxc against \d+ targets?\s+.*?\s+(\d{1,3})%(?:\s|$)"
+)
 
 #-------------------------------------------------------------------------------
 # FUNCTIONS
@@ -80,7 +89,7 @@ def format_check_evidence(record: CheckEvidence, stdout: str | None = None) -> s
     text = f"$ {shlex.join(record.command)}\n{output.rstrip()}"
     if record.stderr:
         text += f"\n[stderr]\n{record.stderr.rstrip()}"
-    return re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
+    return ANSI_ESCAPE_PATTERN.sub("", text)
 
 
 def get_evidence_dir() -> Path:
@@ -308,12 +317,72 @@ def cleanup_test_artifact(
     )
 
 
+def _run_nxc_with_progress(
+    command: list[str], display_command: list[str]
+) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env["FORCE_COLOR"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
+    if env.get("TERM") in (None, "", "dumb"):
+        env["TERM"] = "xterm"
+
+    console.print(f"Running {shlex.join(display_command)}", markup=False, highlight=False)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("{task.description}", markup=False),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console,
+        transient=True,
+    ) as tracker:
+        task = tracker.add_task("NetExec targets", total=None)
+        with subprocess.Popen(
+            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
+        ) as process:
+            assert process.stdout is not None
+            assert process.stderr is not None
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                stderr_future = executor.submit(process.stderr.read)
+                decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+                output_parts: list[str] = []
+                pending = ""
+                try:
+                    while chunk := process.stdout.read1(4096):
+                        text = decoder.decode(chunk)
+                        output_parts.append(text)
+                        pending += text
+                        lines = re.split(r"[\r\n]", pending)
+                        pending = lines.pop()
+                        for line in lines:
+                            match = NXC_PROGRESS_PATTERN.match(
+                                ANSI_ESCAPE_PATTERN.sub("", line)
+                            )
+                            if match and int(match.group(1)) <= 100:
+                                tracker.update(task, total=100, completed=int(match.group(1)))
+                    output_parts.append(decoder.decode(b"", final=True))
+                    returncode = process.wait()
+                    stderr = stderr_future.result().decode("utf-8", errors="replace")
+                except BaseException:
+                    if process.poll() is None:
+                        process.kill()
+                    raise
+
+    output = ANSI_ESCAPE_PATTERN.sub("", "".join(output_parts))
+    output = "\n".join(
+        line for line in re.split(r"[\r\n]+", output)
+        if line and not NXC_PROGRESS_PATTERN.match(line)
+    )
+    stderr = ANSI_ESCAPE_PATTERN.sub("", stderr)
+    return subprocess.CompletedProcess(command, returncode, output, stderr)
+
+
 def run_check(
     name: str,
     command: list[str],
     sensitive_values: list[str] | None = None,
     *,
     show_progress: bool = True,
+    nxc_progress: bool = False,
 ) -> str:
     """
     Execute an assessment check and preserve evidence.
@@ -336,6 +405,9 @@ def run_check(
 
         show_progress:
             Whether to display an individual command activity indicator.
+
+        nxc_progress:
+            Display NetExec's multi-target progress when running interactively.
 
     Returns:
         Command standard output.
@@ -378,18 +450,22 @@ def run_check(
         else:
             display_command.append(argument)
 
-    activity = (
-        progress(f"Running {shlex.join(display_command)}") if show_progress else nullcontext()
-    )
-    with activity:
-        try:
-            result = subprocess.run(command, capture_output=True, text=True)
-        except FileNotFoundError as exc:
-            raise CheckExecutionError(
-                name=name,
-                command=display_command,
-                stderr=f"command not found: {command[0]}",
-            ) from exc
+    try:
+        if nxc_progress and show_progress and console.is_terminal:
+            result = _run_nxc_with_progress(command, display_command)
+        else:
+            activity = (
+                progress(f"Running {shlex.join(display_command)}")
+                if show_progress else nullcontext()
+            )
+            with activity:
+                result = subprocess.run(command, capture_output=True, text=True)
+    except FileNotFoundError as exc:
+        raise CheckExecutionError(
+            name=name,
+            command=display_command,
+            stderr=f"command not found: {command[0]}",
+        ) from exc
 
     output = result.stdout
     for secret in secrets:
