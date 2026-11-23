@@ -18,6 +18,12 @@ ad-kit reads the default domain policy with NetExec:
 nxc ldap <dc_ip> -u <username> -p <password> --pass-pol
 ```
 
+When NetExec reports the lockout duration as `Not Set`, ad-kit also queries:
+
+```bash
+nxc ldap <dc_ip> -u <username> -p <password> --query '(objectClass=domainDNS)' 'lockoutDuration'
+```
+
 ## What it checks
 
 ad-kit reads the default domain policy and compares each setting against the
@@ -40,12 +46,12 @@ Check `ad-kit/evidence/password-policy.txt` for the raw output.
 An account lockout threshold of zero disables lockout; the duration and
 observation window are then not applicable. A lockout duration of zero means
 manual administrator unlock, rather than a short automatic unlock period.
-NetExec may also render an indefinite duration as `Not Set`, but its output
-can represent more than one raw LDAP value. When lockout is enabled, ad-kit
-shows `Review (not set)` and records an incomplete check; verify the raw
-`lockoutDuration` attribute before concluding how long accounts remain locked.
-For example, NetExec's duration converter has mapped both `-2147483648` and
-`-9223372036854775808` to `Not Set`.
+NetExec may also render an indefinite duration as `Not Set`. When this occurs,
+ad-kit queries the raw LDAP attribute and reports **Until manually unlocked**
+if the documented manual-unlock value is returned. If the query fails or its
+result is unexpected, the duration is **Unknown** and the check is incomplete.
+The query output is saved in `ad-kit/evidence/password-policy-lockout-duration.txt`.
+When the threshold is zero, lockout is disabled and the query is unnecessary.
 Maximum password age is not assessed or displayed. NetExec's unmodified command
 output, including any maximum-age value it reports, remains in the evidence file.
 

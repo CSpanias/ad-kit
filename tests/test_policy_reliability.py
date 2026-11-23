@@ -347,7 +347,7 @@ def test_manual_unlock_is_not_automatically_weak(monkeypatch):
 
 @pytest.mark.parametrize(
     ("threshold", "expected"),
-    [("5", "Review (not set)"), ("0", "Not applicable"), ("Unknown", "Unknown")],
+    [("5", "Unknown"), ("0", "Not applicable"), ("Unknown", "Unknown")],
 )
 def test_netexec_not_set_lockout_duration_respects_threshold(monkeypatch, threshold, expected):
     values, assessed = _assess_policy(lockout_duration="Not Set", lockout_threshold=threshold)
@@ -359,15 +359,96 @@ def test_netexec_not_set_lockout_duration_respects_threshold(monkeypatch, thresh
         assert not incomplete
 
 
-def test_netexec_not_set_lockout_duration_is_parsed_for_review(monkeypatch):
-    output = (
+def test_netexec_not_set_lockout_duration_is_verified_in_ldap(monkeypatch, tmp_path):
+    output = io.StringIO()
+    commands = []
+    policy_output = (
+        "LDAP dc 389 DC Minimum password length: 14\n"
+        "LDAP dc 389 DC Password history length: 5\n"
+        "LDAP dc 389 DC Minimum password age: 1 day\n"
+        "LDAP dc 389 DC Domain Password Complex: 1\n"
+        "LDAP dc 389 DC Reset Account Lockout Counter: 1 hour\n"
         "LDAP dc 389 DC Locked Account Duration: Not Set\n"
         "LDAP dc 389 DC Account Lockout Threshold: 5\n"
     )
-    monkeypatch.setattr(passwords, "run_check", lambda *_args: output)
+    query_output = (
+        "LDAP dc 389 DC [+] Response for object: DC=example,DC=test\n"
+        "LDAP dc 389 DC lockoutDuration      -9223372036854775808\n"
+    )
+
+    def run(command, **_kwargs):
+        commands.append(command)
+        return subprocess.CompletedProcess(
+            command, 0, stdout=query_output if "--query" in command else policy_output, stderr=""
+        )
+
+    monkeypatch.setattr(checks.subprocess, "run", run)
+    monkeypatch.setattr(checks, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(checks, "progress", no_progress)
+    monkeypatch.setattr(policy, "progress", no_progress)
+    monkeypatch.setattr(policy, "console", Console(file=output, width=200))
+    monkeypatch.setattr(policy, "print_section", lambda _title: None)
+    monkeypatch.setattr(policy, "require_session", lambda: {"dc_ip": "dc", "standard_user": "user"})
+    monkeypatch.setattr(policy, "record_findings", lambda _items: pytest.fail("unexpected finding"))
+    monkeypatch.setattr(policy, "record_incomplete", lambda *_args: pytest.fail("unexpected gap"))
+    policy.run_password_policy_checks("test-secret")
+    assert "Until manually unlocked" in output.getvalue()
+    assert "Manual unlock" in output.getvalue()
+    assert len(commands) == 2
+    assert commands[1][-3:] == ["--query", "(objectClass=domainDNS)", "lockoutDuration"]
+    evidence = (tmp_path / "evidence" / "password-policy-lockout-duration.txt").read_text()
+    assert "-9223372036854775808" in evidence
+    assert "test-secret" not in evidence
+
+
+@pytest.mark.parametrize("duration,threshold", [
+    ("30 minutes", "5"), ("Not Set", "0"), ("Not Set", "00"),
+])
+def test_unambiguous_or_disabled_lockout_skips_ldap_query(monkeypatch, duration, threshold):
+    calls = []
+
+    def run(name, _command):
+        calls.append(name)
+        return f"Locked Account Duration: {duration}\nAccount Lockout Threshold: {threshold}"
+
+    monkeypatch.setattr(passwords, "run_check", run)
     parsed = passwords.password_policy_check("dc", "user", "password")
-    assert parsed["lockout_duration"] == "Not Set"
-    assert "Review (not set)" in passwords.password_policy_assessment(parsed)["lockout_duration"]
+    assert parsed["lockout_duration"] == duration
+    assert calls == ["password-policy"]
+
+
+@pytest.mark.parametrize("query_output", [
+    "LDAP dc 389 DC [-] LDAP error",
+    "LDAP dc 389 DC [+] Response for object: DC=example,DC=test\n",
+    "LDAP dc 389 DC [+] Response for object: DC=example,DC=test\n"
+    "LDAP dc 389 DC lockoutDuration -2147483648\n",
+    "LDAP dc 389 DC [+] Response for object: DC=example,DC=test\n"
+    "LDAP dc 389 DC lockoutDuration -9223372036854775808\n"
+    "LDAP dc 389 DC [+] Response for object: DC=other,DC=test\n"
+    "LDAP dc 389 DC lockoutDuration -9223372036854775808\n",
+    "command failed",
+])
+def test_unverified_lockout_is_unknown_and_incomplete(monkeypatch, query_output):
+    def run(name, _command):
+        if name == "password-policy":
+            return "Locked Account Duration: Not Set\nAccount Lockout Threshold: 5"
+        if query_output == "command failed":
+            raise CheckExecutionError(name, [], returncode=1)
+        return query_output
+
+    monkeypatch.setattr(passwords, "run_check", run)
+    parsed = passwords.password_policy_check("dc", "user", "password")
+    assert parsed["lockout_duration"] == passwords.UNKNOWN
+    values, _ = _assess_policy(**parsed)
+    findings, incomplete = _run_policy(monkeypatch, values)
+    assert not findings
+    assert len(incomplete) == 1
+    assert "lockout duration" in incomplete[0][2]
+    assert "Lockout duration lookup:" in incomplete[0][2]
+    if query_output == "command failed":
+        assert "exit code 1" in incomplete[0][2]
+    else:
+        assert "password-policy-lockout-duration.txt" in incomplete[0][2]
 
 
 def test_minimum_age_below_baseline_reports_actual_value(monkeypatch):

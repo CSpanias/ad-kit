@@ -2,9 +2,14 @@
 Password-related assessment checks.
 """
 
+import re
+
 from ad_kit.core.checks import PASSWORD_POLICY_BASELINE, duration_to_minutes, run_check
+from ad_kit.core.exceptions import CheckExecutionError
 
 UNKNOWN = "[yellow]⚠ Unknown[/yellow]"
+MANUAL_UNLOCK = "Until manually unlocked"
+MANUAL_UNLOCK_LDAP = "-9223372036854775808"
 
 
 def password_policy_check(
@@ -73,7 +78,7 @@ def password_policy_check(
         elif "Account Lockout Threshold:" in line:
             lockout_threshold = (line.split(":")[-1].strip())
 
-    return {
+    result = {
         "minimum_length": minimum_length,
         "password_history": password_history,
         "minimum_age": minimum_age,
@@ -82,6 +87,38 @@ def password_policy_check(
         "lockout_duration": lockout_duration,
         "lockout_threshold": lockout_threshold,
     }
+
+    if lockout_duration.lower() == "not set" and not (
+        lockout_threshold.isdecimal() and int(lockout_threshold) == 0
+    ):
+        try:
+            raw_output = run_check(
+                "password-policy-lockout-duration",
+                [
+                    "nxc", "ldap", dc_ip, "-u", username, "-p", password,
+                    "--query", "(objectClass=domainDNS)", "lockoutDuration",
+                ],
+            )
+        except CheckExecutionError as exc:
+            result["lockout_duration"] = UNKNOWN
+            result["lockout_duration_error"] = str(exc)
+        else:
+            objects = re.findall(r"\bResponse for object:", raw_output, re.IGNORECASE)
+            values = re.findall(
+                r"\blockoutDuration[ \t]+(-?\d+)[ \t]*\r?$",
+                raw_output,
+                re.IGNORECASE | re.MULTILINE,
+            )
+            if len(objects) == 1 and values == [MANUAL_UNLOCK_LDAP]:
+                result["lockout_duration"] = MANUAL_UNLOCK
+            else:
+                result["lockout_duration"] = UNKNOWN
+                result["lockout_duration_error"] = (
+                    "LDAP query did not return a single documented manual-unlock value; "
+                    "see password-policy-lockout-duration.txt evidence"
+                )
+
+    return result
 
 
 def password_policy_assessment(
@@ -175,8 +212,8 @@ def password_policy_assessment(
 
     if threshold.isdecimal() and int(threshold) == 0:
         assessment["lockout_duration"] = "[yellow]Not applicable[/yellow]"
-    elif threshold.isdecimal() and policy["lockout_duration"].strip().lower() == "not set":
-        assessment["lockout_duration"] = "[yellow]Review (not set)[/yellow]"
+    elif threshold.isdecimal() and policy["lockout_duration"] == MANUAL_UNLOCK:
+        assessment["lockout_duration"] = "[green]✓ Manual unlock[/green]"
     elif not threshold.isdecimal() or lockout_duration is None:
         assessment["lockout_duration"] = UNKNOWN
     elif lockout_duration == 0:

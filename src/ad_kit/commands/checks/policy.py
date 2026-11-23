@@ -204,18 +204,13 @@ def run_password_policy_checks(
         if status == UNKNOWN
     ]
     if unknown:
+        details = password_policy.get("lockout_duration_error")
         record_incomplete(
             "pass-pol",
             session_data["dc_ip"],
             "Could not assess: " + ", ".join(unknown)
-            + ". See password-policy.txt evidence.",
-        )
-    if assessment["lockout_duration"] == "[yellow]Review (not set)[/yellow]":
-        record_incomplete(
-            "pass-pol",
-            session_data["dc_ip"],
-            "NetExec reported lockout duration as Not Set; verify the raw LDAP "
-            "lockoutDuration value to determine the effective duration.",
+            + ". See password-policy.txt evidence."
+            + (f" Lockout duration lookup: {details}." if details else ""),
         )
 
     weak_settings = [
