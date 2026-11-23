@@ -166,6 +166,29 @@ def test_coercion_shows_only_matching_redacted_example(monkeypatch, has_finding)
     assert "password" not in text
 
 
+def test_coercion_methods_are_shown_for_each_host(monkeypatch):
+    output = io.StringIO()
+    recorded_findings = []
+    monkeypatch.setattr(privileged, "console", Console(file=output, width=160))
+    monkeypatch.setattr(privileged, "print_section", lambda *_args: None)
+    monkeypatch.setattr(privileged, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(privileged, "record_findings", recorded_findings.extend)
+    monkeypatch.setattr(privileged, "require_session", lambda: {"standard_user": "user"})
+    monkeypatch.setattr(privileged, "coercion_check", lambda *_args: {
+        "coercion_dcs": {"DC1": ["PetitPotam", "WebDAV"], "DC2": ["DFSCoerce"]},
+        "spooler_dcs": ["DC3"],
+    })
+
+    privileged.run_coercion_checks("pw")
+
+    lines = output.getvalue().splitlines()
+    assert any("DC1" in line and "PetitPotam, WebDAV" in line for line in lines)
+    assert any("DC2" in line and "DFSCoerce" in line for line in lines)
+    assert "DCs with Print Spooler" not in output.getvalue()
+    assert any("Print Spooler" in evidence and "DC3" in evidence
+               for finding in recorded_findings for evidence in finding.evidence)
+
+
 @pytest.mark.parametrize("kind", ["local_admin", "adcs", "pre2k", "tombstone"])
 def test_other_checks_show_known_affected_objects(monkeypatch, kind):
     module = (

@@ -452,7 +452,7 @@ def run_check(
             result = _run_nxc_with_progress(command)
         else:
             activity = (
-                progress(f"Running {shlex.join(display_command)}")
+                progress("Running check...")
                 if show_progress and not nxc_progress else nullcontext()
             )
             with activity:

@@ -32,9 +32,12 @@ ad-kit reports whether the Print Spooler service is enabled (`spooler`), which
 coercion techniques are exposed (`coerce_plus`, such as PrinterBug, PetitPotam,
 DFSCoerce, and MSEven), and whether the WebClient service is enabled
 (`webdav` - WebDAV coercion).
-The table lists affected Domain Controllers. When a finding is present and
-matching output is available, one redacted command and matching result line
-are shown as an example; full evidence remains available on disk.
+The table lists affected Domain Controllers and the detected coercion methods
+for each host. Print Spooler status is assessed separately and included in the
+finding when enabled; it is not by itself proof of a coercion method. When a
+finding is present and matching output is available, one redacted command and
+matching result line are shown as an example; full evidence remains available
+on disk.
 
 ## How it works
 

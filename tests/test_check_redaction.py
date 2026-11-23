@@ -59,8 +59,7 @@ def test_run_check_redacts_password_from_progress_and_evidence(
 
     assert password not in progress_messages[0]
     assert machine_password not in progress_messages[0]
-    assert "[REDACTED]" in progress_messages[0]
-    assert "PASSWORD=[REDACTED]" in progress_messages[0]
+    assert progress_messages == ["Running check..."]
     assert password not in output
     assert machine_password not in output
     assert "[REDACTED]" in output
@@ -144,7 +143,7 @@ def test_empty_arguments_are_preserved_in_display_and_execution(monkeypatch, tmp
 
     evidence = (tmp_path / "evidence" / "anonymous.txt").read_text(encoding="utf-8")
     assert commands == [command]
-    assert "-u '' -p ''" in messages[0]
+    assert messages == ["Running check..."]
     assert "-u '' -p ''" in evidence
 
 

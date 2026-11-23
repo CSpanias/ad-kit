@@ -555,18 +555,18 @@ def run_coercion_checks(
     table.add_column("Setting", style="cyan")
     table.add_column("Value", style="green")
     table.add_column("Object", style="yellow")
+    table.add_column("Methods", style="yellow")
 
-    table.add_row(
-        "Coercible DCs",
-        str(len(coercion_results["coercion_dcs"])),
-        object_text(list(coercion_results["coercion_dcs"])),
-    )
-
-    table.add_row(
-        "DCs with Print Spooler",
-        str(len(coercion_results["spooler_dcs"])),
-        object_text(coercion_results["spooler_dcs"]),
-    )
+    coercible_dcs = coercion_results["coercion_dcs"]
+    for index, (host, techniques) in enumerate(coercible_dcs.items()):
+        table.add_row(
+            "Coercible DCs" if index == 0 else "",
+            str(len(coercible_dcs)) if index == 0 else "",
+            object_text([host]),
+            object_text([", ".join(techniques)]),
+        )
+    if not coercible_dcs:
+        table.add_row("Coercible DCs", "0", "-", "-")
 
     console.print(table)
 
