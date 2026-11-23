@@ -7,11 +7,16 @@ helper functions for loading enumerated Active Directory assets.
 """
 
 import re
+import shlex
 import subprocess
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
 from pathlib import Path
 
-from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.console import print_warning
+from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.util import get_artefacts_dir, progress
 
 #-------------------------------------------------------------------------------
@@ -30,6 +35,38 @@ PASSWORD_POLICY_BASELINE = {
 #-------------------------------------------------------------------------------
 # FUNCTIONS
 #-------------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class CheckEvidence:
+    name: str
+    command: list[str]
+    stdout: str
+    stderr: str
+
+
+_evidence_capture: ContextVar[list[CheckEvidence] | None] = ContextVar(
+    "check_evidence_capture", default=None
+)
+
+
+@contextmanager
+def capture_check_evidence() -> Iterator[list[CheckEvidence]]:
+    """Capture redacted results of commands executed in this context."""
+    records: list[CheckEvidence] = []
+    token = _evidence_capture.set(records)
+    try:
+        yield records
+    finally:
+        _evidence_capture.reset(token)
+
+
+def format_check_evidence(record: CheckEvidence, stdout: str | None = None) -> str:
+    output = record.stdout if stdout is None else stdout
+    text = f"$ {shlex.join(record.command)}\n{output.rstrip()}"
+    if record.stderr:
+        text += f"\n[stderr]\n{record.stderr.rstrip()}"
+    return re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
+
 
 def get_evidence_dir() -> Path:
     """
@@ -306,6 +343,8 @@ def run_check(
         if password and password not in secrets:
             secrets.append(password)
 
+    secrets.sort(key=len, reverse=True)
+
     display_command = []
 
     for argument in command:
@@ -342,6 +381,10 @@ def run_check(
     if error_output:
         evidence += f"\n\n[stderr]\n{error_output}"
     evidence_file.write_text(evidence, encoding="utf-8")
+
+    records = _evidence_capture.get()
+    if records is not None:
+        records.append(CheckEvidence(name, display_command, output, error_output))
 
     if result.returncode != 0:
         raise CheckExecutionError(

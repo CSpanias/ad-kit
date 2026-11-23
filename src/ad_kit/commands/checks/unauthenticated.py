@@ -1,4 +1,7 @@
+import re
+
 from rich.table import Table
+from rich.text import Text
 
 from ad_kit.checks.asreproast import (
     asreproast_check,
@@ -7,19 +10,109 @@ from ad_kit.checks.asreproast import (
 from ad_kit.checks.ldap import ldap_check
 from ad_kit.checks.smb import (
     smb_configuration_check,
-    smb_writable_share_check,
+    smb_share_access_check,
 )
 from ad_kit.checks.tombstone import tombstone_check
-from ad_kit.core.checks import load_dc_hostnames, load_domain_computers
+from ad_kit.core.checks import (
+    CheckEvidence,
+    capture_check_evidence,
+    format_check_evidence,
+    load_dc_hostnames,
+    load_domain_computers,
+)
 from ad_kit.core.console import console, print_info, print_section, print_warning
-from ad_kit.core.findings import load_finding
 from ad_kit.core.exceptions import CheckExecutionError
+from ad_kit.core.findings import load_finding
 from ad_kit.core.util import (
-    get_artefacts_dir, progress, require_collected_data, require_session,
+    get_artefacts_dir,
+    progress,
+    require_collected_data,
+    require_session,
+    track_items,
 )
 from ad_kit.reporting.results import record_findings, record_incomplete
 
 from .credentials import authenticate_standard_user
+
+
+def _enumeration_excerpt(output: str, kind: str) -> tuple[str, bool]:
+    """Return a NetExec table with at most ten result rows."""
+    header = None
+    rows = []
+    messages = []
+    for line in output.splitlines():
+        plain = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", line)
+        match = re.match(r"^\s*(?:SMB|LDAP|LDAPS)\s+\S+\s+\d+\s+\S+\s+(.*)$", plain, re.I)
+        if not match:
+            continue
+        payload = match.group(1).strip()
+        lower = payload.lower()
+        if payload.startswith("[-]") or lower.startswith("enumerated "):
+            messages.append(plain)
+            if header:
+                break
+            continue
+        is_header = (
+            "username" in lower and "last pw set" in lower
+            if kind == "users"
+            else all(word in lower for word in ("share", "permissions", "remark"))
+        )
+        if is_header:
+            header = plain
+            continue
+        if header:
+            if kind == "shares" and "username" in lower and "last pw set" in lower:
+                break
+            if not payload or re.fullmatch(r"[-\s]+", payload):
+                continue
+            if payload.startswith(("[+]", "[*]", "[!]")):
+                break
+            rows.append(plain)
+    if not rows:
+        return "", False
+    lines = messages + [header] + rows[:10]
+    if len(rows) > 10:
+        lines.append(f"... {len(rows) - 10} additional row(s) omitted.")
+    return "\n".join(lines), True
+
+
+def _show_anonymous_evidence(
+    records: list[CheckEvidence], results: list[dict], protocol: str
+) -> None:
+    for result in results:
+        host = result["dc_hostname"] if protocol == "ldap" else result["host"]
+        permitted = (
+            result["anonymous_bind"] == "[red]✗ Permitted[/red]"
+            if protocol == "ldap"
+            else result["null_auth"] is True
+        )
+        if not permitted:
+            continue
+        names = (
+            (f"ldap-{host}", f"ldap-anonymous-users-{host}")
+            if protocol == "ldap"
+            else (f"smb-{host}", f"smb-anonymous-enumeration-{host}")
+        )
+        selected = [record for record in records if record.name in names]
+        if not selected:
+            continue
+        console.print(f"\nAnonymous evidence - {host}", markup=False)
+        for record in selected:
+            if record.name == names[0]:
+                excerpt = record.stdout
+            else:
+                excerpt, found = _enumeration_excerpt(record.stdout, "users")
+                if not found and protocol == "smb":
+                    excerpt, found = _enumeration_excerpt(record.stdout, "shares")
+                if not found:
+                    lines = record.stdout.splitlines()
+                    excerpt = "\n".join(lines[:10])
+                    if len(lines) > 10:
+                        excerpt += "\n... Additional output omitted."
+                    excerpt += "\nNo user or share rows confirmed in this output."
+            console.print(
+                format_check_evidence(record, excerpt), markup=False, highlight=False
+            )
 
 
 def run_ldap_checks() -> None:
@@ -40,7 +133,7 @@ def run_ldap_checks() -> None:
 
     print_section("LDAP Checks")
 
-    with progress("Checking LDAP configuration..."):
+    with capture_check_evidence() as evidence, progress("Checking LDAP configuration..."):
 
         ldap_results, ldap_findings = ldap_check()
 
@@ -61,6 +154,7 @@ def run_ldap_checks() -> None:
         )
 
     console.print(table)
+    _show_anonymous_evidence(evidence, ldap_results, "ldap")
 
     record_findings(ldap_findings)
 
@@ -92,7 +186,7 @@ def run_tombstone_checks(
 
     with progress("Checking Standard User access to deleted objects..."):
 
-        for dc_ip in dc_ips:
+        for dc_ip in track_items(dc_ips, "Deleted-object domain controllers"):
             results.append(
                 tombstone_check(
                     dc_ip,
@@ -156,6 +250,22 @@ def run_tombstone_checks(
 
     record_findings(findings)
 
+def _null_session_status(null_auth: bool | None) -> str:
+    if null_auth is True:
+        return "[red]✗ Permitted[/red]"
+    return "[yellow]⚠ Not confirmed[/yellow]"
+
+
+def _anonymous_count(
+    count: int | None, null_auth: bool | None, *, complete: bool = True
+) -> str:
+    if not complete and count is not None:
+        return f"Incomplete ({count} observed)"
+    if count is not None:
+        return str(count)
+    return "Not attempted" if null_auth is False else "Incomplete"
+
+
 def run_smb_checks(
     std_pass: str | None = None,
 ) -> str | None:
@@ -163,7 +273,7 @@ def run_smb_checks(
     Execute SMB security checks against discovered hosts.
 
     This check evaluates SMB signing, SMBv1, anonymous enumeration, and
-    standard-user write access to shares across discovered systems.
+    Standard User read and write access to shares across discovered systems.
 
     Findings are intended to identify legacy SMB configurations and systems 
     vulnerable to common relay or downgrade attacks.
@@ -193,19 +303,29 @@ def run_smb_checks(
     anonymous_failed_hosts = []
 
     hosts = load_domain_computers()
+    dcs = {dc.rstrip(".").casefold() for dc in load_dc_hostnames()}
 
-    with progress("Checking SMB configuration..."):
+    with capture_check_evidence() as evidence, progress("Checking SMB configuration..."):
 
-        for host in hosts:
+        for host in track_items(hosts, "SMB configuration hosts"):
 
             try:
                 result = smb_configuration_check(
                     host,
                     session_data["dc_ip"],
+                    enumerate_users=host.rstrip(".").casefold() in dcs,
                 )
             except CheckExecutionError as exc:
                 record_incomplete("SMB configuration", host, str(exc), notify=False)
                 unknown_hosts.append(host)
+                smb_results.append({
+                    "host": host,
+                    "signing": "[yellow]⚠ Unknown[/yellow]",
+                    "smbv1": "[yellow]⚠ Unknown[/yellow]",
+                    "null_auth": None,
+                    "anonymous_shares": None,
+                    "anonymous_users": None,
+                })
                 continue
 
             unknown = [
@@ -223,19 +343,19 @@ def run_smb_checks(
                     "SMB configuration", host, f"Unknown: {', '.join(unknown)}",
                     notify=False,
                 )
+            is_dc = host.rstrip(".").casefold() in dcs
             if result["null_auth"] and (
-                result["anonymous_shares"] is None or result["anonymous_users"] is None
+                result["anonymous_shares"] is None
+                or (
+                    is_dc
+                    and not result.get(
+                        "anonymous_users_complete", result["anonymous_users"] is not None
+                    )
+                )
             ):
                 anonymous_failed_hosts.append(result["host"])
-            if len(unknown) == 3:
-                continue
 
             smb_results.append(result)
-
-    dcs = {
-        dc.lower()
-        for dc in load_dc_hostnames()
-    }
 
     dc_results = []
     host_results = []
@@ -253,7 +373,7 @@ def run_smb_checks(
         if result["anonymous_shares"] or result["anonymous_users"]:
             anonymous_enumeration.append(result)
 
-        host = result["host"].lower()
+        host = result["host"].rstrip(".").casefold()
 
         if host in dcs:
             dc_results.append(result)
@@ -267,8 +387,9 @@ def run_smb_checks(
     dc_table.add_column("Host", style="cyan")
     dc_table.add_column("Signing", style="green")
     dc_table.add_column("SMBv1", style="green")
-    dc_table.add_column("Anon Shares", style="yellow")
-    dc_table.add_column("Anon Users", style="yellow")
+    dc_table.add_column("Null Session", style="yellow")
+    dc_table.add_column("Anon Shares (count)", style="yellow")
+    dc_table.add_column("Anon Users (count)", style="yellow")
 
     for result in dc_results:
 
@@ -276,19 +397,17 @@ def run_smb_checks(
             result["host"],
             result["signing"],
             result["smbv1"],
-            (
-                str(result["anonymous_shares"])
-                if result["anonymous_shares"] is not None
-                else "N/A"
-            ),
-            (
-                str(result["anonymous_users"])
-                if result["anonymous_users"] is not None
-                else "N/A"
+            _null_session_status(result["null_auth"]),
+            _anonymous_count(result["anonymous_shares"], result["null_auth"]),
+            _anonymous_count(
+                result["anonymous_users"],
+                result["null_auth"],
+                complete=result.get("anonymous_users_complete", True),
             ),
         )
 
     console.print(dc_table)
+    _show_anonymous_evidence(evidence, dc_results, "smb")
 
     print_section("SMB Checks - Hosts")
 
@@ -297,8 +416,8 @@ def run_smb_checks(
     host_table.add_column("Host", style="cyan")
     host_table.add_column("Signing", style="green")
     host_table.add_column("SMBv1", style="green")
-    host_table.add_column("Anon Shares", style="yellow")
-    host_table.add_column("Anon Users", style="yellow")
+    host_table.add_column("Null Session", style="yellow")
+    host_table.add_column("Anon Shares (count)", style="yellow")
 
     for result in host_results:
 
@@ -306,79 +425,70 @@ def run_smb_checks(
             result["host"],
             result["signing"],
             result["smbv1"],
-            (
-                str(result["anonymous_shares"])
-                if result["anonymous_shares"] is not None
-                else "N/A"
-            ),
-            (
-                str(result["anonymous_users"])
-                if result["anonymous_users"] is not None
-                else "N/A"
-            ),
+            _null_session_status(result["null_auth"]),
+            _anonymous_count(result["anonymous_shares"], result["null_auth"]),
         )
 
     console.print(host_table)
+    _show_anonymous_evidence(evidence, host_results, "smb")
 
-    writable_share_results = []
-    writable_failed_hosts = []
+    share_access_results = []
+    share_failed_hosts = []
     standard_user = session_data.get("standard_user", "")
-    writable_checks_run = False
+    share_checks_run = False
     if hosts:
         if standard_user:
             if std_pass is None:
                 try:
                     std_pass = authenticate_standard_user()
                 except CheckExecutionError as exc:
-                    record_incomplete("SMB writable shares", "all hosts", str(exc))
+                    record_incomplete("SMB share access", "all hosts", str(exc))
             if std_pass is not None:
-                writable_checks_run = True
+                share_checks_run = True
 
-            if writable_checks_run:
-                with progress("Checking writable SMB shares..."):
+            if share_checks_run:
+                with progress("Checking SMB share access..."):
 
-                    for host in hosts:
+                    for host in track_items(hosts, "SMB share-access hosts"):
 
-                        try:
-                            shares = smb_writable_share_check(
-                                host,
-                                session_data["dc_ip"],
-                                standard_user,
-                                std_pass,
-                            )
-                        except CheckExecutionError as exc:
-                            record_incomplete(
-                                "SMB writable shares", host, str(exc), notify=False
-                            )
-                            writable_failed_hosts.append(host)
-                            continue
+                        shares, complete = smb_share_access_check(
+                            host,
+                            session_data["dc_ip"],
+                            standard_user,
+                            std_pass,
+                        )
+                        if not complete:
+                            share_failed_hosts.append(host)
 
                         if shares:
-                            writable_share_results.append({
+                            share_access_results.append({
                                 "host": host,
                                 "shares": shares,
                             })
         else:
             record_incomplete(
-                "SMB writable shares", "all hosts",
+                "SMB share access", "all hosts",
                 "No Standard User is configured for this session",
             )
 
-    print_section("SMB Checks - Writable Shares")
+    print_section("SMB Checks - Share Access")
 
-    writable_table = Table()
-    writable_table.add_column("Host", style="cyan")
-    writable_table.add_column("Share / Permissions", style="yellow")
+    share_table = Table()
+    share_table.add_column("Host", style="cyan")
+    share_table.add_column("Share", style="yellow")
+    share_table.add_column("Permissions", style="yellow")
 
-    for result in writable_share_results:
+    for result in share_access_results:
 
         for share in result["shares"]:
-            writable_table.add_row(result["host"], share)
+            share_table.add_row(
+                result["host"], Text(share["name"]), ", ".join(share["permissions"])
+            )
 
-    console.print(writable_table)
+    console.print(share_table)
 
-    if writable_checks_run and not writable_share_results and not writable_failed_hosts:
-        print_info("No writable SMB shares found for the Standard User.")
+    if share_checks_run and not share_access_results and not share_failed_hosts:
+        print_info("No readable or writable SMB shares reported for the Standard User.")
 
     if unknown_hosts:
 
@@ -395,10 +505,10 @@ def run_smb_checks(
             "See the HTML report for details."
         )
 
-    if writable_failed_hosts:
+    if share_failed_hosts:
         print_warning(
-            "SMB writable-share checks could not be completed on "
-            f"{len({host.casefold() for host in writable_failed_hosts})} host(s). "
+            "SMB share-access checks could not be completed on "
+            f"{len({host.casefold() for host in share_failed_hosts})} host(s). "
             "See the HTML report for details."
         )
 
@@ -446,21 +556,23 @@ def run_smb_checks(
         finding.affected_assets = sorted(set(finding.affected_assets))
         findings.append(finding)
 
-    if writable_share_results:
+    writable_shares = [
+        (result["host"], share)
+        for result in share_access_results
+        for share in result["shares"]
+        if any(permission.startswith("WRITE") for permission in share["permissions"])
+    ]
+    if writable_shares:
 
         finding = load_finding("smb", "SMB-004")
 
-        for result in writable_share_results:
-
-            host = result["host"]
+        for host, share in writable_shares:
             finding.affected_assets.append(host)
-
-            for share in result["shares"]:
-                finding.evidence.append(
-                    f"NetExec reported WRITE access for Standard User "
-                    f"'{standard_user}' to '{share}' on "
-                    f"'{host}'."
-                )
+            finding.evidence.append(
+                f"NetExec reported {', '.join(share['permissions'])} permissions "
+                f"for Standard User '{standard_user}' on share '{share['name']}' "
+                f"on '{host}'."
+            )
 
         finding.affected_assets = sorted(set(finding.affected_assets))
         findings.append(finding)

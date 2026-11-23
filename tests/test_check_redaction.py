@@ -1,7 +1,10 @@
 import subprocess
 from contextlib import contextmanager
 
+import pytest
+
 from ad_kit.core import checks
+from ad_kit.core.exceptions import CheckExecutionError
 
 
 def test_run_check_redacts_password_from_progress_and_evidence(
@@ -62,3 +65,39 @@ def test_run_check_redacts_password_from_progress_and_evidence(
     assert machine_password not in evidence
     assert "Authenticated using [REDACTED]" in evidence
     assert "[stderr]\nError involving [REDACTED] and [REDACTED]" in evidence
+
+
+def test_capture_is_current_run_redacted_and_preserves_failed_output(monkeypatch, tmp_path):
+    monkeypatch.setattr(checks, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        checks.subprocess, "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command, 1, stdout="secret output", stderr="secret error"
+        ),
+    )
+    with checks.capture_check_evidence() as captured:
+        with pytest.raises(CheckExecutionError):
+            checks.run_check("failed", ["tool", "-p", "secret"])
+
+    assert len(captured) == 1
+    formatted = checks.format_check_evidence(captured[0])
+    assert "secret" not in formatted
+    assert "[REDACTED] output" in formatted
+    assert "[stderr]\n[REDACTED] error" in formatted
+
+    with checks.capture_check_evidence() as next_run:
+        pass
+    assert next_run == []
+
+
+def test_redaction_handles_overlapping_passwords(monkeypatch, tmp_path):
+    monkeypatch.setattr(checks, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        checks.subprocess, "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command, 0, stdout="foobar foo", stderr=""
+        ),
+    )
+    with checks.capture_check_evidence() as captured:
+        checks.run_check("overlap", ["tool", "-p", "foo", "PASSWORD=foobar"])
+    assert captured[0].stdout == "[REDACTED] [REDACTED]"

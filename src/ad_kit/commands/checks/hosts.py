@@ -5,7 +5,7 @@ from ad_kit.checks.scriptpath import scriptpath_check
 from ad_kit.core.checks import get_evidence_dir
 from ad_kit.core.console import console, print_info, print_section
 from ad_kit.core.util import progress, require_session
-from ad_kit.reporting.results import record_findings
+from ad_kit.reporting.results import record_findings, record_incomplete
 
 from .credentials import authenticate_standard_user
 
@@ -143,7 +143,10 @@ def run_scriptpath_checks(
     console.print(table)
 
     evidence_lines: list[str] = []
+    incomplete_paths: set[tuple[str, str]] = set()
     for result in results:
+        if result["error"]:
+            incomplete_paths.add((result["resolved_path"], result["error"]))
         evidence_lines.extend(
             [
                 f"User: {result['username']}",
@@ -162,5 +165,8 @@ def run_scriptpath_checks(
         "\n".join(evidence_lines),
         encoding="utf-8",
     )
+
+    for path, error in sorted(incomplete_paths):
+        record_incomplete("scriptPath", path, error, notify=False)
 
     record_findings(findings)

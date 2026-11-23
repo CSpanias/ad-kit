@@ -8,6 +8,7 @@ from typing import TypedDict
 from ad_kit.core.checks import run_check
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
+from ad_kit.core.util import track_items
 
 ACCOUNT_NAME_PATTERN = re.compile(r"\bsAMAccountName:\s*(\S+)", re.IGNORECASE)
 ENABLED_PATTERN = re.compile(r"\bEnabled:\s*(Yes|No)\b", re.IGNORECASE)
@@ -63,10 +64,10 @@ def builtin_accounts_check(
 
     accounts: dict[str, BuiltinAccountResult] = {}
 
-    for account_key, account_name, rid in (
+    for account_key, account_name, rid in track_items((
         ("administrator", "Administrator", 500),
         ("guest", "Guest", 501),
-    ):
+    ), "Built-in accounts"):
         output = run_check(
             f"builtin-account-rid-{rid}",
             [

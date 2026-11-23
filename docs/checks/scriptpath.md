@@ -22,6 +22,8 @@ nxc ldap <dc_ip> -u <username> -p <password> -M get-scriptpath
 
 The resolved SMB paths are then inspected using write-capable file handles
 (Impacket, in-process - no separate shell command).
+If an ACL query fails, ad-kit records the incomplete check and still attempts
+the write-access probe where possible.
 
 ## What it checks
 

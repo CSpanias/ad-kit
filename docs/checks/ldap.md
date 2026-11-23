@@ -17,7 +17,14 @@ For each Domain Controller, ad-kit runs NetExec directly:
 
 ```bash
 nxc ldap <controller> -u '' -p ''
+nxc ldap <controller> -u '' -p '' --users
 ```
+
+The user enumeration command runs when NetExec reports a successful anonymous
+bind. A search failure does not prove that the bind was rejected, and an empty
+result does not confirm that enumeration was denied.
+The console shows current-run command evidence for successful binds, including
+up to ten user rows when available.
 
 ## What it checks
 
@@ -63,10 +70,11 @@ over a new one.
   requests can be relayed.
 - Without channel binding, authentication intended for a secure LDAPS channel
   can be relayed to a Domain Controller.
-- With anonymous bind permitted, an unauthenticated client can query directory
-  objects such as users and groups.
+- If anonymous directory searches are permitted, unauthenticated clients may
+  enumerate objects such as users and groups. Bind acceptance alone does not
+  establish that such searches are permitted.
 
-All three feed credential-relay attacks and directory reconnaissance.
+These controls affect credential-relay exposure and directory reconnaissance.
 
 ## Findings
 

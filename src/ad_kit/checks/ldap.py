@@ -1,11 +1,12 @@
-"""
-LDAP-related assessment checks.
-"""
+"""LDAP-related assessment checks."""
+
+import re
 
 from ad_kit.core.checks import load_dc_hostnames, run_check
 from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
+from ad_kit.core.util import track_items
 from ad_kit.reporting.results import record_incomplete
 
 
@@ -33,10 +34,9 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
     signing_not_enforced: list[str] = []
     channel_binding_not_enforced: list[str] = []
     anonymous_bind_permitted: set[str] = set()
-    anonymous_bind_rejected: set[str] = set()
     failed_dcs: set[str] = set()
 
-    for dc_hostname in dc_hostnames:
+    for dc_hostname in track_items(dc_hostnames, "LDAP domain controllers"):
 
         results[dc_hostname] = {
             "dc_hostname": dc_hostname,
@@ -97,9 +97,6 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
                     results[dc_hostname]["channel_binding"] = channel_binding
 
             # Anonymous (Null) Bind
-            if "successful bind must be completed" in lower:
-                anonymous_bind_rejected.add(dc_hostname)
-
             if "[+]" in line:
                 success_message = line.split("[+]", 1)[1].strip()
                 identity = success_message.split(":", 1)[0].strip()
@@ -109,13 +106,23 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
                 if identity.endswith(chr(92)):
                     anonymous_bind_permitted.add(dc_hostname)
 
-    for dc_hostname in anonymous_bind_rejected:
-        results[dc_hostname]["anonymous_bind"] = "[green]✓ Disabled[/green]"
-
-    permitted_dc_hostnames = anonymous_bind_permitted - anonymous_bind_rejected
-
-    for dc_hostname in permitted_dc_hostnames:
-        results[dc_hostname]["anonymous_bind"] = "[red]✗ Permitted[/red]"
+        if dc_hostname in anonymous_bind_permitted:
+            results[dc_hostname]["anonymous_bind"] = "[red]✗ Permitted[/red]"
+            evidence_name = f"ldap-anonymous-users-{dc_hostname}"
+            try:
+                users_output = run_check(
+                    evidence_name,
+                    ["nxc", "ldap", dc_hostname, "-u", "", "-p", "", "--users"],
+                )
+            except CheckExecutionError as exc:
+                record_incomplete("LDAP anonymous user enumeration", dc_hostname, str(exc))
+            else:
+                if not re.search(r"Enumerated\s+\d+\s+domain users:", users_output, re.I):
+                    record_incomplete(
+                        "LDAP anonymous user enumeration",
+                        dc_hostname,
+                        f"No confirmed user enumeration; see {evidence_name}.txt",
+                    )
 
     for dc_hostname, result in results.items():
         if dc_hostname in failed_dcs:
@@ -144,10 +151,10 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
         finding.affected_assets.extend(sorted(set(channel_binding_not_enforced)))
         findings.append(finding)
 
-    if permitted_dc_hostnames:
+    if anonymous_bind_permitted:
 
         finding = load_finding("ldap", "LDAP-003")
-        finding.affected_assets.extend(sorted(permitted_dc_hostnames))
+        finding.affected_assets.extend(sorted(anonymous_bind_permitted))
         findings.append(finding)
 
     return (

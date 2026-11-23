@@ -1,10 +1,14 @@
+import io
+import subprocess
 from contextlib import contextmanager
 from types import SimpleNamespace
 
 import pytest
+from rich.console import Console
 
 from ad_kit.checks import dns, maq, passwords
 from ad_kit.commands.checks import policy
+from ad_kit.core import checks
 from ad_kit.core.checks import duration_to_minutes
 from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.reporting.html import render_html
@@ -14,6 +18,81 @@ from ad_kit.reporting.markdown import format_finding_sections
 @contextmanager
 def no_progress(_message):
     yield
+
+
+@pytest.mark.parametrize("kind", ["maq", "dns"])
+def test_current_command_evidence_includes_cleanup_without_replaying(
+    monkeypatch, tmp_path, kind
+):
+    output = io.StringIO()
+    commands = []
+    monkeypatch.setattr(policy, "console", Console(file=output, width=200))
+    monkeypatch.setattr(policy, "print_section", lambda title: print(title, file=output))
+    monkeypatch.setattr(policy, "require_session", lambda: {
+        "dc_ip": "dc", "domain": "example.test", "standard_user": "user",
+    })
+    monkeypatch.setattr(policy, "authenticate_domain_admin", lambda: ("admin", "admin-secret"))
+    monkeypatch.setattr(policy, "record_findings", lambda _findings: None)
+    monkeypatch.setattr(policy, "progress", no_progress)
+    monkeypatch.setattr(checks, "progress", no_progress)
+    monkeypatch.setattr(checks, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(maq.secrets, "token_hex", lambda length: "f" * length)
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        if kind == "maq":
+            if "maq" in command:
+                result = "MachineAccountQuota: 10"
+            elif "smb" in command:
+                result = "[+] machine authenticated"
+            elif "DELETE=True" in command:
+                result = "successfully deleted" if "admin" in command else "delete denied"
+            else:
+                result = "successfully added"
+        elif "add" in command:
+            result = "successfully added"
+        else:
+            result = "successfully removed" if "admin" in command else "remove denied"
+        return subprocess.CompletedProcess(command, 0, stdout=result, stderr="")
+
+    monkeypatch.setattr(checks.subprocess, "run", fake_run)
+    if kind == "maq":
+        policy.run_maq_checks("standard-secret")
+        assert len(commands) == 5
+    else:
+        policy.run_dns_checks("standard-secret")
+        assert len(commands) == 3
+
+    text = output.getvalue()
+    assert text.count("$ ") == len(commands)
+    assert "successfully added" in text
+    assert "successfully deleted" in text if kind == "maq" else "successfully removed" in text
+    assert "standard-secret" not in text and "admin-secret" not in text
+    assert "ffffffffffffffff" not in text
+    assert "[REDACTED]" in text
+
+
+def test_maq_evidence_does_not_read_stale_files(monkeypatch, tmp_path):
+    output = io.StringIO()
+    evidence_dir = tmp_path / "evidence"
+    evidence_dir.mkdir()
+    (evidence_dir / "maq-create-machine.txt").write_text("STALE", encoding="utf-8")
+    monkeypatch.setattr(policy, "console", Console(file=output, width=200))
+    monkeypatch.setattr(policy, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user",
+    })
+    monkeypatch.setattr(policy, "progress", no_progress)
+    monkeypatch.setattr(checks, "progress", no_progress)
+    monkeypatch.setattr(checks, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        checks.subprocess, "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command, 0, stdout="MachineAccountQuota: 0", stderr=""
+        ),
+    )
+    policy.run_maq_checks("secret")
+    assert "MachineAccountQuota: 0" in output.getvalue()
+    assert "STALE" not in output.getvalue()
 
 
 def test_unknown_policy_is_not_reported_as_weak(monkeypatch):
@@ -138,6 +217,31 @@ def test_manual_unlock_and_unset_expiry_are_not_automatically_weak(monkeypatch):
     findings, incomplete = _run_policy(monkeypatch, values)
     assert findings == []
     assert incomplete == []
+
+
+@pytest.mark.parametrize(
+    ("threshold", "expected"),
+    [("5", "Review (not set)"), ("0", "Not applicable"), ("Unknown", "Unknown")],
+)
+def test_netexec_not_set_lockout_duration_respects_threshold(monkeypatch, threshold, expected):
+    values, assessed = _assess_policy(lockout_duration="Not Set", lockout_threshold=threshold)
+    assert expected in assessed["lockout_duration"]
+    _, incomplete = _run_policy(monkeypatch, values)
+    if threshold in {"Unknown", "5"}:
+        assert "lockout duration" in incomplete[0][2]
+    else:
+        assert not incomplete
+
+
+def test_netexec_not_set_lockout_duration_is_parsed_for_review(monkeypatch):
+    output = (
+        "LDAP dc 389 DC Locked Account Duration: Not Set\n"
+        "LDAP dc 389 DC Account Lockout Threshold: 5\n"
+    )
+    monkeypatch.setattr(passwords, "run_check", lambda *_args: output)
+    parsed = passwords.password_policy_check("dc", "user", "password")
+    assert parsed["lockout_duration"] == "Not Set"
+    assert "Review (not set)" in passwords.password_policy_assessment(parsed)["lockout_duration"]
 
 
 def test_minimum_age_below_baseline_reports_actual_value(monkeypatch):

@@ -3,7 +3,7 @@ Authentication coercion assessment checks.
 """
 
 from ad_kit.core.checks import load_dc_hostnames, run_check
-from ad_kit.core.util import get_artefacts_dir
+from ad_kit.core.util import get_artefacts_dir, track_items
 
 
 def extract_hostname(
@@ -58,35 +58,18 @@ def coercion_check(
         for hostname in load_dc_hostnames()
     }
 
-    spooler_output = run_check(
-        "coercion-spooler",
-        [
-            "nxc", "smb", targets,
-            "-u", username,
-            "-p", password,
-            "-M", "spooler",
-        ],
+    modules = (
+        ("coercion-spooler", "spooler"),
+        ("coercion-plus", "coerce_plus"),
+        ("coercion-webdav", "webdav"),
     )
-
-    coercion_output = run_check(
-        "coercion-plus",
-        [
-            "nxc", "smb", targets,
-            "-u", username,
-            "-p", password,
-            "-M", "coerce_plus",
-        ],
-    )
-
-    webdav_output = run_check(
-        "coercion-webdav",
-        [
-            "nxc", "smb", targets,
-            "-u", username,
-            "-p", password,
-            "-M", "webdav",
-        ],
-    )
+    spooler_output, coercion_output, webdav_output = [
+        run_check(
+            name,
+            ["nxc", "smb", targets, "-u", username, "-p", password, "-M", module],
+        )
+        for name, module in track_items(modules, "Coercion modules")
+    ]
 
     spooler_dcs: set[str] = set()
 

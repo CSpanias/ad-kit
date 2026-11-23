@@ -16,6 +16,16 @@ Modules are executed in the order provided. Checks requiring a Standard User
 account will prompt for credentials once and reuse them across subsequent 
 checks. Some checks (e.g., MAQ) may prompt for DA credentials.
 
+Checks show progress through known targets, groups, script paths or queries where
+available. Counts represent items processed, including incomplete checks.
+External commands without measurable progress display an activity indicator
+instead; they may continue running between progress updates.
+
+MAQ and DNS display current-run command evidence after their tables. LDAP and
+SMB display anonymous enumeration excerpts with up to ten result rows. Known
+passwords are redacted; review other potentially sensitive output before
+sharing screenshots.
+
 The current run writes `ad-kit/ad-kit_findings.html` and 
 `ad-kit/ad-kit_findings.json`.
 
@@ -37,7 +47,7 @@ including when running selected checks.
 | Check | Command | Description |
 |-------|---------|-------------|
 | LDAP | `ad-kit check ldap` | LDAP signing, channel binding, anonymous bind |
-| SMB | `ad-kit check smb` | SMB signing, SMBv1, anonymous enumeration, writable shares |
+| SMB | `ad-kit check smb` | SMB signing, SMBv1, anonymous shares, DC users, readable and writable shares |
 | AS-REP Roasting | `ad-kit check asreproast` | AS-REP roastable accounts + privileged membership |
 | Kerberoasting | `ad-kit check kerberoast` | Kerberoastable accounts + privileged membership |
 | AD CS | `ad-kit check adcs` | Certificate template/CA misconfigurations (ESC) |

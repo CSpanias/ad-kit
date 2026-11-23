@@ -102,8 +102,10 @@ SMB-004:
   title: SMB Shares Writable by Standard User
 
   commentary: |
-    The assessment identified one or more SMB shares for which ACL-based 
-    permission check reported WRITE access for the Standard User.
+    The assessment identified one or more SMB shares for which an ACL-based
+    permission check reported write-related permissions for the Standard User.
+    NetExec's WRITE (SUBDIR) and WRITE (ACL) labels indicate specific
+    permissions and do not by themselves establish direct file-write access.
 
     Writable shares may permit unintended modification or placement of files.
     This check does not create or modify files; effective access can also be

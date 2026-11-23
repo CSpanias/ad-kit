@@ -1,7 +1,7 @@
 # SMB Check
 
-Evaluates SMB signing, SMBv1, anonymous access, and Standard User write access
-to shares across discovered systems.
+Evaluates SMB signing, SMBv1, anonymous access, and Standard User read and
+write-related access to shares across discovered systems.
 
 ```bash
 ad-kit check smb
@@ -9,7 +9,7 @@ ad-kit check smb
 
 !!! info "Prerequisite"
     Requires the Domain Controller and domain computer inventories from
-    `ad-kit enum`. The writable-share check uses a Standard User account.
+    `ad-kit enum`. The share-access checks use a Standard User account.
 
 ## Commands run
 
@@ -17,10 +17,15 @@ ad-kit runs NetExec against the discovered hosts:
 
 ```bash
 nxc smb <host> --dns-server <dc_ip>
+nxc smb <host> -u '' -p '' --shares --dns-server <dc_ip>
+nxc smb <dc> -u '' -p '' --shares --users --dns-server <dc_ip>
+nxc smb <host> -u <username> -p <password> --shares READ --dns-server <dc_ip>
 nxc smb <host> -u <username> -p <password> --shares WRITE --dns-server <dc_ip>
 ```
 
-The writable-share check uses the Standard User account and is prompted only
+The anonymous enumeration commands run only when NetExec reports a null
+session. User enumeration is restricted to discovered Domain Controllers.
+The share-access checks use the Standard User account and are prompted only
 when needed.
 
 ## What it checks
@@ -29,14 +34,29 @@ ad-kit records:
 
 - **SMB signing** - required or not.
 - **SMBv1** - enabled or not.
-- **Anonymous access** - whether a null session can enumerate shares and
-  users.
-- **Writable shares** - shares the Standard User can write to, reported without
-  writing any files.
+- **Null session** - whether NetExec reports an anonymous SMB session.
+- **Anonymous enumeration** - share counts on all hosts and account counts
+  on Domain Controllers, when enumeration succeeds.
+- **Share access** - readable and write-related share permissions reported for
+  the Standard User without writing any files. Only write-related permissions
+  generate a finding.
 
 The signing, SMBv1, and anonymous checks are unauthenticated. The
-writable-share check uses the Standard User account and is prompted only when
+share-access checks use the Standard User account and are prompted only when
 needed.
+
+The null-session column shows **Permitted** when NetExec reports a null
+session, and **Not confirmed** otherwise. The latter does not prove anonymous
+access is disabled. For enumeration, **Not attempted** means NetExec did not
+report a null session. **Incomplete** means the check did not produce a
+complete result. Counts reflect objects
+reported by NetExec, not whether the shares are readable. Partially returned
+account counts are marked as incomplete.
+
+For confirmed null sessions, the console displays the current-run NetExec
+command and up to ten anonymous user rows per Domain Controller, falling back
+to share rows when user rows are unavailable. Other hosts display share rows.
+An excerpt without rows does not establish that enumeration was denied.
 
 If a host or an individual enumeration command fails, ad-kit retains confirmed
 results from other checks and hosts. The console summarises affected host

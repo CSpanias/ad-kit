@@ -7,6 +7,7 @@ from pathlib import PureWindowsPath
 from typing import Literal, TypedDict
 
 from impacket.ldap.ldaptypes import SR_SECURITY_DESCRIPTOR
+from impacket.nt_errors import STATUS_NOT_SUPPORTED
 from impacket.smb import (
     FILE_APPEND_DATA,
     FILE_NON_DIRECTORY_FILE,
@@ -16,7 +17,9 @@ from impacket.smb import (
     FILE_SHARE_WRITE,
     FILE_WRITE_DATA,
     READ_CONTROL,
+    SMB_DIALECT,
 )
+from impacket.smb3 import SessionError as SMB3SessionError
 from impacket.smb3structs import (
     DACL_SECURITY_INFORMATION,
     GROUP_SECURITY_INFORMATION,
@@ -28,6 +31,7 @@ from impacket.smbconnection import SessionError, SMBConnection
 from ad_kit.core.checks import run_check
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
+from ad_kit.core.util import track_items
 
 SCRIPT_PATH_PATTERN = re.compile(
     r"\bUser:\s*(\S+)\s+ScriptPath:\s*(.*?)\s*$",
@@ -233,16 +237,22 @@ def _read_file_acl(
     )
 
     try:
-        raw_descriptor = connection.getSMBServer().queryInfo(
-            tree_id,
-            handle,
-            infoType=SMB2_0_INFO_SECURITY,
-            additionalInformation=(
-                OWNER_SECURITY_INFORMATION
-                | GROUP_SECURITY_INFORMATION
-                | DACL_SECURITY_INFORMATION
-            ),
-        )
+        if connection.getDialect() == SMB_DIALECT:
+            raise SessionError(STATUS_NOT_SUPPORTED)
+        try:
+            raw_descriptor = connection.getSMBServer().queryInfo(
+                tree_id,
+                handle,
+                infoType=SMB2_0_INFO_SECURITY,
+                fileInfoClass=0,
+                additionalInformation=(
+                    OWNER_SECURITY_INFORMATION
+                    | GROUP_SECURITY_INFORMATION
+                    | DACL_SECURITY_INFORMATION
+                ),
+            )
+        except SMB3SessionError as exc:
+            raise SessionError(exc.get_error_code(), exc.get_error_packet()) from exc
         return _format_security_descriptor(raw_descriptor)
     finally:
         connection.closeFile(tree_id, handle)
@@ -397,7 +407,7 @@ def scriptpath_check(
     permission_cache: dict[tuple[str, str, str], _PathPermission] = {}
     results: list[ScriptPathEntry] = []
 
-    for account, script_path in script_paths:
+    for account, script_path in track_items(script_paths, "Logon script paths"):
         resolved = _resolve_script_path(
             script_path,
             dc_ip,

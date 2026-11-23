@@ -54,6 +54,9 @@ the creation evidence path. It may prompt for Domain Administrator credentials
 to retry cleanup over LDAP; otherwise, check whether the account remains and
 remove it.
 
+The console shows the redacted commands and output from the current check,
+including attempted cleanup, without repeating any state-changing commands.
+
 ## How it works
 
 By default Active Directory allows any authenticated user to create up to 10

@@ -4,15 +4,26 @@ import json
 import os
 import shlex
 import subprocess
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
+from typing import TypeVar
 
 import typer
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+)
 
 from ad_kit.core.console import console, print_info, print_section, print_warning
 from ad_kit.core.exceptions import ADKitError
 
 ARTEFACTS_DIR = Path("ad-kit")
+T = TypeVar("T")
 
 
 def require_collected_data(session_data: dict, key: str, label: str) -> None:
@@ -148,6 +159,26 @@ def progress(
 
     with console.status(f"[cyan]{message}"):
         yield
+
+
+def track_items(items: Sequence[T], description: str) -> Iterator[T]:
+    """Track processed items without estimating the progress of individual commands."""
+    if not items:
+        return
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        MofNCompleteColumn(),
+        console=console,
+        transient=True,
+    ) as tracker:
+        task = tracker.add_task(description, total=len(items))
+        for item in items:
+            yield item
+            tracker.advance(task)
 
 
 def normalize_hostname(

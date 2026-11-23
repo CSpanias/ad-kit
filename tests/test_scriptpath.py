@@ -1,4 +1,5 @@
 import struct
+from contextlib import nullcontext
 
 from impacket.ldap.ldaptypes import (
     ACCESS_ALLOWED_ACE,
@@ -8,9 +9,11 @@ from impacket.ldap.ldaptypes import (
     LDAP_SID,
     SR_SECURITY_DESCRIPTOR,
 )
+from impacket.smb3 import SessionError as SMB3SessionError
 from impacket.smbconnection import SessionError
 
 from ad_kit.checks import scriptpath
+from ad_kit.commands.checks import hosts
 
 
 def test_scriptpath_check_reports_paths_and_writable_scripts(monkeypatch):
@@ -163,6 +166,103 @@ def test_missing_script_file_is_reported_without_crashing(monkeypatch):
     assert result["standard_user_writable"] == "Unknown"
     assert "not found" in result["error"]
     assert connection.open_count == 1
+
+
+def test_acl_query_uses_security_information_class_and_closes_handle(monkeypatch):
+    class Connection:
+        def __init__(self):
+            self.closed = []
+            self.query = None
+
+        def openFile(self, *args, **kwargs):
+            return b"handle"
+
+        def getDialect(self):
+            return 0x0311
+
+        def getSMBServer(self):
+            return self
+
+        def queryInfo(self, tree_id, handle, **kwargs):
+            self.query = kwargs
+            return b"descriptor"
+
+        def closeFile(self, tree_id, handle):
+            self.closed.append(handle)
+
+    connection = Connection()
+    monkeypatch.setattr(scriptpath, "_format_security_descriptor", lambda data: ["ACL"])
+    assert scriptpath._read_file_acl(connection, 1, "test.ps1") == ["ACL"]
+    assert connection.query["infoType"] == scriptpath.SMB2_0_INFO_SECURITY
+    assert connection.query["fileInfoClass"] == 0
+    assert connection.closed == [b"handle"]
+
+
+def test_raw_smb3_acl_error_is_reported_and_write_probe_continues(monkeypatch):
+    class Connection:
+        def __init__(self):
+            self.closed = []
+
+        def login(self, *args):
+            pass
+
+        def connectTree(self, share):
+            return 1
+
+        def openFile(self, *args, **kwargs):
+            return b"handle"
+
+        def getDialect(self):
+            return 0x0311
+
+        def getSMBServer(self):
+            return self
+
+        def queryInfo(self, *args, **kwargs):
+            raise SMB3SessionError(0xC000000D)
+
+        def closeFile(self, tree_id, handle):
+            self.closed.append(handle)
+
+        def disconnectTree(self, tree_id):
+            pass
+
+        def logoff(self):
+            pass
+
+    connection = Connection()
+    monkeypatch.setattr(scriptpath, "SMBConnection", lambda *args, **kwargs: connection)
+    result = scriptpath._inspect_resolved_path(
+        "dc", "NETLOGON", "test.ps1", "user", "password", "example.test"
+    )
+    assert result["standard_user_writable"] == "Yes"
+    assert "ACL query failed (NTSTATUS 0xC000000D)" in result["error"]
+    assert connection.closed == [b"handle", b"handle"]
+
+
+def test_scriptpath_acl_failure_is_recorded_as_incomplete(monkeypatch, tmp_path):
+    monkeypatch.setattr(hosts, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user", "domain": "example.test",
+    })
+    monkeypatch.setattr(hosts, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(hosts, "get_evidence_dir", lambda: tmp_path)
+    monkeypatch.setattr(hosts, "scriptpath_check", lambda *_args: ([{
+        "username": "alice",
+        "script_path": "test.ps1",
+        "resolved_path": r"\\dc\NETLOGON\test.ps1",
+        "acl_entries": [],
+        "standard_user_writable": "Yes",
+        "error": "ACL query failed (NTSTATUS 0xC000000D).",
+    }], []))
+    incomplete = []
+    monkeypatch.setattr(
+        hosts, "record_incomplete",
+        lambda check, path, reason, *, notify: incomplete.append((check, path, reason)),
+    )
+    hosts.run_scriptpath_checks("password")
+    assert incomplete == [
+        ("scriptPath", r"\\dc\NETLOGON\test.ps1", "ACL query failed (NTSTATUS 0xC000000D).")
+    ]
 
 
 def test_security_descriptor_without_dacl_is_reported_as_unrestricted():

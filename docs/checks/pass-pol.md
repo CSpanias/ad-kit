@@ -41,6 +41,10 @@ Check `ad-kit/evidence/password-policy.txt` for the raw output.
 An account lockout threshold of zero disables lockout; the duration and
 observation window are then not applicable. A lockout duration of zero means
 manual administrator unlock, rather than a short automatic unlock period.
+NetExec may also render an indefinite duration as `Not Set`, but its output
+can represent more than one raw LDAP value. When lockout is enabled, ad-kit
+shows `Review (not set)` and records an incomplete check; verify the raw
+`lockoutDuration` attribute before concluding how long accounts remain locked.
 When maximum password age is unset, review the organisation's approach to
 compromise-triggered resets and other controls rather than assuming periodic
 expiry is required.

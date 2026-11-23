@@ -12,7 +12,7 @@ other privilege-related security assessments.
 
 
 from ad_kit.core.checks import run_check
-from ad_kit.core.util import require_session
+from ad_kit.core.util import require_session, track_items
 
 PRIVILEGED_GROUPS = (
     "Domain Admins",
@@ -49,7 +49,7 @@ def get_privileged_group_members(
 
     groups = {}
 
-    for group in PRIVILEGED_GROUPS:
+    for group in track_items(PRIVILEGED_GROUPS, "Privileged groups"):
 
         output = run_check(
             f"privileged-{group.lower().replace(' ', '-')}",

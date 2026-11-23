@@ -11,7 +11,12 @@ from ad_kit.checks.passwords import (
     password_policy_check,
 )
 from ad_kit.checks.pre2k import pre2k_check
-from ad_kit.core.checks import cleanup_test_artifact, warn_test_artifact_remaining
+from ad_kit.core.checks import (
+    capture_check_evidence,
+    cleanup_test_artifact,
+    format_check_evidence,
+    warn_test_artifact_remaining,
+)
 from ad_kit.core.console import console, print_section
 from ad_kit.core.exceptions import ADKitError
 from ad_kit.core.findings import load_finding, load_finding_definition
@@ -211,6 +216,13 @@ def run_password_policy_checks(
             "Could not assess: " + ", ".join(unknown)
             + ". See password-policy.txt evidence.",
         )
+    if assessment["lockout_duration"] == "[yellow]Review (not set)[/yellow]":
+        record_incomplete(
+            "pass-pol",
+            session_data["dc_ip"],
+            "NetExec reported lockout duration as Not Set; verify the raw LDAP "
+            "lockoutDuration value to determine the effective duration.",
+        )
 
     weak_settings = [
         setting for setting, status in assessment.items()
@@ -337,7 +349,7 @@ def run_maq_checks(
     if std_pass is None:
         std_pass = authenticate_standard_user()
 
-    with progress("Checking Machine Account Quota..."):
+    with capture_check_evidence() as evidence, progress("Checking Machine Account Quota..."):
 
         maq_results = maq_check(
             session_data["dc_ip"],
@@ -381,8 +393,8 @@ def run_maq_checks(
         try:
             da_user, da_pass = authenticate_domain_admin()
 
-            maq_results["machine_deleted"] = (
-                cleanup_test_artifact(
+            with capture_check_evidence() as cleanup_evidence:
+                maq_results["machine_deleted"] = cleanup_test_artifact(
                     "maq-delete-machine-da",
                     [
                         "nxc", "ldap", session_data["dc_ip"],
@@ -395,7 +407,7 @@ def run_maq_checks(
                         "DELETE=True",
                     ],
                 )
-            )
+            evidence.extend(cleanup_evidence)
         except (ADKitError, KeyboardInterrupt):
             warn_test_artifact_remaining(
                 "machine account", f"{maq_results['machine_name']}$",
@@ -418,6 +430,10 @@ def run_maq_checks(
     table.add_row("Machine Cleanup", maq_results["cleanup_method"])
 
     console.print(table)
+    if evidence:
+        print_section("Machine Account Quota - Command Evidence")
+        for record in evidence:
+            console.print(format_check_evidence(record), markup=False, highlight=False)
 
     generated_findings = []
 
@@ -495,7 +511,7 @@ def run_dns_checks(
     if std_pass is None:
         std_pass = authenticate_standard_user()
 
-    with progress("Checking DNS permissions..."):
+    with capture_check_evidence() as evidence, progress("Checking DNS permissions..."):
 
         dns_results, findings = (
             dns_record_creation_check(
@@ -511,8 +527,8 @@ def run_dns_checks(
         try:
             da_user, da_pass = authenticate_domain_admin()
 
-            dns_results["record_deleted"] = (
-                cleanup_test_artifact(
+            with capture_check_evidence() as cleanup_evidence:
+                dns_results["record_deleted"] = cleanup_test_artifact(
                     "dns-record-remove-da",
                     [
                         "bloodyAD",
@@ -526,7 +542,7 @@ def run_dns_checks(
                         dns_results["record_ip"],
                     ],
                 )
-            )
+            evidence.extend(cleanup_evidence)
         except (ADKitError, KeyboardInterrupt):
             warn_test_artifact_remaining(
                 "DNS record", dns_results["record_name"], "dns-record-create"
@@ -575,6 +591,10 @@ def run_dns_checks(
     table.add_row("Record Cleanup", dns_results["cleanup_method"])
 
     console.print(table)
+    if evidence:
+        print_section("DNS Record Creation - Command Evidence")
+        for record in evidence:
+            console.print(format_check_evidence(record), markup=False, highlight=False)
 
     record_findings(findings)
 

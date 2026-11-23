@@ -90,11 +90,10 @@ LDAP-003:
     The assessment identified that one or more Domain Controllers permitted 
     anonymous LDAP bind operations.
 
-    Anonymous binds allow unauthenticated users to query directory information 
-    without providing valid credentials. Depending on the directory 
-    configuration, this may allow attackers to enumerate users, groups, domain 
-    information, and other directory objects which can assist with 
-    reconnaissance and attack planning.
+    A successful anonymous bind does not establish that directory searches are
+    permitted. Depending on directory permissions, unauthenticated users may
+    also be able to enumerate users, groups, or other objects; this requires
+    separate verification and may assist reconnaissance and attack planning.
 
     Directory services should require authentication for LDAP queries wherever 
     possible to limit unauthorised access to Active Directory information.
@@ -103,8 +102,8 @@ LDAP-003:
     To reduce the risk of unauthorised access to Active Directory information, 
     the following actions are recommended:
     
-    - Disable anonymous LDAP bind operations and require authentication for 
-    directory queries.
+    - Restrict anonymous directory searches and require authentication for
+    directory queries where appropriate.
     - Review any systems, applications, or network appliances that utilise LDAP 
     to ensure authenticated connections are used where required.
     

@@ -9,6 +9,7 @@ from ad_kit.core.checks import run_check
 from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
+from ad_kit.core.util import track_items
 from ad_kit.reporting.results import record_incomplete
 
 PAC_TGT_SIZE_PATTERN = re.compile(r"TGT with PAC size\s+(\d+)", re.IGNORECASE)
@@ -69,7 +70,7 @@ def nopac_check(
 
     results: list[NoPACResult] = []
 
-    for dc_ip in dc_ips:
+    for dc_ip in track_items(dc_ips, "NoPAC domain controllers"):
         try:
             output = run_check(
                 f"nopac-{dc_ip.replace(':', '-')}",

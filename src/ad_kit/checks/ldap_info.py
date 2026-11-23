@@ -3,6 +3,7 @@ LDAP information exposure assessment checks.
 """
 
 from ad_kit.core.checks import run_check
+from ad_kit.core.util import track_items
 
 LDAP_SENSITIVE_KEYWORDS = (
     "password",
@@ -41,65 +42,19 @@ def ldap_info_check(
         Dictionary containing exposed LDAP attribute values.
     """
 
-    desc_output = run_check(
-        "ldap-desc-users",
-        [
-            "nxc",
-            "ldap",
-            dc_ip,
-            "-u",
-            username,
-            "-p",
-            password,
-            "-M",
-            "get-desc-users",
-        ],
+    queries = (
+        ("ldap-desc-users", "get-desc-users"),
+        ("ldap-info-users", "get-info-users"),
+        ("ldap-user-password", "get-userPassword"),
+        ("ldap-unix-password", "get-unixUserPassword"),
     )
-
-    info_output = run_check(
-        "ldap-info-users",
-        [
-            "nxc",
-            "ldap",
-            dc_ip,
-            "-u",
-            username,
-            "-p",
-            password,
-            "-M",
-            "get-info-users",
-        ],
-    )
-
-    user_password_output = run_check(
-        "ldap-user-password",
-        [
-            "nxc",
-            "ldap",
-            dc_ip,
-            "-u",
-            username,
-            "-p",
-            password,
-            "-M",
-            "get-userPassword",
-        ],
-    )
-
-    unix_password_output = run_check(
-        "ldap-unix-password",
-        [
-            "nxc",
-            "ldap",
-            dc_ip,
-            "-u",
-            username,
-            "-p",
-            password,
-            "-M",
-            "get-unixUserPassword",
-        ],
-    )
+    desc_output, info_output, user_password_output, unix_password_output = [
+        run_check(
+            name,
+            ["nxc", "ldap", dc_ip, "-u", username, "-p", password, "-M", module],
+        )
+        for name, module in track_items(queries, "LDAP attribute queries")
+    ]
 
     descriptions = []
     info_fields = []

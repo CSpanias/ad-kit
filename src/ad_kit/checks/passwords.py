@@ -194,6 +194,8 @@ def password_policy_assessment(
 
     if threshold.isdecimal() and int(threshold) == 0:
         assessment["lockout_duration"] = "[yellow]Not applicable[/yellow]"
+    elif threshold.isdecimal() and policy["lockout_duration"].strip().lower() == "not set":
+        assessment["lockout_duration"] = "[yellow]Review (not set)[/yellow]"
     elif not threshold.isdecimal() or lockout_duration is None:
         assessment["lockout_duration"] = UNKNOWN
     elif lockout_duration == 0:
