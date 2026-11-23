@@ -153,11 +153,23 @@ PRIV-004:
 
   remediation: |
     Ensure the account has a long, unique password and protect its use with
-    appropriate administrative logon controls and monitoring. Consider
-    renaming or disabling it only when operational and recovery requirements
-    have been reviewed. On Domain Controllers, disabling the account does not
-    remove every recovery-mode access path, so it should not replace strong
-    credential protection.
+    appropriate administrative logon controls and monitoring. On Domain
+    Controllers, disabling the account does not remove every recovery-mode
+    access path, so it should not replace strong credential protection.
+
+  name_guidance:
+    administrator:
+      remediation: >-
+        Consider renaming or disabling the account only when operational and
+        recovery requirements have been reviewed.
+    other:
+      commentary: >-
+        The account used a name other than the English default, Administrator.
+        This avoids using that well-known name, although the account can still
+        be identified by its well-known RID.
+      remediation: >-
+        Consider disabling the account only when operational and recovery
+        requirements have been reviewed.
 
   references:
     - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-default-user-accounts#administrator-account

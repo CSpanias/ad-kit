@@ -6,7 +6,7 @@ from typer.testing import CliRunner
 
 from ad_kit.cli import app
 from ad_kit.commands import check
-from ad_kit.core.finding import Finding
+from ad_kit.core.finding import EvidenceTable, Finding
 from ad_kit.reporting import html, markdown, results
 
 
@@ -69,7 +69,7 @@ def test_html_contains_complete_copyable_findings_and_escapes_data():
         markdown.format_findings([finding]),
         "First line continues.\n\nSecond paragraph.\n\n"
         "### Affected Assets\n\n- host <one>",
-        "# Evidence\n\n1. Evidence </textarea><script>alert(1)</script>",
+        "1. Evidence </textarea><script>alert(1)</script>",
         "Fix <issue> & retry.\n\n### References\n\n"
         "- [https://example.com/?a=1&b=2](https://example.com/?a=1&b=2)",
     ]
@@ -81,6 +81,7 @@ def test_html_contains_complete_copyable_findings_and_escapes_data():
     assert parser.copy_texts[0].index("Affected Assets") < parser.copy_texts[0].index("Evidence")
     assert parser.copy_texts[0].index("Remediation") < parser.copy_texts[0].index("References")
     assert "### Commentary\n\nFirst line continues." in parser.copy_texts[0]
+    assert "### Evidence\n\n1. Evidence " in parser.copy_texts[0]
     assert "### Remediation\n\nFix <issue> & retry." in parser.copy_texts[0]
     assert "- [https://example.com/?a=1&b=2](https://example.com/?a=1&b=2)" in parser.copy_texts[0]
     assert "<script>alert" not in report
@@ -92,6 +93,24 @@ def test_html_contains_complete_copyable_findings_and_escapes_data():
         "target": "_blank",
         "rel": "noopener noreferrer",
     }]
+
+
+def test_html_evidence_copy_retains_table_and_list_without_heading():
+    finding = Finding(
+        "TEST-002", "Evidence", "", "",
+        evidence=["Additional evidence."],
+        evidence_table=EvidenceTable(
+            "Detected methods:", ("Host", "Methods"), [("DC|1", "PetitPotam")]
+        ),
+    )
+    parser = ReportParser()
+    parser.feed(html.render_html([finding]))
+
+    assert "### Evidence\n\nDetected methods:" in parser.copy_texts[0]
+    assert parser.copy_texts[1] == (
+        "Detected methods:\n\n| Host | Methods |\n| --- | --- |\n"
+        "| DC\\|1 | PetitPotam |\n\n1. Additional evidence."
+    )
 
 
 def test_html_references_only_link_http_urls_and_escape_attributes():

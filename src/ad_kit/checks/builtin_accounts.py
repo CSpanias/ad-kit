@@ -8,7 +8,7 @@ from typing import TypedDict
 from ad_kit.core.checks import parse_domain_sid, run_check
 from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
-from ad_kit.core.findings import load_finding
+from ad_kit.core.findings import load_finding, load_finding_definition
 from ad_kit.core.util import track_items
 from ad_kit.reporting.results import record_incomplete
 
@@ -34,7 +34,12 @@ def _account_status(
     enabled_match = ENABLED_PATTERN.search(output)
     sid_match = USER_SID_PATTERN.search(output)
 
-    if account_name_match is None or enabled_match is None or sid_match is None:
+    if (
+        account_name_match is None
+        or not account_name_match.group(1).strip()
+        or enabled_match is None
+        or sid_match is None
+    ):
         raise RuntimeError(
             f"Could not determine the status of built-in account RID "
             f"{expected_sid.rsplit('-', 1)[-1]} from NetExec output."
@@ -92,7 +97,7 @@ def builtin_accounts_check(
                 sensitive_values=[password],
             )
             match = ACCOUNT_NAME_PATTERN.search(lookup)
-            if match is None:
+            if match is None or not match.group(1).strip():
                 raise RuntimeError(f"Could not resolve built-in account SID {sid}.")
             output = run_check(
                 f"builtin-account-rid-{rid}",
@@ -120,6 +125,13 @@ def builtin_accounts_check(
 
     if administrator["enabled"] is True:
         finding = load_finding("privileged_excessive", "PRIV-004")
+        name_is_administrator = administrator["account_name"].casefold() == "administrator"
+        guidance = load_finding_definition("privileged_excessive", "PRIV-004")[
+            "name_guidance"
+        ]["administrator" if name_is_administrator else "other"]
+        if not name_is_administrator:
+            finding.commentary = finding.commentary.strip() + "\n\n" + guidance["commentary"]
+        finding.remediation = finding.remediation.strip() + "\n\n" + guidance["remediation"]
         finding.evidence.append(
             f"The built-in Administrator account (RID 500), named "
             f"`{administrator['account_name']}`, was enabled."

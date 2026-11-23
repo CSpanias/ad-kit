@@ -43,6 +43,9 @@ ad-kit:
 - Resolves the built-in Guest and Administrator accounts by domain SID and RID
   before checking their state, including when they have been renamed. Failed
   lookups are reported as incomplete rather than treated as disabled.
+  The Administrator finding notes when its name differs from the English
+  default and adjusts its guidance. This comparison does not establish whether
+  an account was renamed from a localised default name.
 - Reads the domain DACL with
   [`dacledit.py`](https://github.com/fortra/impacket/blob/master/examples/dacledit.py)
   to find non-default principals with DCSync-related replication rights.

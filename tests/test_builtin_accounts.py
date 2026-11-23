@@ -6,7 +6,8 @@ from ad_kit.core.exceptions import CheckExecutionError
 DOMAIN_SID = "S-1-5-21-1-2-3"
 
 
-def test_builtin_accounts_resolve_renamed_accounts_by_sid(monkeypatch):
+@pytest.mark.parametrize("admin_name", ["Admin", "Renamed Admin"])
+def test_builtin_accounts_resolve_renamed_accounts_by_sid(monkeypatch, admin_name):
     calls = []
 
     def run(name, command, sensitive_values):
@@ -16,24 +17,76 @@ def test_builtin_accounts_resolve_renamed_accounts_by_sid(monkeypatch):
             return f"Domain SID: {DOMAIN_SID}"
         if name.startswith("builtin-account-lookup"):
             return (
-                "sAMAccountName: Renamed Admin"
+                f"sAMAccountName: {admin_name}"
                 if name.endswith("500") else "sAMAccountName: Guest"
             )
         if name.endswith("500"):
-            return f"sAMAccountName: Renamed Admin\nEnabled: Yes\nUser SID: {DOMAIN_SID}-500"
+            return f"sAMAccountName: {admin_name}\nEnabled: Yes\nUser SID: {DOMAIN_SID}-500"
         return f"sAMAccountName: Guest\nEnabled: No\nUser SID: {DOMAIN_SID}-501"
 
     monkeypatch.setattr(builtin_accounts, "run_check", run)
     accounts, findings = builtin_accounts.builtin_accounts_check(
         "192.0.2.1", "example.test", "user", "password"
     )
-    assert accounts["administrator"]["account_name"] == "Renamed Admin"
+    assert accounts["administrator"]["account_name"] == admin_name
     assert accounts["administrator"]["enabled"] is True
     assert accounts["guest"]["enabled"] is False
     assert [finding.id for finding in findings] == ["PRIV-004"]
+    assert "name other than the English default" in findings[0].commentary
+    assert "well-known RID" in findings[0].commentary
+    assert "Consider disabling" in findings[0].remediation
+    assert "renaming" not in findings[0].remediation
     assert calls[1][1][-3:] == [f"{DOMAIN_SID}-500", "--attr", "sAMAccountName"]
-    assert calls[2][1][-1] == "USER=Renamed Admin"
+    assert calls[2][1][-1] == f"USER={admin_name}"
     assert calls[3][1][-3:] == [f"{DOMAIN_SID}-501", "--attr", "sAMAccountName"]
+
+
+@pytest.mark.parametrize("account_name", ["Administrator", "administrator"])
+def test_builtin_administrator_default_name_retains_rename_guidance(monkeypatch, account_name):
+    def run(name, _command, sensitive_values):
+        if name == "builtin-account-domain-sid":
+            return f"Domain SID: {DOMAIN_SID}"
+        if name == "builtin-account-lookup-500":
+            return f"sAMAccountName: {account_name}"
+        if name == "builtin-account-rid-500":
+            return f"sAMAccountName: {account_name}\nEnabled: Yes\nUser SID: {DOMAIN_SID}-500"
+        if name == "builtin-account-lookup-501":
+            return "sAMAccountName: Guest"
+        return f"sAMAccountName: Guest\nEnabled: No\nUser SID: {DOMAIN_SID}-501"
+
+    monkeypatch.setattr(builtin_accounts, "run_check", run)
+    _, findings = builtin_accounts.builtin_accounts_check(
+        "dc", "example.test", "user", "password"
+    )
+    assert "name other than the English default" not in findings[0].commentary
+    assert "Consider renaming or disabling" in findings[0].remediation
+
+
+@pytest.mark.parametrize("failure", ["lookup", "status"])
+def test_empty_builtin_account_name_is_incomplete(monkeypatch, failure):
+    incomplete = []
+    monkeypatch.setattr(
+        builtin_accounts, "record_incomplete", lambda *args: incomplete.append(args)
+    )
+
+    def run(name, _command, sensitive_values):
+        if name == "builtin-account-domain-sid":
+            return f"Domain SID: {DOMAIN_SID}"
+        if name == "builtin-account-lookup-500":
+            return "sAMAccountName:  " if failure == "lookup" else "sAMAccountName: Admin"
+        if name == "builtin-account-rid-500":
+            return f"sAMAccountName:  \nEnabled: Yes\nUser SID: {DOMAIN_SID}-500"
+        if name == "builtin-account-lookup-501":
+            return "sAMAccountName: Guest"
+        return f"sAMAccountName: Guest\nEnabled: No\nUser SID: {DOMAIN_SID}-501"
+
+    monkeypatch.setattr(builtin_accounts, "run_check", run)
+    accounts, findings = builtin_accounts.builtin_accounts_check(
+        "dc", "example.test", "user", "password"
+    )
+    assert accounts["administrator"]["enabled"] is None
+    assert findings == []
+    assert len(incomplete) == 1
 
 
 @pytest.mark.parametrize("failure", ["lookup", "wrong_sid", "wrong_domain", "missing_status"])
