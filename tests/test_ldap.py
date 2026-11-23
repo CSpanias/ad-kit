@@ -5,6 +5,7 @@ import pytest
 from ad_kit.checks import ldap
 from ad_kit.core import util
 from ad_kit.core.checks import CheckEvidence, append_captured_evidence, capture_check_evidence
+from ad_kit.core.findings import load_finding
 
 
 @pytest.mark.parametrize(
@@ -103,6 +104,25 @@ def test_ldap_user_search_without_results_is_not_treated_as_denied(monkeypatch):
     assert results[0]["anonymous_bind"] == "[red]✗ Permitted[/red]"
     assert findings[0].id == "LDAP-003"
     assert any("No confirmed user enumeration" in entry[2] for entry in incomplete)
+
+
+@pytest.mark.parametrize(("count", "noun"), [
+    (1, "Domain Controller"), (2, "Domain Controllers")
+])
+def test_ldap_commentary_counts_affected_controllers(monkeypatch, count, noun):
+    monkeypatch.setattr(ldap, "load_dc_hostnames", lambda: [f"DC{i}" for i in range(count)])
+    monkeypatch.setattr(ldap, "record_incomplete", lambda *_args: None)
+    monkeypatch.setattr(ldap, "load_finding", load_finding)
+    monkeypatch.setattr(
+        ldap, "run_check",
+        lambda *_args, **_kwargs: (
+            "LDAP dc 389 DC (signing:None) (channel binding:Always)\n"
+            "LDAP dc 389 DC [-] STATUS_LOGON_FAILURE"
+        ),
+    )
+    _, findings = ldap.ldap_check()
+    signing = next(finding for finding in findings if finding.id == "LDAP-001")
+    assert f"{count} {noun} did not" in signing.commentary
 
 
 def test_ldap_parallel_controllers_keep_per_host_evidence_and_order(monkeypatch):

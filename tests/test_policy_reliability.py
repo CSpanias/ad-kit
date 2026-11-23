@@ -310,6 +310,24 @@ def _run_policy(monkeypatch, values):
     return findings, incomplete
 
 
+@pytest.mark.parametrize(("value", "word"), [("0", "passwords"), ("1", "password")])
+def test_password_history_report_uses_correct_form(monkeypatch, value, word):
+    values, _ = _assess_policy(password_history=value)
+    findings, incomplete = _run_policy(monkeypatch, values)
+    assert not incomplete
+    expected = f"Password history retained {value} previous {word},"
+    assert expected in findings[0].commentary
+    assert expected in render_html(findings)
+
+
+@pytest.mark.parametrize(("value", "word"), [("0", "characters"), ("1", "character")])
+def test_minimum_length_report_uses_correct_form(monkeypatch, value, word):
+    values, _ = _assess_policy(minimum_length=value)
+    findings, incomplete = _run_policy(monkeypatch, values)
+    assert not incomplete
+    assert f"Minimum password length was {value} {word};" in findings[0].commentary
+
+
 def test_multiple_weak_settings_get_only_relevant_guidance_and_deduplicated_references(monkeypatch):
     values, _ = _assess_policy(minimum_length="8", complexity="Disabled")
     findings, incomplete = _run_policy(monkeypatch, values)

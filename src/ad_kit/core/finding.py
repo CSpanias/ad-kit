@@ -45,6 +45,9 @@ class Finding:
 
         evidence_table:
             Optional tabular evidence with an introduction.
+
+        evidence_introduction:
+            Optional introduction to the evidence list.
     """
 
     id: str
@@ -57,3 +60,4 @@ class Finding:
     evidence: list[str] = field(default_factory=list)
     references: list[str] = field(default_factory=list)
     evidence_table: EvidenceTable | None = None
+    evidence_introduction: str = ""

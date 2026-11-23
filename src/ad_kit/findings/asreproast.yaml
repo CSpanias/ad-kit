@@ -15,8 +15,8 @@ ASREP-001:
   title: Accounts Susceptible to AS-REP Roasting
 
   commentary: |
-    A review of Active Directory (AD) account configurations identified one or 
-    more user accounts configured without Kerberos pre-authentication.
+    A review of Active Directory (AD) account configurations identified
+    {count} user {subject} configured without Kerberos pre-authentication.
 
     Accounts configured with the setting 'Do not require Kerberos 
     pre-authentication' are susceptible to AS-REP roasting attacks.
@@ -77,7 +77,7 @@ ASREP-002:
   title: Privileged Accounts Susceptible to AS-REP Roasting
 
   commentary: |
-    One or more accounts configured without Kerberos pre-authentication were
+    A total of {count} {subject} configured without Kerberos pre-authentication {was}
     also identified as members of a monitored privileged Active Directory
     group.
 

@@ -12,7 +12,7 @@ import re
 
 from ad_kit.core.checks import run_check
 from ad_kit.core.finding import Finding
-from ad_kit.core.findings import load_finding
+from ad_kit.core.findings import format_counted_commentary, load_finding
 
 SUPPORTED_ESC_FINDINGS = {
     "ESC1": "ADCS-ESC1",
@@ -152,6 +152,8 @@ def adcs_check(
             continue
 
         finding = load_finding("adcs", finding_id)
+        if esc != "ESC8":
+            format_counted_commentary(finding, len(results[esc]), "template", "templates")
 
         for asset in sorted(set(results[esc])):
 

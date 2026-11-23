@@ -12,7 +12,7 @@ from ad_kit.core.checks import (
 )
 from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
-from ad_kit.core.findings import load_finding
+from ad_kit.core.findings import format_counted_commentary, load_finding
 from ad_kit.core.util import parallel_items, unique_hosts
 from ad_kit.reporting.results import record_incomplete
 
@@ -127,6 +127,9 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
         affected = sorted({result["dc_hostname"] for result in results if result[key] == status})
         if affected:
             finding = load_finding("ldap", finding_id)
+            format_counted_commentary(
+                finding, len(affected), "Domain Controller", "Domain Controllers"
+            )
             finding.affected_assets.extend(affected)
             findings.append(finding)
 

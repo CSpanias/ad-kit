@@ -13,9 +13,9 @@ import re
 from ad_kit.core.checks import run_check
 from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
-from ad_kit.core.findings import load_finding
+from ad_kit.core.findings import format_counted_commentary, load_finding
 from ad_kit.core.privileged import get_privileged_users
-from ad_kit.core.util import get_artefacts_dir
+from ad_kit.core.util import count_form, get_artefacts_dir
 
 
 def kerberoast_check(
@@ -122,12 +122,13 @@ def kerberoast_check(
 
         # KERB-001
         finding = load_finding("kerberoast", "KERB-001")
+        format_counted_commentary(finding, len(accounts), "account", "accounts")
 
         for account in accounts:
 
             finding.evidence.append(
-                f"Account '{account}' was associated with one or more Service "
-                "Principal Names (SPNs)."
+                f"Account '{account}' was associated with a Service "
+                "Principal Name (SPN)."
             )
 
             finding.evidence.append(
@@ -136,7 +137,8 @@ def kerberoast_check(
             )
 
         finding.evidence.append(
-            f"A total of {len(accounts)} Kerberoastable account(s) were "
+            f"A total of {len(accounts)} Kerberoastable "
+            f"{count_form(len(accounts), 'account was', 'accounts were')} "
             "identified."
         )
 
@@ -158,6 +160,7 @@ def kerberoast_check(
         if privileged_accounts:
 
             finding = load_finding("kerberoast", "KERB-002")
+            format_counted_commentary(finding, len(privileged_accounts), "account", "accounts")
 
             for account in sorted(privileged_accounts):
 
@@ -178,7 +181,9 @@ def kerberoast_check(
 
             finding.evidence.append(
                 f"A total of {len(privileged_accounts)} privileged "
-                "Kerberoastable account(s) were identified."
+                "Kerberoastable "
+                f"{count_form(len(privileged_accounts), 'account was', 'accounts were')} "
+                "identified."
             )
 
             findings.append(finding)

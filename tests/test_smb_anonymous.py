@@ -97,8 +97,9 @@ def test_smb_scopes_anonymous_users_and_displays_enumeration_status(monkeypatch,
     assert sorted(share_hosts) == ["DC.EXAMPLE", "FAIL", "HOST", "NO-NULL"]
     assert any("FAIL" in entry and "share enumeration" in entry for entry in results._incomplete)
     finding = next(finding for finding in results._findings if finding.id == "SMB-003")
-    assert any("DC.EXAMPLE" in entry and "account(s)" in entry for entry in finding.evidence)
-    assert not any("'HOST'" in entry and "account(s)" in entry for entry in finding.evidence)
+    assert any("DC.EXAMPLE" in entry and "1 account," in entry for entry in finding.evidence)
+    assert any("DC.EXAMPLE" in entry and "1 share." in entry for entry in finding.evidence)
+    assert not any("'HOST'" in entry and "account" in entry for entry in finding.evidence)
     results.reset()
 
 

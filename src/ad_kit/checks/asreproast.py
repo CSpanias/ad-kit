@@ -10,9 +10,9 @@ susceptible to AS-REP roasting attacks.
 
 from ad_kit.core.checks import run_check
 from ad_kit.core.finding import Finding
-from ad_kit.core.findings import load_finding
+from ad_kit.core.findings import format_counted_commentary, load_finding
 from ad_kit.core.privileged import get_privileged_users
-from ad_kit.core.util import get_artefacts_dir
+from ad_kit.core.util import count_form, get_artefacts_dir
 
 
 def _parse_asrep_account(
@@ -121,6 +121,7 @@ def asreproast_check(
     if results["accounts"]:
 
         finding = load_finding("asreproast", "ASREP-001")
+        format_counted_commentary(finding, results["account_count"], "account", "accounts")
 
         for account in results["accounts"]:
 
@@ -130,8 +131,8 @@ def asreproast_check(
             )
 
         finding.evidence.append(
-            f"{results['account_count']} AS-REP roastable account(s) were "
-            "identified."
+            f"A total of {results['account_count']} AS-REP roastable "
+            f"{count_form(results['account_count'], 'account was', 'accounts were')} identified."
         )
 
         findings.append(finding)
@@ -169,6 +170,7 @@ def asreproast_privileged_check(
     findings: list[Finding] = []
     if privileged_accounts:
         finding = load_finding("asreproast", "ASREP-002")
+        format_counted_commentary(finding, len(privileged_accounts), "account", "accounts")
 
         for account in privileged_accounts:
             finding.evidence.append(
@@ -179,7 +181,8 @@ def asreproast_privileged_check(
 
         finding.evidence.append(
             f"A total of {len(privileged_accounts)} privileged AS-REP "
-            "roastable account(s) were identified."
+            f"roastable {count_form(len(privileged_accounts), 'account was', 'accounts were')} "
+            "identified."
         )
         findings.append(finding)
 

@@ -164,7 +164,7 @@ PRIV-004:
         recovery requirements have been reviewed.
     other:
       commentary: >-
-        The account used a name other than the English default, Administrator.
+        The account used a name other than the default `Administrator`.
         This avoids using that well-known name, although the account can still
         be identified by its well-known RID.
       remediation: >-
@@ -180,16 +180,12 @@ PRIV-005:
   title: Unexpected DCSync-Related Replication Rights
 
   commentary: |
-    One or more non-default principals were granted DCSync-related replication
+    A total of {count} non-default {subject} {was} granted DCSync-related replication
     control rights on the domain naming context. A principal with both
     Replicating Directory Changes and Replicating Directory Changes All can
     replicate sensitive directory data, including credential material.
-    Replicating Directory Changes In Filtered Set is an additional right for
-    filtered attributes.
 
-    Some reported principals may have only a subset of the core rights; this
-    does not by itself confirm that they can perform a complete DCSync
-    operation. Review the trustee's direct and group-derived permissions.
+    Review each trustee's direct and group-derived permissions.
 
   remediation: |
     Review each identified trustee and remove replication rights that are not

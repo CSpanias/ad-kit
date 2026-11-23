@@ -1,4 +1,5 @@
 from ad_kit.checks import adcs
+from ad_kit.core.findings import load_finding
 
 
 def test_adcs_check_only_counts_vulnerabilities_and_deduplicates(monkeypatch):
@@ -57,3 +58,21 @@ Certificate Templates
         "ADCS-ESC15",
     ]
     assert loaded_findings == ["ADCS-ESC1", "ADCS-ESC8", "ADCS-ESC15"]
+
+
+def test_adcs_commentary_counts_unique_templates(monkeypatch):
+    output = """Certificate Templates
+    Template Name : First
+    [!] Vulnerabilities
+      ESC1 : Issue.
+      ESC15 : Issue.
+    Template Name : Second
+    [!] Vulnerabilities
+      ESC1 : Issue.
+"""
+    monkeypatch.setattr(adcs, "run_check", lambda *_args: output)
+    monkeypatch.setattr(adcs, "load_finding", load_finding)
+    _, findings = adcs.adcs_check("dc", "example.test", "user", "password")
+    by_id = {finding.id: finding for finding in findings}
+    assert "2 certificate templates vulnerable" in by_id["ADCS-ESC1"].commentary
+    assert "1 certificate template vulnerable" in by_id["ADCS-ESC15"].commentary

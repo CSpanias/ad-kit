@@ -162,6 +162,14 @@ def test_incomplete_checks_are_collapsed_after_findings_and_escaped():
     assert 'class="incomplete"' not in html.render_html([finding], [])
 
 
+def test_html_singular_report_counts():
+    finding = Finding("TEST-003", "Example", "Comment", "Fix")
+    report = html.render_html([finding], ["SMB: Failed"])
+    assert 'aria-live="polite">1 finding</p>' in report
+    assert "Incomplete checks (1 entry)" in report
+    assert 'cards.length === 1 ? "finding" : "findings"' in report
+
+
 def test_run_exports_all_findings_without_markdown_files(monkeypatch, tmp_path):
     mapped = Finding("SMB-001", "Mapped", "Comment", "Fix", evidence=["proof"])
     unmapped = Finding("OTHER-001", "Unmapped", "Other", "Fix")

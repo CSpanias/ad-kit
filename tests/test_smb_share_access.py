@@ -216,6 +216,7 @@ def test_share_table_and_finding_only_include_write_related_permissions(monkeypa
     assert "evidence directory" in messages[0]
     finding = next(finding for finding in results._findings if finding.id == "SMB-004")
     assert len(finding.evidence) == 5
+    assert "identified 5 SMB shares" in finding.commentary
     assert any("'IPC$'" in entry for entry in finding.evidence)
     assert any("'print$'" in entry for entry in finding.evidence)
     assert all("Read Only" not in entry for entry in finding.evidence)

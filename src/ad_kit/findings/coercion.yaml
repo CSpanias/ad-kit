@@ -19,8 +19,8 @@ COERCE-001:
   title: Domain Controllers Susceptible to Authentication Coercion
 
   commentary: |
-    A review of Domain Controller (DC) configurations identified one or more
-    systems exposing functionality commonly associated with authentication
+    A review of Domain Controller (DC) configurations identified {count}
+    {subject} exposing functionality commonly associated with authentication
     coercion attacks.
 
     Authentication coercion techniques abuse legitimate Windows services and

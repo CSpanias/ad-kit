@@ -21,8 +21,8 @@ ADCS-ESC1:
   title: Vulnerable Certificate Template (ESC1)
 
   commentary: |
-    A review of Active Directory Certificate Services (AD CS) identified one or 
-    more certificate templates vulnerable to the ESC1 attack path.
+    A review of Active Directory Certificate Services (AD CS) identified
+    {count} certificate {subject} vulnerable to the ESC1 attack path.
 
     ESC1 vulnerabilities occur when certificate templates permit 
     enrollee-supplied subject information whilst also allowing low-privileged
@@ -126,8 +126,8 @@ ADCS-ESC15:
   title: Vulnerable Certificate Template (ESC15)
 
   commentary: |
-    A review of Active Directory Certificate Services (AD CS) identified one or 
-    more certificate templates vulnerable to the ESC15 attack path.
+    A review of Active Directory Certificate Services (AD CS) identified
+    {count} certificate {subject} vulnerable to the ESC15 attack path.
 
     ESC15 vulnerabilities affect legacy Version 1 certificate templates that 
     permit enrollee-supplied subject information and do not properly validate 

@@ -15,7 +15,7 @@ SMB-001:
   title: SMB Signing Not Enforced
 
   commentary: |
-    The assessment identified one or more systems that did not enforce SMB 
+    The assessment identified {count} {subject} that did not enforce SMB
     signing.
 
     SMB signing provides integrity protection for Server Message Block (SMB) 
@@ -46,7 +46,7 @@ SMB-002:
   title: SMBv1 Enabled
 
   commentary: |
-    The assessment identified one or more systems with SMBv1 enabled.
+    The assessment identified {count} {subject} with SMBv1 enabled.
 
     SMBv1 is a legacy protocol that lacks many of the security protections 
     present in SMBv2 and SMBv3 and has been associated with multiple 
@@ -102,7 +102,7 @@ SMB-004:
   title: SMB Shares Writable by Standard User
 
   commentary: |
-    The assessment identified one or more SMB shares for which an ACL-based
+    The assessment identified {count} SMB {subject} for which an ACL-based
     permission check reported write-related permissions for the Standard User.
     NetExec's WRITE (SUBDIR) and WRITE (ACL) labels indicate specific
     permissions and do not by themselves establish direct file-write access.

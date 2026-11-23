@@ -3,6 +3,8 @@ import pytest
 from ad_kit.checks import privileged_excessive
 from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.privileged import PRIVILEGED_GROUPS
+from ad_kit.reporting.html import render_html
+from ad_kit.reporting.markdown import format_findings
 
 
 def _entry(name, admin_count=None):
@@ -56,7 +58,27 @@ def test_admin_count_uses_enabled_user_population(monkeypatch, protected, findin
     }
     assert [finding.id for finding in findings] == (["PRIV-002"] if finding_expected else [])
     if finding_expected:
-        assert "25 enabled user account(s)" in findings[0].evidence[1]
+        assert "25 enabled user accounts" in findings[0].evidence[1]
+
+
+@pytest.mark.parametrize(("count", "noun"), [(1, "account"), (2, "accounts")])
+def test_admin_count_report_uses_correct_account_form(monkeypatch, count, noun):
+    monkeypatch.setattr(privileged_excessive, "require_session", lambda: {})
+    monkeypatch.setattr(
+        privileged_excessive, "get_privileged_group_members",
+        lambda *_args: {group: [] for group in PRIVILEGED_GROUPS},
+    )
+    monkeypatch.setattr(
+        privileged_excessive, "run_check",
+        lambda *_args, **_kwargs: "\n".join(_entry(f"user-{i}", 1) for i in range(count)),
+    )
+    _, findings = privileged_excessive.privileged_excessive_check("dc", "user", "password")
+    finding = next(finding for finding in findings if finding.id == "PRIV-002")
+    sentence = f"The `adminCount=1` attribute was set on {count} enabled user {noun},"
+    assert sentence in finding.evidence[1]
+    assert sentence in format_findings([finding])
+    assert sentence in render_html([finding])
+    assert f"contained {count} enabled user {noun}" in finding.evidence[0]
 
 
 def test_enabled_user_parser_preserves_names_and_zero_admin_count():

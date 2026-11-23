@@ -16,6 +16,7 @@ from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
 from ad_kit.core.privileged import get_privileged_users
+from ad_kit.core.util import count_form
 
 IGNORED_DELEGATION_ACCOUNTS = {
         "azureadkerberos$",
@@ -236,7 +237,9 @@ def delegation_check(
 
         finding.evidence.append(
             f"A total of {len(privileged_delegated_accounts)} privileged "
-            "delegated account(s) were identified."
+            "delegated "
+            f"{count_form(len(privileged_delegated_accounts), 'account was', 'accounts were')} "
+            "identified."
         )
 
         findings.append(finding)

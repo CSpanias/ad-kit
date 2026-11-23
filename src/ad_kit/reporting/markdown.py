@@ -72,6 +72,8 @@ def format_finding_sections(finding: Finding, *, heading_level: int = 1) -> dict
 
     if finding.evidence or finding.evidence_table:
         parts = [f"{heading} Evidence"]
+        if finding.evidence_introduction:
+            parts.append(finding.evidence_introduction)
         if finding.evidence_table:
             table = finding.evidence_table
 

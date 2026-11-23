@@ -23,8 +23,9 @@ from ad_kit.core.checks import (
 )
 from ad_kit.core.console import console, object_text, print_info, print_section, print_warning
 from ad_kit.core.exceptions import CheckExecutionError
-from ad_kit.core.findings import load_finding
+from ad_kit.core.findings import format_counted_commentary, load_finding
 from ad_kit.core.util import (
+    count_form,
     get_artefacts_dir,
     parallel_items,
     progress,
@@ -256,18 +257,21 @@ def run_tombstone_checks(
 
     if accessible_objects:
         finding = load_finding("tombstone", "TOMB-001")
+        affected = {result["dc_hostname"].rstrip(".").casefold() for result in accessible_objects}
+        format_counted_commentary(finding, len(affected), "Domain Controller", "Domain Controllers")
 
         for result in accessible_objects:
             dc_hostname = result["dc_hostname"]
             deleted_objects = result["deleted_objects"]
             evidence = (
                 f"Standard User '{standard_user}' enumerated "
-                f"{deleted_objects} deleted object(s) on '{dc_hostname}'."
+                f"{deleted_objects} deleted {count_form(deleted_objects, 'object', 'objects')} "
+                f"on '{dc_hostname}'."
             )
             sam_account_names = result["sam_account_names"]
             if sam_account_names:
                 evidence += (
-                    " Their `sAMAccountName` values are the following:\n"
+                    " Returned `sAMAccountName` values:\n"
                     + "\n".join(
                         f"  - {name}"
                         for name in sam_account_names
@@ -599,12 +603,14 @@ def run_smb_checks(
 
         finding = load_finding("smb", "SMB-001")
         finding.affected_assets.extend(sorted(set(smb_signing_disabled)))
+        format_counted_commentary(finding, len(finding.affected_assets), "system", "systems")
         findings.append(finding)
 
     if smbv1_enabled:
 
         finding = load_finding("smb", "SMB-002")
         finding.affected_assets.extend(sorted(set(smbv1_enabled)))
+        format_counted_commentary(finding, len(finding.affected_assets), "system", "systems")
         findings.append(finding)
 
     if anonymous_enumeration:
@@ -625,7 +631,7 @@ def run_smb_checks(
             if share_count:
                 finding.evidence.append(
                     f"{access} on '{host}' enumerated "
-                    f"{share_count} share(s)."
+                    f"{share_count} {count_form(share_count, 'share', 'shares')}."
                 )
 
             if user_count:
@@ -634,7 +640,8 @@ def run_smb_checks(
                 )
                 finding.evidence.append(
                     f"{account_access} on '{host}' returned "
-                    f"{user_count} account(s), as reported by NetExec."
+                    f"{user_count} {count_form(user_count, 'account', 'accounts')}, "
+                    "as reported by NetExec."
                 )
 
             finding.affected_assets.append(host)
@@ -651,6 +658,7 @@ def run_smb_checks(
     if writable_shares:
 
         finding = load_finding("smb", "SMB-004")
+        format_counted_commentary(finding, len(writable_shares), "share", "shares")
 
         for host, share in writable_shares:
             finding.affected_assets.append(host)

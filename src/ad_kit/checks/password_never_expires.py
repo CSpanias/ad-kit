@@ -4,7 +4,8 @@ Accounts configured with non-expiring passwords assessment check.
 
 from ad_kit.core.checks import run_check
 from ad_kit.core.finding import Finding
-from ad_kit.core.findings import load_finding
+from ad_kit.core.findings import format_counted_commentary, load_finding
+from ad_kit.core.util import count_form
 
 
 def password_never_expires_check(
@@ -65,9 +66,14 @@ def password_never_expires_check(
     findings: list[Finding] = []
     if enabled_accounts:
         finding = load_finding("password_policy", "PASS-003")
+        format_counted_commentary(finding, len(enabled_accounts), "account", "accounts")
+        account_phrase = count_form(
+            len(enabled_accounts), "account has a password", "accounts have passwords"
+        )
         finding.evidence.append(
-            f"A total of {len(enabled_accounts)} enabled user account(s) have "
-            "passwords configured to never expire:"
+            f"A total of {len(enabled_accounts)} enabled user "
+            f"{account_phrase} "
+            "configured to never expire:"
         )
         finding.evidence.extend(
             f"`{account}`"

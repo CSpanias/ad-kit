@@ -15,7 +15,7 @@ LDAP-001:
   title: LDAP Signing Not Enforced
 
   commentary: |
-    The assessment identified that one or more Domain Controllers did not
+    The assessment identified that {count} {subject} did not
     enforce Lightweight Directory Access Protocol (LDAP) signing. As a result, 
     LDAP communications may occur without integrity protection and are 
     susceptible to tampering and relay attacks.
@@ -50,8 +50,8 @@ LDAP-002:
   title: LDAP Channel Binding Not Enforced
 
   commentary: |
-    The assessment identified that one or more Domain Controllers (DCs) did not 
-    Enforced LDAP channel binding.
+    The assessment identified that {count} {subject} did not
+    enforce LDAP channel binding.
 
     LDAP channel binding associates authentication credentials with the 
     specific Transport Layer Security (TLS) session over which authentication 
@@ -87,7 +87,7 @@ LDAP-003:
   title: Anonymous LDAP Bind Permitted
 
   commentary: |
-    The assessment identified that one or more Domain Controllers permitted 
+    The assessment identified that {count} {subject} permitted
     anonymous LDAP bind operations.
 
     A successful anonymous bind does not establish that directory searches are

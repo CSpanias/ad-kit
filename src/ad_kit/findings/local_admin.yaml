@@ -16,8 +16,8 @@ LA-001:
   title: Standard User Has Local Administrator Access
 
   commentary: |
-    A review of local administrative permissions identified one or more
-    domain-joined systems on which a standard user account possessed local
+    A review of local administrative permissions identified {count}
+    domain-joined {subject} on which a standard user account possessed local
     administrator privileges.
 
     Local administrator access provides extensive control over a system and
@@ -65,8 +65,8 @@ LA-002:
   title: Standard User Has Administrative Access to Domain Controller
 
   commentary: |
-    A review of administrative permissions identified one or more Domain
-    Controllers on which a standard user account possessed administrative
+    A review of administrative permissions identified {count} {subject}
+    on which a standard user account possessed administrative
     access.
 
     Administrative access to a Domain Controller (DC) represents a critical

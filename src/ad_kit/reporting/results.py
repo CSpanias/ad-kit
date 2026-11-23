@@ -4,6 +4,7 @@ from pathlib import Path
 
 from ad_kit.core.console import print_warning
 from ad_kit.core.finding import Finding
+from ad_kit.core.util import count_form
 from ad_kit.reporting import html, json, sureformat
 
 _findings: list[Finding] = []
@@ -41,7 +42,8 @@ def write_reports(
     html.write_report(_findings, directory / f"{basename}.html", _incomplete)
     if _incomplete:
         print_warning(
-            f"Assessment incomplete: {len(_incomplete)} coverage gap(s). "
+            f"Assessment incomplete: {len(_incomplete)} coverage "
+            f"{count_form(len(_incomplete), 'gap', 'gaps')}. "
             "See the HTML report for details."
         )
     if domain is None:

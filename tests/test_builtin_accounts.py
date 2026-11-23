@@ -32,7 +32,7 @@ def test_builtin_accounts_resolve_renamed_accounts_by_sid(monkeypatch, admin_nam
     assert accounts["administrator"]["enabled"] is True
     assert accounts["guest"]["enabled"] is False
     assert [finding.id for finding in findings] == ["PRIV-004"]
-    assert "name other than the English default" in findings[0].commentary
+    assert "name other than the default `Administrator`" in findings[0].commentary
     assert "well-known RID" in findings[0].commentary
     assert "Consider disabling" in findings[0].remediation
     assert "renaming" not in findings[0].remediation
@@ -58,7 +58,7 @@ def test_builtin_administrator_default_name_retains_rename_guidance(monkeypatch,
     _, findings = builtin_accounts.builtin_accounts_check(
         "dc", "example.test", "user", "password"
     )
-    assert "name other than the English default" not in findings[0].commentary
+    assert "name other than the default `Administrator`" not in findings[0].commentary
     assert "Consider renaming or disabling" in findings[0].remediation
 
 

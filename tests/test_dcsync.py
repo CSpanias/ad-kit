@@ -7,6 +7,8 @@ from rich.console import Console
 from ad_kit.checks import dcsync
 from ad_kit.commands.checks import privileged
 from ad_kit.core.exceptions import ADKitError
+from ad_kit.reporting.html import render_html
+from ad_kit.reporting.markdown import format_finding_sections
 
 DOMAIN_SID = "S-1-5-21-1-2-3"
 RIGHTS = dcsync.DCSYNC_RIGHTS
@@ -96,6 +98,33 @@ def test_saved_expected_sids_are_validated():
 
 def test_no_finding_when_all_trustees_are_excluded():
     assert dcsync.dcsync_findings([]) == []
+
+
+@pytest.mark.parametrize(("count", "phrase"), [
+    (1, "1 non-default principal was granted"),
+    (2, "2 non-default principals were granted"),
+])
+def test_dcsync_finding_only_reports_complete_rights(count, phrase):
+    complete = [
+        {"name": f"user-{i}", "sid": f"{DOMAIN_SID}-{i}", "rights": ["right"], "complete": True}
+        for i in range(count)
+    ]
+    partial = {"name": "partial", "sid": f"{DOMAIN_SID}-999", "rights": [], "complete": False}
+    assert dcsync.dcsync_findings([partial]) == []
+    finding = dcsync.dcsync_findings([*complete, partial])[0]
+    assert phrase in finding.commentary
+    assert "Filtered Set is an additional right" not in finding.commentary
+    assert "Some reported principals" not in finding.commentary
+    assert len(finding.evidence) == count
+    assert all("partial" not in entry for entry in finding.evidence)
+    evidence = format_finding_sections(finding)["Evidence"]
+    noun = "principal was" if count == 1 else "principals were"
+    assert f"The following {noun} found to have the complete core DCSync right set" in evidence
+    assert "DS-Replication-Get-Changes, DS-Replication-Get-Changes-All" in evidence
+    assert f"1. `user-0` ({DOMAIN_SID}-0)" in evidence
+    if count == 2:
+        assert f"2. `user-1` ({DOMAIN_SID}-1)" in evidence
+    assert f"The following {noun} found" in render_html([finding])
 
 
 @pytest.mark.parametrize("unknown_count", [0, 1, 2])

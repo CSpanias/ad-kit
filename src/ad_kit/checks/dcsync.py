@@ -7,7 +7,8 @@ from typing import TypedDict
 
 from ad_kit.core.checks import parse_domain_sid, run_check
 from ad_kit.core.finding import Finding
-from ad_kit.core.findings import load_finding
+from ad_kit.core.findings import format_counted_commentary, load_finding
+from ad_kit.core.util import count_form
 
 ACE_BLOCK_PATTERN = re.compile(
     r"ACE\[\s*\d+\s*\]\s+info(.*?)(?=ACE\[\s*\d+\s*\]\s+info|\Z)",
@@ -209,19 +210,18 @@ def dcsync_check(
 
 def dcsync_findings(trustees: list[DCSyncTrustee]) -> list[Finding]:
     findings: list[Finding] = []
-    if trustees:
+    complete_trustees = [trustee for trustee in trustees if trustee["complete"]]
+    if complete_trustees:
         finding = load_finding("privileged_excessive", "PRIV-005")
+        format_counted_commentary(finding, len(complete_trustees), "principal", "principals")
+        trustee_form = count_form(len(complete_trustees), "principal was", "principals were")
+        finding.evidence_introduction = (
+            f"The following {trustee_form} found to have the complete core DCSync right set "
+            "(DS-Replication-Get-Changes, DS-Replication-Get-Changes-All):"
+        )
 
-        for trustee in trustees:
-            completeness = (
-                "the complete core DCSync right set"
-                if trustee["complete"]
-                else "DCSync-related rights, but not the complete core set"
-            )
-            finding.evidence.append(
-                f"{trustee['name']} ({trustee['sid']}) has "
-                f"{', '.join(trustee['rights'])}; this is {completeness}."
-            )
+        for trustee in complete_trustees:
+            finding.evidence.append(f"`{trustee['name']}` ({trustee['sid']})")
 
         findings.append(finding)
 

@@ -12,7 +12,7 @@ account credentials.
 
 from ad_kit.core.checks import run_check
 from ad_kit.core.finding import Finding
-from ad_kit.core.findings import load_finding
+from ad_kit.core.findings import format_counted_commentary, load_finding
 
 
 def pre2k_check(
@@ -99,6 +99,7 @@ def pre2k_check(
     ):
 
         finding = load_finding("pre2k", "PRE2K-001")
+        format_counted_commentary(finding, results["accounts_found"], "account", "accounts")
 
         if len(results["accounts"]) == 1:
 
@@ -114,7 +115,7 @@ def pre2k_check(
             )
 
         finding.evidence.append(
-            "Kerberos Ticket Granting Tickets (TGTs) were successfully "
+            "A Kerberos Ticket Granting Ticket (TGT) was successfully "
             "obtained using the default machine account password convention."
         )
 

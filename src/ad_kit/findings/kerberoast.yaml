@@ -15,8 +15,8 @@ KERB-001:
   title: Kerberoastable Accounts Identified
 
   commentary: |
-    A review of Active Directory (AD) account configurations identified one or 
-    more accounts associated with Service Principal Names (SPNs).
+    A review of Active Directory (AD) account configurations identified
+    {count} {subject} associated with Service Principal Names (SPNs).
 
     SPNs are commonly used by applications and services to facilitate Kerberos
     authentication. Where an SPN is associated with an account, an attacker may 
@@ -69,8 +69,8 @@ KERB-002:
   title: Service Principal Names Assigned to Privileged Accounts
 
   commentary: |
-    A review of Active Directory (AD) configurations identified one or more
-    privileged accounts associated with Service Principal Names (SPNs).
+    A review of Active Directory (AD) configurations identified {count}
+    privileged {subject} associated with Service Principal Names (SPNs).
 
     SPNs are typically assigned to dedicated service accounts and facilitate 
     Kerberos authentication for applications and services. Assigning SPNs to 

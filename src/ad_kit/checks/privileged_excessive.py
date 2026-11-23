@@ -19,7 +19,7 @@ from ad_kit.core.privileged import (
     PRIVILEGED_GROUPS,
     get_privileged_group_members,
 )
-from ad_kit.core.util import require_session
+from ad_kit.core.util import count_form, require_session
 
 PRIVILEGED_GROUP_THRESHOLD = 10.0
 ADMIN_COUNT_THRESHOLD = 25.0
@@ -194,7 +194,8 @@ def privileged_excessive_check(
         finding = load_finding("privileged_excessive", "PRIV-001")
 
         finding.evidence.append(
-            f"The domain contained {enabled_users} enabled user accounts "
+            f"The domain contained {enabled_users} enabled user "
+            f"{count_form(enabled_users, 'account', 'accounts')} "
             "following exclusion of testing accounts used during the "
             "assessment."
         )
@@ -202,7 +203,8 @@ def privileged_excessive_check(
         for group, member_count, percentage in excessive_groups:
 
             finding.evidence.append(
-                f"The {group} group contained {member_count} member(s) which "
+                f"The {group} group contained {member_count} "
+                f"{count_form(member_count, 'member', 'members')} which "
                 f"represented {percentage}% of the enabled user population."
             )
 
@@ -229,13 +231,15 @@ def privileged_excessive_check(
 
         finding = load_finding("privileged_excessive", "PRIV-002")
         finding.evidence.append(
-            f"The domain contained {enabled_users} enabled user accounts "
+            f"The domain contained {enabled_users} enabled user "
+            f"{count_form(enabled_users, 'account', 'accounts')} "
             "following exclusion of testing accounts used during the "
             "assessment."
         )
         finding.evidence.append(
             f"The `adminCount=1` attribute was set on {admin_count} enabled user "
-            f"account(s), representing {admin_count_percentage}% of the enabled user "
+            f"{count_form(admin_count, 'account', 'accounts')}, representing "
+            f"{admin_count_percentage}% of the enabled user "
             "population. This attribute can be stale and does not by itself "
             "confirm current privileged access."
         )

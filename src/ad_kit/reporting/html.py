@@ -5,6 +5,7 @@ from html import escape
 from pathlib import Path
 
 from ad_kit.core.finding import Finding
+from ad_kit.core.util import count_form
 from ad_kit.reporting.markdown import format_finding_sections, format_findings, format_paragraphs
 
 
@@ -53,7 +54,10 @@ def render_html(findings: list[Finding], incomplete: list[str] | None = None) ->
                     + _list_section("Affected Assets", finding.affected_assets)
                 )
             elif label == "Evidence":
-                body = ""
+                body = (
+                    f"<p>{escape(finding.evidence_introduction)}</p>"
+                    if finding.evidence_introduction else ""
+                )
                 if finding.evidence_table:
                     table = finding.evidence_table
                     headers = "".join(f"<th>{escape(value)}</th>" for value in table.columns)
@@ -61,7 +65,7 @@ def render_html(findings: list[Finding], incomplete: list[str] | None = None) ->
                         "<tr>" + "".join(f"<td>{escape(value)}</td>" for value in row) + "</tr>"
                         for row in table.rows
                     )
-                    body = (
+                    body += (
                         f"<p>{escape(table.introduction)}</p>"
                         '<div class="table-container"><table>'
                         f"<thead><tr>{headers}</tr></thead><tbody>{rows}</tbody>"
@@ -88,9 +92,11 @@ def render_html(findings: list[Finding], incomplete: list[str] | None = None) ->
             + "</article>"
         )
     content = "\n".join(cards) or '<p class="empty">No findings were generated.</p>'
+    finding_label = count_form(len(findings), "finding", "findings")
     incomplete_section = (
         '<details class="incomplete">'
-        f"<summary>Incomplete checks ({len(incomplete)} entries)</summary>"
+        f"<summary>Incomplete checks ({len(incomplete)} "
+        f"{count_form(len(incomplete), 'entry', 'entries')})</summary>"
         "<p>Results do not cover the following checks or hosts:</p>"
         + _list_section("", incomplete)
         + "</details>"
@@ -146,7 +152,7 @@ def render_html(findings: list[Finding], incomplete: list[str] | None = None) ->
   <main>
     <label for="search">Search findings</label>
     <input id="search" type="search" placeholder="Search findings">
-    <p id="count" aria-live="polite">{len(findings)} findings</p>
+    <p id="count" aria-live="polite">{len(findings)} {finding_label}</p>
     <div id="findings">{content}</div>
     <p id="no-matches" hidden>No findings match the search.</p>
     {incomplete_section}
@@ -162,7 +168,9 @@ def render_html(findings: list[Finding], incomplete: list[str] | None = None) ->
         card.hidden = !card.textContent.toLowerCase().includes(query);
         if (!card.hidden) visible++;
       }}
-      document.getElementById("count").textContent = `${{visible}} of ${{cards.length}} findings`;
+      const findingLabel = cards.length === 1 ? "finding" : "findings";
+      document.getElementById("count").textContent =
+        `${{visible}} of ${{cards.length}} ${{findingLabel}}`;
       document.getElementById("no-matches").hidden = visible > 0 || !cards.length;
     }});
 

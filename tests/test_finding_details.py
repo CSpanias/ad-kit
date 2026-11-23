@@ -4,7 +4,14 @@ from contextlib import contextmanager, nullcontext
 import pytest
 from rich.console import Console
 
-from ad_kit.checks import delegations, kerberoast
+from ad_kit.checks import (
+    asreproast,
+    delegations,
+    kerberoast,
+    password_never_expires,
+    password_not_required,
+    pre2k,
+)
 from ad_kit.checks.ldap_info import is_sensitive_value
 from ad_kit.commands.checks import policy, privileged, unauthenticated
 from ad_kit.core.checks import CheckEvidence
@@ -58,6 +65,10 @@ def test_kerberoast_parses_names_not_spns_and_ignores_other_output(monkeypatch, 
     assert result["accounts"] == ["SQL Service", "websvc"]
     assert result["account_count"] == 2
     assert [finding.id for finding in findings] == ["KERB-001", "KERB-002"]
+    assert "identified\n2 accounts associated" in findings[0].commentary
+    assert "identified 1\nprivileged account associated" in findings[1].commentary
+    assert "2 Kerberoastable accounts were identified." in findings[0].evidence[-1]
+    assert "1 privileged Kerberoastable account was identified." in findings[1].evidence[-1]
     assert all("successfully requested" not in entry for f in findings for entry in f.evidence)
 
 
@@ -73,6 +84,54 @@ def test_kerberoast_empty_result_is_not_a_parse_error(monkeypatch, tmp_path):
     monkeypatch.setattr(kerberoast, "get_artefacts_dir", lambda: tmp_path)
     result, findings = kerberoast.kerberoast_check("dc", "example.test", "user", "pw")
     assert result["accounts"] == [] and findings == []
+
+
+@pytest.mark.parametrize(("count", "phrase"), [(1, "account was"), (2, "accounts were")])
+def test_asreproast_finding_counts_use_correct_grammar(monkeypatch, tmp_path, count, phrase):
+    accounts = [f"user{i}" for i in range(count)]
+    (tmp_path / "domain-users-filtered.txt").write_text("\n".join(accounts), encoding="utf-8")
+    (tmp_path / "asreproastable-users.txt").write_text(
+        "\n".join(f"$krb5asrep$23${account}@example.test:hash" for account in accounts),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(asreproast, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(asreproast, "run_check", lambda *_args: "")
+    monkeypatch.setattr(asreproast, "get_privileged_users", lambda *_args: set(accounts))
+    result, findings = asreproast.asreproast_check("dc", "example.test")
+    _, privileged_findings = asreproast.asreproast_privileged_check(
+        "dc", result["accounts"], "user", "pw"
+    )
+    assert f"{count} AS-REP roastable {phrase} identified." in findings[0].evidence[-1]
+    assert f"{count} privileged AS-REP roastable {phrase} identified." in (
+        privileged_findings[0].evidence[-1]
+    )
+    assert f"A total of {count} {phrase.split()[0]} configured" in (
+        privileged_findings[0].commentary
+    )
+
+
+@pytest.mark.parametrize("module", [password_not_required, password_never_expires])
+@pytest.mark.parametrize(("count", "noun"), [(1, "account"), (2, "accounts")])
+def test_password_account_commentary_uses_actual_count(monkeypatch, module, count, noun):
+    output = "\n".join(
+        f"LDAP dc 389 DC User: user{i} Status: enabled" for i in range(count)
+    )
+    monkeypatch.setattr(module, "run_check", lambda *_args: output)
+    check = (
+        module.password_not_required_check
+        if module is password_not_required else module.password_never_expires_check
+    )
+    _, findings = check("dc", "user", "password")
+    assert f"identified {count} {noun} with the" in findings[0].commentary
+
+
+@pytest.mark.parametrize(("count", "noun"), [(1, "account"), (2, "accounts")])
+def test_pre2k_commentary_counts_identified_accounts(monkeypatch, count, noun):
+    output = f"Found {count} pre-created computer accounts\nSuccessfully obtained TGT"
+    monkeypatch.setattr(pre2k, "run_check", lambda *_args: output)
+    _, findings = pre2k.pre2k_check("dc", "user", "password")
+    assert f"{count} pre-created computer\n{noun}" in findings[0].commentary
+    assert "A Kerberos Ticket Granting Ticket (TGT) was successfully" in findings[0].evidence[-1]
 
 
 def test_delegation_parses_enabled_accounts_from_netexec_table(monkeypatch):
@@ -112,6 +171,7 @@ def test_delegation_parses_enabled_accounts_from_netexec_table(monkeypatch):
         "protocol_transition": ["SQL Service"],
     }
     assert [finding.id for finding in findings] == ["DELEG-001", "DELEG-002", "DELEG-003"]
+    assert "1 privileged delegated account was identified." in findings[-1].evidence[-1]
 
 
 @pytest.mark.parametrize("output", [
@@ -274,6 +334,7 @@ def test_coercion_methods_are_shown_for_each_host(monkeypatch):
     assert any("Print Spooler" in evidence and "DC3" in evidence
                for finding in recorded_findings for evidence in finding.evidence)
     finding = recorded_findings[0]
+    assert "identified 3\nsystems exposing" in finding.commentary
     markdown = format_finding_sections(finding)["Evidence"]
     assert "The following Domain Controllers exposed" in markdown
     assert "| Hostname | Coercion Methods |" in markdown
@@ -324,6 +385,7 @@ def test_spooler_only_coercion_shows_matching_service_evidence(monkeypatch):
     assert "DC2 Spooler service enabled" not in output.getvalue()
     assert findings[0].evidence_table is None
     assert "DC1" in findings[0].evidence[0]
+    assert "identified 1\nsystem exposing" in findings[0].commentary
 
 
 def test_coercion_commentary_combines_explanation_and_examples():
@@ -342,10 +404,11 @@ def test_other_checks_show_known_affected_objects(monkeypatch, kind):
         else policy
     )
     output = io.StringIO()
+    recorded_findings = []
     monkeypatch.setattr(module, "console", Console(file=output, width=160))
     monkeypatch.setattr(module, "print_section", lambda *_args: None)
     monkeypatch.setattr(module, "progress", lambda *_args: nullcontext())
-    monkeypatch.setattr(module, "record_findings", lambda *_args: None)
+    monkeypatch.setattr(module, "record_findings", recorded_findings.extend)
     monkeypatch.setattr(module, "require_session", lambda: {
         "dc_ip": "dc", "domain": "example.test", "standard_user": "user",
         "domain_computers_exported": True,
@@ -378,6 +441,12 @@ def test_other_checks_show_known_affected_objects(monkeypatch, kind):
         module.run_tombstone_checks("pw")
         expected = "deleted-user"
     assert expected in output.getvalue()
+    if kind == "local_admin":
+        assert "1\ndomain-joined system" in recorded_findings[0].commentary
+        assert "1 host permitted" in recorded_findings[0].evidence[-1]
+    if kind == "tombstone":
+        assert "on 1 Domain Controller" in recorded_findings[0].commentary
+        assert "1 deleted object on 'DC1'" in recorded_findings[0].evidence[0]
 
 
 def test_privileged_summary_omits_member_list(monkeypatch):

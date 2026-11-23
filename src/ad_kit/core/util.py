@@ -30,6 +30,10 @@ U = TypeVar("U")
 _check_workers: ContextVar[int] = ContextVar("check_workers", default=4)
 
 
+def count_form(count: int, singular: str, plural: str) -> str:
+    return singular if count == 1 else plural
+
+
 def require_collected_data(session_data: dict, key: str, label: str) -> None:
     if session_data.get(key) is not True:
         raise ADKitError(

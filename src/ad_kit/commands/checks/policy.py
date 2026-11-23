@@ -19,8 +19,12 @@ from ad_kit.core.checks import (
 )
 from ad_kit.core.console import console, object_text, print_section
 from ad_kit.core.exceptions import ADKitError
-from ad_kit.core.findings import load_finding, load_finding_definition
-from ad_kit.core.util import progress, require_collected_data, require_session
+from ad_kit.core.findings import (
+    format_counted_commentary,
+    load_finding,
+    load_finding_definition,
+)
+from ad_kit.core.util import count_form, progress, require_collected_data, require_session
 from ad_kit.reporting.results import record_findings, record_incomplete
 
 from .credentials import authenticate_domain_admin, authenticate_standard_user
@@ -86,6 +90,7 @@ def run_local_admin_checks(
     if local_admin_results["hosts"]:
 
         finding = load_finding("local_admin", "LA-001")
+        format_counted_commentary(finding, len(local_admin_results["hosts"]), "system", "systems")
 
         for host in local_admin_results["hosts"]:
 
@@ -95,7 +100,8 @@ def run_local_admin_checks(
             )
 
         finding.evidence.append(
-            f"A total of {len(local_admin_results['hosts'])} host(s) permitted "
+            f"A total of {len(local_admin_results['hosts'])} "
+            f"{count_form(len(local_admin_results['hosts']), 'host', 'hosts')} permitted "
             "local administrator access."
         )
 
@@ -104,6 +110,10 @@ def run_local_admin_checks(
     if local_admin_results["domain_controllers"]:
 
         finding = load_finding("local_admin", "LA-002")
+        controller_count = len(local_admin_results["domain_controllers"])
+        format_counted_commentary(
+            finding, controller_count, "Domain Controller", "Domain Controllers"
+        )
 
         for host in local_admin_results["domain_controllers"]:
 
@@ -114,8 +124,9 @@ def run_local_admin_checks(
             )
 
         finding.evidence.append(
-            f"A total of {len(local_admin_results['domain_controllers'])} "
-            "Domain Controller(s) permitted administrative access."
+            f"A total of {controller_count} "
+            f"{count_form(controller_count, 'Domain Controller', 'Domain Controllers')} "
+            "permitted administrative access."
         )
 
         findings.append(finding)
@@ -238,7 +249,13 @@ def run_password_policy_checks(
             else setting
         )
         content = definitions[definition_key]
-        commentary.append("- " + content["commentary"].format(value=password_policy[setting]))
+        value = password_policy[setting]
+        format_values = {"value": value}
+        if setting == "minimum_length":
+            format_values["character_word"] = count_form(int(value), "character", "characters")
+        elif setting == "password_history":
+            format_values["password_word"] = count_form(int(value), "password", "passwords")
+        commentary.append("- " + content["commentary"].format(**format_values))
         remediation.append("- " + content["remediation"])
         references.extend(content["references"])
 

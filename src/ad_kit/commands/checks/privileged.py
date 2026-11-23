@@ -27,7 +27,11 @@ from ad_kit.core.checks import (
 from ad_kit.core.console import console, object_text, print_info, print_section
 from ad_kit.core.exceptions import ADKitError
 from ad_kit.core.finding import EvidenceTable
-from ad_kit.core.findings import load_finding, load_finding_definition
+from ad_kit.core.findings import (
+    format_counted_commentary,
+    load_finding,
+    load_finding_definition,
+)
 from ad_kit.core.util import progress, require_session
 from ad_kit.reporting.results import record_findings
 
@@ -548,6 +552,11 @@ def run_coercion_checks(
     if coercion_results["coercion_dcs"] or coercion_results["spooler_dcs"]:
 
         finding = load_finding("coercion", "COERCE-001")
+        affected = {
+            host.rstrip(".").casefold()
+            for host in (*coercible_dcs, *coercion_results["spooler_dcs"])
+        }
+        format_counted_commentary(finding, len(affected), "system", "systems")
 
         if coercible_dcs:
             finding.evidence_table = EvidenceTable(
