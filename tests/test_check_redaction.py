@@ -216,6 +216,9 @@ def test_nxc_progress_uses_normal_capture_for_noninteractive_output(monkeypatch,
     monkeypatch.setattr(checks, "console", Console(file=io.StringIO(), force_terminal=False))
     monkeypatch.setattr(checks, "get_artefacts_dir", lambda: tmp_path)
     monkeypatch.setattr(
+        checks, "progress", lambda *_args: pytest.fail("unexpected command progress")
+    )
+    monkeypatch.setattr(
         checks.subprocess, "run",
         lambda command, **kwargs: (
             calls.append((command, kwargs))
@@ -225,6 +228,8 @@ def test_nxc_progress_uses_normal_capture_for_noninteractive_output(monkeypatch,
     output = checks.run_check("nxc-noninteractive", ["nxc", "smb", "hosts"], nxc_progress=True)
     assert output == "SMB result\n"
     assert calls == [(["nxc", "smb", "hosts"], {"capture_output": True, "text": True})]
+    evidence = (tmp_path / "evidence" / "nxc-noninteractive.txt").read_text(encoding="utf-8")
+    assert "$ nxc smb hosts" in evidence
 
 
 def test_nxc_progress_preserves_failed_command_evidence(monkeypatch, tmp_path):

@@ -453,7 +453,7 @@ def run_check(
         else:
             activity = (
                 progress(f"Running {shlex.join(display_command)}")
-                if show_progress else nullcontext()
+                if show_progress and not nxc_progress else nullcontext()
             )
             with activity:
                 result = subprocess.run(command, capture_output=True, text=True)
