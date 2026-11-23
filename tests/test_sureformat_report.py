@@ -26,6 +26,7 @@ def test_sureformat_export_matches_adapter_and_optional_dc_split(monkeypatch, tm
         Finding("NOPAC-001", "NoPAC", "NoPAC details.", ""),
         Finding("OTHER-001", "Unmapped", "Other details.", ""),
         Finding("PRIV-001", "Privileged accounts", "Privilege details.", ""),
+        Finding("PRIV-002", "Protected accounts", "Protected details.", ""),
     ]
     monkeypatch.setattr(check, "get_artefacts_dir", lambda: tmp_path)
     monkeypatch.setattr(check, "require_session", lambda: {"domain": "EXAMPLE.COM"})
@@ -42,9 +43,11 @@ def test_sureformat_export_matches_adapter_and_optional_dc_split(monkeypatch, tm
     assert item.attrib == {"ipaddress": "", "hostname": "example.com"}
     assert service.attrib == {"name": "", "port": "", "protocol": "tcp"}
     assert [v.attrib["id"] for v in vulnerabilities] == (
-        ["SC-10674", "SC-7704"]
-        if dc else ["SC-6080", "SC-3704", "SC-10674", "SC-7704"]
+        ["SC-10674", "SC-10700", "SC-7704"]
+        if dc else ["SC-6080", "SC-3704", "SC-10674", "SC-10700", "SC-7704"]
     )
+    protected = next(v for v in vulnerabilities if v.attrib["id"] == "SC-10700")
+    assert protected.findtext("information") == "Protected details."
     smb = next(v for v in vulnerabilities if v.attrib["id"] == "SC-7704")
     assert smb.findtext("information") == "SMB signing details."
     assert (tmp_path / "ad-kit_findings.html").exists()
