@@ -10,6 +10,10 @@ ad-kit check all
 
 # Execute one or more selected assessment modules
 ad-kit check run ldap smb pass-pol
+
+# Limit concurrent target checks; 1 runs them sequentially
+ad-kit check --workers 2 run ldap smb
+ad-kit check smb --workers 8
 ```
 
 Modules are executed in the order provided. Checks requiring a Standard User 
@@ -20,6 +24,11 @@ Checks show progress through known targets, groups, script paths or queries wher
 available. Counts represent items processed, including incomplete checks.
 External commands without measurable progress display an activity indicator
 instead; they may continue running between progress updates.
+
+LDAP configuration, SMB configuration, and SMB share access use up to four
+workers by default. `--workers` accepts one through 16; select a lower value
+for sensitive environments. Dependent operations on each target remain
+ordered, and check modules themselves still run sequentially.
 
 MAQ and DNS display current-run command evidence after their tables. LDAP and
 SMB each display one anonymous enumeration sample with up to ten result rows;

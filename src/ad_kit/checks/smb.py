@@ -7,7 +7,6 @@ from typing import TypedDict
 
 from ad_kit.core.checks import run_check
 from ad_kit.core.exceptions import CheckExecutionError
-from ad_kit.reporting.results import record_incomplete
 
 
 class ShareAccess(TypedDict):
@@ -255,6 +254,7 @@ def smb_configuration_check(
     output = run_check(
         f"smb-{host}",
         ["nxc", "smb", host, "--dns-server", dc_ip],
+        show_progress=False,
     )
 
     signing = "[yellow]⚠ Unknown[/yellow]"
@@ -292,6 +292,7 @@ def smb_configuration_check(
     anonymous_shares: int | None = None
     anonymous_users: int | None = None
     anonymous_users_complete = False
+    incomplete: list[str] = []
     if null_auth:
         command = [
             "nxc", "smb", host,
@@ -306,26 +307,24 @@ def smb_configuration_check(
             enumeration_output = run_check(
                 f"smb-anonymous-enumeration-{host}",
                 command,
+                show_progress=False,
             )
         except CheckExecutionError as exc:
-            record_incomplete("SMB anonymous enumeration", host, str(exc), notify=False)
+            incomplete.append(str(exc))
         else:
             anonymous_shares = _parse_share_count(enumeration_output)
             if enumerate_users:
                 anonymous_users, anonymous_users_complete = _parse_user_count(
                     enumeration_output
                 )
-            incomplete = []
+            missing = []
             if anonymous_shares is None:
-                incomplete.append("share enumeration")
+                missing.append("share enumeration")
             if enumerate_users and not anonymous_users_complete:
-                incomplete.append("user enumeration")
-            if incomplete:
-                record_incomplete(
-                    "SMB anonymous enumeration",
-                    host,
-                    f"No complete result for {' and '.join(incomplete)}; see evidence",
-                    notify=False,
+                missing.append("user enumeration")
+            if missing:
+                incomplete.append(
+                    f"No complete result for {' and '.join(missing)}; see evidence"
                 )
 
     if signing == "true":
@@ -351,4 +350,5 @@ def smb_configuration_check(
         "anonymous_shares": anonymous_shares,
         "anonymous_users": anonymous_users,
         "anonymous_users_complete": anonymous_users_complete,
+        "anonymous_incomplete": incomplete,
     }

@@ -38,9 +38,11 @@ def test_smb_keeps_successes_and_reports_each_incomplete_host(monkeypatch, tmp_p
         if host == "B":
             raise failure("smb-B")
         return {
-            "host": host, "signing": "[red]✗ Disabled[/red]" if host == "A" else "[green]✓ Enabled[/green]",
+            "host": host,
+            "signing": "[red]✗ Disabled[/red]" if host == "A" else "[green]✓ Enabled[/green]",
             "smbv1": "[green]✓ Disabled[/green]", "null_auth": False,
             "anonymous_shares": None, "anonymous_users": None,
+            "anonymous_incomplete": [],
         }
 
     def writable(host, *_args):
@@ -86,6 +88,7 @@ def test_smb_summarises_multiple_partial_and_unknown_hosts(monkeypatch, tmp_path
             "smbv1": unknown if host == "A" else "[green]✓ Disabled[/green]",
             "null_auth": None if host == "A" else False,
             "anonymous_shares": None, "anonymous_users": None,
+            "anonymous_incomplete": [],
         }
 
     monkeypatch.setattr(unauthenticated, "smb_configuration_check", configuration)
@@ -120,7 +123,7 @@ def test_smb_omits_hosts_without_usable_results_but_retains_coverage(monkeypatch
         lambda host, *_args: (share_hosts.append(host) or [], []),
     )
 
-    def run(name, _command):
+    def run(name, _command, **_kwargs):
         if name == "smb-DC-FAIL":
             raise failure(name)
         if name == "smb-FILTERED":
@@ -151,7 +154,7 @@ def test_failed_anonymous_enumeration_keeps_smb_configuration(monkeypatch):
     results.reset()
     warnings = []
     monkeypatch.setattr(results, "print_warning", warnings.append)
-    def run(name, _command):
+    def run(name, _command, **_kwargs):
         if name.startswith("smb-anonymous"):
             raise failure(name)
         return "SMB dc 445 HOST (signing:False) (SMBv1:False) (null auth:True)"
@@ -160,7 +163,7 @@ def test_failed_anonymous_enumeration_keeps_smb_configuration(monkeypatch):
     result = smb.smb_configuration_check("host", "dc")
     assert result["signing"] == "[red]✗ Disabled[/red]"
     assert result["anonymous_shares"] is None
-    assert "SMB anonymous enumeration - host" in results._incomplete[0]
+    assert "smb-anonymous-enumeration-host" in result["anonymous_incomplete"][0]
     assert not warnings
     results.reset()
 
@@ -179,7 +182,7 @@ def test_smb_summarises_anonymous_enumeration_failures(monkeypatch, tmp_path):
     monkeypatch.setattr(unauthenticated, "progress", no_progress)
     monkeypatch.setattr(unauthenticated, "smb_share_access_check", lambda *_args: ([], []))
 
-    def run(name, _command):
+    def run(name, _command, **_kwargs):
         if name.startswith("smb-anonymous"):
             raise failure(name)
         return "SMB dc 445 HOST (signing:True) (SMBv1:False) (null auth:True)"
@@ -198,7 +201,7 @@ def test_ldap_and_nopac_continue_after_failed_controller(monkeypatch):
     results.reset()
     monkeypatch.setattr(ldap, "load_dc_hostnames", lambda: ["DC1.EXAMPLE", "DC2.EXAMPLE"])
 
-    def ldap_run(name, _command):
+    def ldap_run(name, _command, **_kwargs):
         if name.endswith("DC2.EXAMPLE"):
             raise failure(name)
         return (

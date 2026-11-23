@@ -155,6 +155,47 @@ def test_cli_dispatches_sureformat_options(monkeypatch, args, expected):
     assert calls == [(expected, {"csacyber": True, "dc": expected_dc})]
 
 
+@pytest.mark.parametrize(
+    ("args", "expected_workers"),
+    [
+        (["check"], 4),
+        (["check", "--workers", "2"], 2),
+        (["check", "all", "--workers", "16"], 16),
+        (["check", "--workers", "3", "ldap"], 3),
+        (["check", "smb", "--workers", "1"], 1),
+        (["check", "run", "ldap", "smb", "--workers", "2"], 2),
+    ],
+)
+def test_cli_applies_worker_limit_to_each_check_entrypoint(monkeypatch, args, expected_workers):
+    seen = []
+    monkeypatch.setattr(
+        check, "run_checks", lambda **_kwargs: seen.append(util._check_workers.get())
+    )
+    monkeypatch.setattr(
+        check, "run_selected_checks",
+        lambda _modules, **_kwargs: seen.append(util._check_workers.get()),
+    )
+    result = CliRunner().invoke(app, args)
+    assert result.exit_code == 0, result.output
+    assert seen == [expected_workers]
+    assert util._check_workers.get() == 4
+
+
+@pytest.mark.parametrize("args", [
+    ["check", "--workers", "0"],
+    ["check", "ldap", "--workers", "17"],
+    ["check", "--workers", "2", "smb", "--workers", "3"],
+])
+def test_cli_rejects_invalid_or_duplicate_worker_limits(monkeypatch, args):
+    monkeypatch.setattr(check, "run_checks", lambda **_kwargs: pytest.fail("checks ran"))
+    monkeypatch.setattr(
+        check, "run_selected_checks", lambda *_args, **_kwargs: pytest.fail("checks ran")
+    )
+    result = CliRunner().invoke(app, args)
+    assert result.exit_code != 0
+    assert "--workers" in result.output
+
+
 @pytest.mark.parametrize("domain", [None, "", "   "])
 def test_cli_rejects_missing_domain_before_running_checks(monkeypatch, domain):
     monkeypatch.setattr(check, "require_session", lambda: {"domain": domain})

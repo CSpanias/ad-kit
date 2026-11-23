@@ -1,5 +1,4 @@
 import re
-from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 
 from rich.table import Table
 from rich.text import Text
@@ -27,10 +26,12 @@ from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.findings import load_finding
 from ad_kit.core.util import (
     get_artefacts_dir,
+    parallel_items,
     progress,
     require_collected_data,
     require_session,
     track_items,
+    unique_hosts,
 )
 from ad_kit.reporting.results import record_findings, record_incomplete
 
@@ -289,36 +290,12 @@ def _anonymous_count(
 def _check_share_access(
     hosts: list[str], dc_ip: str, username: str, password: str
 ) -> list[tuple[str, list[ShareAccess], list[str]]]:
-    unique_hosts = []
-    seen = set()
-    for host in hosts:
-        key = host.rstrip(".").casefold()
-        if key not in seen:
-            unique_hosts.append(host)
-            seen.add(key)
-    checked: dict[str, tuple[list[ShareAccess], list[str]]] = {}
-    work = iter(unique_hosts)
-
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        pending: dict[Future[tuple[list[ShareAccess], list[str]]], str] = {}
-
-        def submit_next() -> None:
-            host = next(work, None)
-            if host is not None:
-                pending[executor.submit(
-                    smb_share_access_check, host, dc_ip, username, password
-                )] = host
-
-        for _ in range(min(4, len(unique_hosts))):
-            submit_next()
-
-        for _ in track_items(range(len(unique_hosts)), "SMB share-access hosts"):
-            future = next(as_completed(pending))
-            host = pending.pop(future)
-            checked[host] = future.result()
-            submit_next()
-
-    return [(host, *checked[host]) for host in unique_hosts]
+    targets = unique_hosts(hosts)
+    checked = parallel_items(
+        targets, "SMB share-access hosts",
+        lambda host: smb_share_access_check(host, dc_ip, username, password),
+    )
+    return [(host, *result) for host, result in zip(targets, checked)]
 
 
 def run_smb_checks(
@@ -360,10 +337,8 @@ def run_smb_checks(
     hosts = load_domain_computers()
     dcs = {dc.rstrip(".").casefold() for dc in load_dc_hostnames()}
 
-    with capture_check_evidence() as evidence, progress("Checking SMB configuration..."):
-
-        for host in track_items(hosts, "SMB configuration hosts"):
-
+    def check_host(host: str) -> tuple[str, dict | None, str | None, list[CheckEvidence]]:
+        with capture_check_evidence() as captured:
             try:
                 result = smb_configuration_check(
                     host,
@@ -371,9 +346,23 @@ def run_smb_checks(
                     enumerate_users=host.rstrip(".").casefold() in dcs,
                 )
             except CheckExecutionError as exc:
-                record_incomplete("SMB configuration", host, str(exc), notify=False)
+                return host, None, str(exc), captured
+            return host, result, None, captured
+
+    with capture_check_evidence() as evidence, progress("Checking SMB configuration..."):
+        checked = parallel_items(
+            unique_hosts(hosts), "SMB configuration hosts", check_host
+        )
+        for host, result, error, captured in checked:
+            evidence.extend(captured)
+            if error is not None:
+                record_incomplete("SMB configuration", host, error, notify=False)
                 unknown_hosts.append(host)
                 continue
+            if result is None:
+                raise RuntimeError(f"No SMB configuration result for {host}")
+            for reason in result["anonymous_incomplete"]:
+                record_incomplete("SMB anonymous enumeration", host, reason, notify=False)
 
             unknown = [
                 label

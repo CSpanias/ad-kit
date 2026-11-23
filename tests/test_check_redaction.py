@@ -118,3 +118,28 @@ def test_suppressed_command_progress_still_writes_redacted_evidence(monkeypatch,
     evidence = (tmp_path / "evidence" / "quiet.txt").read_text(encoding="utf-8")
     assert "secret" not in evidence
     assert "[REDACTED]" in evidence
+
+
+def test_empty_arguments_are_preserved_in_display_and_execution(monkeypatch, tmp_path):
+    messages = []
+    commands = []
+
+    @contextmanager
+    def fake_progress(message):
+        messages.append(message)
+        yield
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(checks, "progress", fake_progress)
+    monkeypatch.setattr(checks, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(checks.subprocess, "run", fake_run)
+    command = ["nxc", "smb", "dc", "-u", "", "-p", "", "--shares"]
+    checks.run_check("anonymous", command)
+
+    evidence = (tmp_path / "evidence" / "anonymous.txt").read_text(encoding="utf-8")
+    assert commands == [command]
+    assert "-u '' -p ''" in messages[0]
+    assert "-u '' -p ''" in evidence

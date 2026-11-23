@@ -4,8 +4,10 @@ import json
 import os
 import shlex
 import subprocess
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import TypeVar
 
@@ -24,6 +26,8 @@ from ad_kit.core.exceptions import ADKitError
 
 ARTEFACTS_DIR = Path("ad-kit")
 T = TypeVar("T")
+U = TypeVar("U")
+_check_workers: ContextVar[int] = ContextVar("check_workers", default=4)
 
 
 def require_collected_data(session_data: dict, key: str, label: str) -> None:
@@ -179,6 +183,53 @@ def track_items(items: Sequence[T], description: str) -> Iterator[T]:
         for item in items:
             yield item
             tracker.advance(task)
+
+
+def unique_hosts(hosts: Sequence[str]) -> list[str]:
+    unique = []
+    seen = set()
+    for host in hosts:
+        key = host.rstrip(".").casefold()
+        if key not in seen:
+            unique.append(host)
+            seen.add(key)
+    return unique
+
+
+@contextmanager
+def check_workers(workers: int) -> Iterator[None]:
+    if not 1 <= workers <= 16:
+        raise ValueError("Check workers must be between 1 and 16.")
+    token = _check_workers.set(workers)
+    try:
+        yield
+    finally:
+        _check_workers.reset(token)
+
+
+def parallel_items(
+    items: Sequence[T], description: str, check: Callable[[T], U]
+) -> list[U]:
+    """Run independent checks with bounded concurrency, preserving input order."""
+    completed: dict[int, U] = {}
+    work = iter(enumerate(items))
+    workers = _check_workers.get()
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        pending: dict[Future[U], int] = {}
+
+        def submit_next() -> None:
+            item = next(work, None)
+            if item is not None:
+                index, target = item
+                pending[executor.submit(check, target)] = index
+
+        for _ in range(min(workers, len(items))):
+            submit_next()
+        for _ in track_items(range(len(items)), description):
+            future = next(as_completed(pending))
+            completed[pending.pop(future)] = future.result()
+            submit_next()
+    return [completed[index] for index in range(len(items))]
 
 
 def normalize_hostname(

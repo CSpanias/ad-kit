@@ -7,6 +7,7 @@ from rich.console import Console
 
 from ad_kit.checks import smb
 from ad_kit.commands.checks import unauthenticated
+from ad_kit.core import util
 from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.reporting import results
 
@@ -113,14 +114,16 @@ def test_share_access_does_not_guess_ambiguous_permissions(monkeypatch):
     assert errors and "Could not parse" in errors[0]
 
 
-def test_parallel_share_checks_are_bounded_and_keep_host_order(monkeypatch):
-    barrier = threading.Barrier(4)
+@pytest.mark.parametrize("workers", [1, 4, 16])
+def test_parallel_share_checks_are_bounded_and_keep_host_order(monkeypatch, workers):
+    barrier = threading.Barrier(workers)
     lock = threading.Lock()
     active = 0
     peak = 0
     started = []
     main_thread = threading.get_ident()
     progress_threads = []
+    hosts = [f"host-{i}" for i in range(workers + 1)]
 
     def check(host, *_args):
         nonlocal active, peak
@@ -128,7 +131,7 @@ def test_parallel_share_checks_are_bounded_and_keep_host_order(monkeypatch):
             active += 1
             peak = max(peak, active)
             started.append(host)
-        if host in {"A", "B", "C", "D"}:
+        if host in hosts[:workers]:
             barrier.wait(timeout=5)
         with lock:
             active -= 1
@@ -140,14 +143,15 @@ def test_parallel_share_checks_are_bounded_and_keep_host_order(monkeypatch):
             yield item
 
     monkeypatch.setattr(unauthenticated, "smb_share_access_check", check)
-    monkeypatch.setattr(unauthenticated, "track_items", track)
-    checked = unauthenticated._check_share_access(
-        ["A", "B", "C", "D", "E", "a."], "dc", "user", "secret"
-    )
-    assert peak == 4
-    assert sorted(started) == ["A", "B", "C", "D", "E"]
-    assert [host for host, _, _ in checked] == ["A", "B", "C", "D", "E"]
-    assert progress_threads == [main_thread] * 5
+    monkeypatch.setattr(util, "track_items", track)
+    with util.check_workers(workers):
+        checked = unauthenticated._check_share_access(
+            [*hosts, hosts[0].upper() + "."], "dc", "user", "secret"
+        )
+    assert peak == workers
+    assert sorted(started) == sorted(hosts)
+    assert [host for host, _, _ in checked] == hosts
+    assert progress_threads == [main_thread] * len(hosts)
 
 
 def test_share_table_and_finding_only_include_write_related_permissions(monkeypatch, tmp_path):
@@ -166,6 +170,7 @@ def test_share_table_and_finding_only_include_write_related_permissions(monkeypa
     monkeypatch.setattr(unauthenticated, "smb_configuration_check", lambda *_args, **_kwargs: {
         "host": "host", "signing": "[green]✓ Enabled[/green]", "smbv1": "[green]✓ Disabled[/green]",
         "null_auth": False, "anonymous_shares": None, "anonymous_users": None,
+        "anonymous_incomplete": [],
     })
     monkeypatch.setattr(unauthenticated, "smb_share_access_check", lambda *_args: ([
         {"name": "Read Only", "permissions": ("READ",)},

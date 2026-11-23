@@ -25,9 +25,10 @@ nxc smb <host> -u <username> -p <password> --shares --dns-server <dc_ip>
 The anonymous enumeration commands run only when NetExec reports a null
 session. User enumeration is restricted to discovered Domain Controllers.
 The share-access checks use the Standard User account and are prompted only
-when needed. Share access is checked once per host, with up to four hosts
-checked concurrently. Only rows with reported READ or write-related
-permissions are displayed.
+when needed. Configuration and share access are checked across hosts
+concurrently, with four workers by default; use `--workers` to choose between
+one and 16. Share access is checked once per host. Only rows with reported
+READ or write-related permissions are displayed.
 
 ## What it checks
 

@@ -60,6 +60,12 @@ def capture_check_evidence() -> Iterator[list[CheckEvidence]]:
         _evidence_capture.reset(token)
 
 
+def append_captured_evidence(records: list[CheckEvidence]) -> None:
+    captured = _evidence_capture.get()
+    if captured is not None:
+        captured.extend(records)
+
+
 def format_check_evidence(record: CheckEvidence, stdout: str | None = None) -> str:
     output = record.stdout if stdout is None else stdout
     text = f"$ {shlex.join(record.command)}\n{output.rstrip()}"
@@ -363,7 +369,9 @@ def run_check(
         else:
             display_command.append(argument)
 
-    activity = progress(f"Running {' '.join(display_command)}") if show_progress else nullcontext()
+    activity = (
+        progress(f"Running {shlex.join(display_command)}") if show_progress else nullcontext()
+    )
     with activity:
         try:
             result = subprocess.run(command, capture_output=True, text=True)
@@ -383,7 +391,7 @@ def run_check(
         error_output = error_output.replace(secret, "[REDACTED]")
 
     evidence_file = (get_evidence_dir() / f"{name}.txt")
-    evidence = (f"$ {' '.join(display_command)}\n\n {output}")
+    evidence = (f"$ {shlex.join(display_command)}\n\n {output}")
     if error_output:
         evidence += f"\n\n[stderr]\n{error_output}"
     evidence_file.write_text(evidence, encoding="utf-8")

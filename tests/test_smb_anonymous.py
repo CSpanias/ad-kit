@@ -1,23 +1,24 @@
 import io
+import threading
 from contextlib import nullcontext
 
 from rich.console import Console
 
 from ad_kit.checks import smb
 from ad_kit.commands.checks import unauthenticated
+from ad_kit.core import util
+from ad_kit.core.checks import append_captured_evidence
 from ad_kit.reporting import results
 
 
 def test_smb_scopes_anonymous_users_and_displays_enumeration_status(monkeypatch, tmp_path):
     results.reset()
     calls = []
-    evidence = []
     share_hosts = []
     output = io.StringIO()
     monkeypatch.setattr(unauthenticated, "console", Console(file=output, width=160))
     monkeypatch.setattr(unauthenticated, "print_section", lambda title: print(title, file=output))
     monkeypatch.setattr(unauthenticated, "progress", lambda *_args: nullcontext())
-    monkeypatch.setattr(unauthenticated, "capture_check_evidence", lambda: nullcontext(evidence))
     monkeypatch.setattr(unauthenticated, "track_items", lambda items, _label: items)
     monkeypatch.setattr(unauthenticated, "require_session", lambda: {
         "dc_ip": "192.0.2.1",
@@ -34,7 +35,7 @@ def test_smb_scopes_anonymous_users_and_displays_enumeration_status(monkeypatch,
         lambda host, *_args: (share_hosts.append(host) or [], []),
     )
 
-    def run(name, command):
+    def run(name, command, **_kwargs):
         calls.append((name, command))
         host = command[2]
         if name.startswith("smb-anonymous"):
@@ -56,7 +57,9 @@ def test_smb_scopes_anonymous_users_and_displays_enumeration_status(monkeypatch,
         else:
             marker = "" if host == "NO-NULL" else " (Null Auth:True)"
             output_text = f"SMB host 445 HOST (signing:True) (SMBv1:False){marker}"
-        evidence.append(unauthenticated.CheckEvidence(name, command, output_text, ""))
+        append_captured_evidence([
+            unauthenticated.CheckEvidence(name, command, output_text, "")
+        ])
         return output_text
 
     monkeypatch.setattr(smb, "run_check", run)
@@ -106,9 +109,59 @@ def test_anonymous_counts_require_evidence_of_completion():
     )
 
 
+def test_smb_configuration_runs_in_parallel_and_keeps_sample_evidence(monkeypatch, tmp_path):
+    results.reset()
+    output = io.StringIO()
+    barrier = threading.Barrier(2)
+    share_hosts = []
+    monkeypatch.setattr(unauthenticated, "console", Console(file=output, width=160))
+    monkeypatch.setattr(unauthenticated, "print_section", lambda title: print(title, file=output))
+    monkeypatch.setattr(unauthenticated, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(unauthenticated, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user", "domain_computers_exported": True,
+    })
+    monkeypatch.setattr(unauthenticated, "load_domain_computers", lambda: ["DC1", "HOST1", "DOWN"])
+    monkeypatch.setattr(unauthenticated, "load_dc_hostnames", lambda: ["DC1"])
+    monkeypatch.setattr(unauthenticated, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        unauthenticated, "smb_share_access_check",
+        lambda host, *_args: (share_hosts.append(host) or [], []),
+    )
+
+    def run(name, command, **_kwargs):
+        if name in {"smb-DC1", "smb-HOST1"}:
+            barrier.wait(timeout=5)
+        if name == "smb-DC1":
+            text = "SMB dc 445 DC (signing:True) (SMBv1:False) (Null Auth:True)"
+        elif name == "smb-HOST1":
+            text = "SMB host 445 HOST (signing:False) (SMBv1:False)"
+        elif name == "smb-anonymous-enumeration-DC1":
+            text = (
+                "SMB dc 445 DC -Username- -Last PW Set- -BadPW- -Description-\n"
+                "SMB dc 445 DC alice 2024-01-01 0 example\n"
+                "SMB dc 445 DC Enumerated 1 local users: EXAMPLE\n"
+            )
+        else:
+            text = ""
+        append_captured_evidence([unauthenticated.CheckEvidence(name, command, text, "")])
+        return text
+
+    monkeypatch.setattr(smb, "run_check", run)
+    with util.check_workers(2):
+        unauthenticated.run_smb_checks("secret")
+    text = output.getvalue()
+    assert "Anonymous evidence - DC1" in text and "alice" in text
+    assert "HOST1" in text and "DOWN" not in text
+    assert sorted(share_hosts) == ["DC1", "DOWN", "HOST1"]
+    assert any("SMB configuration - DOWN" in entry for entry in results._incomplete)
+    assert any("share enumeration" in entry for entry in results._incomplete)
+    results.reset()
+
+
 def test_smb_invalid_configuration_values_remain_unknown(monkeypatch):
     monkeypatch.setattr(
-        smb, "run_check", lambda *_args: "SMB host 445 HOST (signing:unknown) (SMBv1:unknown)"
+        smb, "run_check",
+        lambda *_args, **_kwargs: "SMB host 445 HOST (signing:unknown) (SMBv1:unknown)"
     )
     result = smb.smb_configuration_check("host", "dc")
     assert result["signing"] == "[yellow]⚠ Unknown[/yellow]"
@@ -133,7 +186,7 @@ def test_partial_user_results_remain_visible_and_are_marked_incomplete():
 def test_share_failure_preserves_successful_dc_user_enumeration(monkeypatch):
     results.reset()
 
-    def run(name, _command):
+    def run(name, _command, **_kwargs):
         if not name.startswith("smb-anonymous"):
             return "SMB dc 445 DC (signing:True) (SMBv1:False) (Null Auth:True)"
         return (
@@ -148,7 +201,7 @@ def test_share_failure_preserves_successful_dc_user_enumeration(monkeypatch):
     assert result["anonymous_shares"] is None
     assert result["anonymous_users"] == 1
     assert result["anonymous_users_complete"]
-    assert any("share enumeration" in entry for entry in results._incomplete)
+    assert any("share enumeration" in entry for entry in result["anonymous_incomplete"])
     results.reset()
 
 
