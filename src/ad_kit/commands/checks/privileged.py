@@ -113,11 +113,17 @@ def run_privileged_group_checks(
     dcsync_trustees = [
         trustee for trustee in dcsync_trustees
         if trustee["complete"]
-        and not is_msol_trustee(trustee)
         and (
-            trustee["name"].strip().casefold() == "unknown"
-            or trustee["name"].strip().rsplit("\\", 1)[-1].casefold() == "cisco_connector"
-            or trustee["sid"].upper() not in expected_dcsync_sids
+            "GenericAll" in trustee["rights"]
+            or (
+                not is_msol_trustee(trustee)
+                and (
+                    trustee["name"].strip().casefold() == "unknown"
+                    or trustee["name"].strip().rsplit("\\", 1)[-1].casefold()
+                    == "cisco_connector"
+                    or trustee["sid"].upper() not in expected_dcsync_sids
+                )
+            )
         )
     ]
     record_findings(dcsync_findings(dcsync_trustees))
@@ -186,7 +192,7 @@ def run_privileged_group_checks(
     dcsync_table = Table(title="Unexpected DCSync Principals")
     dcsync_table.add_column("Trustee", style="cyan")
     dcsync_table.add_column("SID", style="green")
-    dcsync_table.add_column("Replication Rights", style="yellow")
+    dcsync_table.add_column("Rights", style="yellow")
 
     if dcsync_trustees:
         for trustee in dcsync_trustees:

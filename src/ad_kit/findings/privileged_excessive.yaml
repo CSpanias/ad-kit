@@ -181,8 +181,8 @@ PRIV-005:
   title: Unexpected DCSync-Related Replication Rights
 
   commentary: |
-    A total of {count} non-default {subject} {was} granted DCSync-related replication
-    control rights on the domain naming context. A principal with both
+    A total of {count} non-default {subject} {was} granted permissions that may
+    permit DCSync on the domain naming context. A principal with both
     Replicating Directory Changes and Replicating Directory Changes All can
     replicate sensitive directory data, including credential material.
 
@@ -194,6 +194,15 @@ PRIV-005:
     permissions required by Domain Controllers and other documented default
     administrative principals. Also review nested group membership and
     inherited permissions when validating effective access.
+
+  generic_all_commentary: |
+    GenericAll grants full control over the domain object and includes the
+    core replication rights. Effective access may be restricted by deny entries
+    or other access controls.
+
+  generic_all_remediation: |
+    Review GenericAll permissions on the domain object and remove any that are
+    not required. GenericAll grants broader control than replication rights.
 
   references:
     - https://www.alteredsecurity.com/post/a-primer-on-dcsync-attack-and-detection

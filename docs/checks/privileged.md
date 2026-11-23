@@ -49,7 +49,8 @@ ad-kit:
   an account was renamed from a localised default name.
 - Reads the domain DACL with
   [`dacledit.py`](https://github.com/fortra/impacket/blob/master/examples/dacledit.py)
-  to find non-default principals with DCSync-related replication rights.
+  to find non-default principals with DCSync-related replication rights or
+  GenericAll on the domain object.
 
 Previously saved expected trustee SIDs remain excluded for resolved trustees
 other than `Cisco_Connector`; the check no longer prompts for selections.
@@ -64,13 +65,22 @@ hash synchronisation requires both core replication rights. A name prefix
 alone does not verify an account's purpose; review the raw DACL evidence when
 that assumption is uncertain.
 
-Only trustees with both core rights are included in the table or finding.
+Trustees with GenericAll over the domain object are also included, with
+GenericAll identified separately from explicit replication rights. This
+includes GenericAll represented by the mapped FullControl access mask.
+Previously saved expected DCSync SIDs and the `MSOL_*` name exclusion do not
+hide GenericAll, because it grants broader control than replication rights.
+Inherit-only entries and object-specific rights restricted to a different
+object type are not treated as domain-wide GenericAll.
+
+Otherwise, only trustees with both core rights are included in the table or finding.
 Partial rights remain in the raw DACL evidence. Cisco's AD Connector requires
 Replicating Directory Changes but not Replicating Directory Changes All; an
 account such as `Cisco_Connector` is reported if it has both core rights.
 This is not an effective-permissions calculation: permissions can also be
-inherited or combined through group membership, so hiding partial trustees can
-miss effective access.
+inherited or combined through group membership, and deny entries can restrict
+access. Hiding partial trustees can therefore miss effective access, and a
+reported allow entry does not guarantee effective access.
 
 ## How it works
 
