@@ -138,6 +138,7 @@ def run_privileged_group_checks(
         )
         account_table.add_row(label, account["account_name"], status)
 
+    console.print()
     console.print(account_table)
 
     dcsync_table = Table(title="Unexpected DCSync Principals")
@@ -157,6 +158,7 @@ def run_privileged_group_checks(
     else:
         dcsync_table.add_row("No unexpected trustees found", "", "", "")
 
+    console.print()
     console.print(dcsync_table)
 
 def run_delegation_checks(

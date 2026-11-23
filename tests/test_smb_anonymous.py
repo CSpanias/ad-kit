@@ -86,6 +86,7 @@ def test_smb_scopes_anonymous_users_and_displays_enumeration_status(monkeypatch,
     assert "Incomplete" in table_output
     assert table_output.count("Anonymous evidence - ") == 1
     assert "Anonymous evidence - DC.EXAMPLE\n\n$ nxc smb" in table_output
+    assert "Null Auth:True)\n\n$ nxc smb DC.EXAMPLE" in table_output
     assert sorted(share_hosts) == ["DC.EXAMPLE", "FAIL", "HOST", "NO-NULL"]
     assert any("FAIL" in entry and "share enumeration" in entry for entry in results._incomplete)
     finding = next(finding for finding in results._findings if finding.id == "SMB-003")
@@ -274,7 +275,7 @@ def test_ldap_anonymous_evidence_limits_results_and_marks_missing_rows(monkeypat
     assert "Anonymous evidence - DC\n\n$ nxc ldap" in text
     assert "Enumerated 12 domain users" in text
     assert "user09" in text and "user10" not in text
-    assert "2 additional row(s) omitted" in text
+    assert text.endswith("... 2 additional row(s) omitted.\n\n")
 
     output.seek(0)
     output.truncate()
@@ -285,6 +286,13 @@ def test_ldap_anonymous_evidence_limits_results_and_marks_missing_rows(monkeypat
     unauthenticated._show_anonymous_evidence(records, result, "ldap")
     assert "search denied" in output.getvalue()
     assert "No user or share rows confirmed" in output.getvalue()
+
+
+def test_missing_anonymous_evidence_leaves_space_after_table(monkeypatch):
+    output = io.StringIO()
+    monkeypatch.setattr(unauthenticated, "console", Console(file=output))
+    unauthenticated._show_anonymous_evidence([], [], "ldap")
+    assert output.getvalue() == "\n"
 
 
 def test_ldap_selects_one_sample_with_users_over_unconfirmed_results(monkeypatch):

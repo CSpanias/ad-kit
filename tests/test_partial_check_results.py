@@ -273,6 +273,37 @@ def test_privileged_finding_survives_later_subcheck_failure(monkeypatch, tmp_pat
     results.reset()
 
 
+def test_privileged_tables_are_separated(monkeypatch):
+    output = io.StringIO()
+    monkeypatch.setattr(privileged, "console", Console(file=output, width=160))
+    monkeypatch.setattr(privileged, "print_section", lambda _title: None)
+    monkeypatch.setattr(privileged, "progress", no_progress)
+    monkeypatch.setattr(privileged, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user", "domain": "example.test",
+    })
+    monkeypatch.setattr(privileged, "privileged_excessive_check", lambda *_args: ({
+        "groups": {
+            "Domain Admins": {"members": [], "member_count": 0, "percentage": 0},
+            "Enterprise Admins": {"members": [], "member_count": 0, "percentage": 0},
+        },
+        "admin_count": {"member_count": 0, "percentage": 0},
+    }, []))
+    monkeypatch.setattr(privileged, "builtin_accounts_check", lambda *_args: ({
+        "administrator": {"enabled": False, "account_name": "Administrator"},
+        "guest": {"enabled": False, "account_name": "Guest"},
+    }, []))
+    monkeypatch.setattr(privileged, "load_dc_hostnames", lambda: [])
+    monkeypatch.setattr(privileged, "dcsync_check", lambda *_args: ([], []))
+    monkeypatch.setattr(privileged, "record_findings", lambda _findings: None)
+
+    privileged.run_privileged_group_checks("secret")
+
+    text = output.getvalue()
+    assert text.count("┘\n\n") == 2
+    assert "Built-in Account Status" in text
+    assert "Unexpected DCSync Principals" in text
+
+
 def test_skipped_module_is_listed_in_report(monkeypatch, tmp_path):
     finding = Finding("SMB-001", "SMB", "Comment", "Fix")
     monkeypatch.setattr(check, "get_artefacts_dir", lambda: tmp_path)

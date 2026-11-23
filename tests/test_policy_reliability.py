@@ -70,6 +70,8 @@ def test_current_command_evidence_includes_cleanup_without_replaying(
     assert "standard-secret" not in text and "admin-secret" not in text
     assert "ffffffffffffffff" not in text
     assert "[REDACTED]" in text
+    assert text.count("\n\n$ ") == len(commands) - 1
+    assert text.endswith("\n\n")
 
 
 def test_maq_evidence_does_not_read_stale_files(monkeypatch, tmp_path):

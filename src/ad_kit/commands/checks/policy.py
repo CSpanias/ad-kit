@@ -434,6 +434,7 @@ def run_maq_checks(
         print_section("Machine Account Quota - Command Evidence")
         for record in evidence:
             console.print(format_check_evidence(record), markup=False, highlight=False)
+            console.print()
 
     generated_findings = []
 
@@ -595,6 +596,7 @@ def run_dns_checks(
         print_section("DNS Record Creation - Command Evidence")
         for record in evidence:
             console.print(format_check_evidence(record), markup=False, highlight=False)
+            console.print()
 
     record_findings(findings)
 

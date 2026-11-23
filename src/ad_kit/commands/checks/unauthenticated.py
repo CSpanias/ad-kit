@@ -115,6 +115,7 @@ def _show_anonymous_evidence(
                 break
 
     if sample is None:
+        console.print()
         return
     host, names, selected = sample
     console.print(f"\nAnonymous evidence - {host}\n", markup=False)
@@ -134,6 +135,7 @@ def _show_anonymous_evidence(
         console.print(
             format_check_evidence(record, excerpt), markup=False, highlight=False
         )
+        console.print()
 
 
 def run_ldap_checks() -> None:
@@ -205,6 +207,7 @@ def run_tombstone_checks(
     results = []
     findings = []
 
+    console.print()
     with progress("Checking Standard User access to deleted objects..."):
 
         for dc_ip in track_items(dc_ips, "Deleted-object domain controllers"):
