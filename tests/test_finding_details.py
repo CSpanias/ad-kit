@@ -9,6 +9,8 @@ from ad_kit.checks.ldap_info import is_sensitive_value
 from ad_kit.commands.checks import policy, privileged, unauthenticated
 from ad_kit.core.checks import CheckEvidence
 from ad_kit.core.exceptions import CheckExecutionError
+from ad_kit.reporting.html import render_html
+from ad_kit.reporting.markdown import format_finding_sections
 
 
 @pytest.mark.parametrize(
@@ -144,25 +146,41 @@ def test_coercion_shows_only_matching_redacted_example(monkeypatch, has_finding)
     monkeypatch.setattr(privileged, "record_findings", lambda *_args: None)
     monkeypatch.setattr(privileged, "require_session", lambda: {"standard_user": "user"})
     monkeypatch.setattr(privileged, "coercion_check", lambda *_args: {
-        "coercion_dcs": {"DC1": ["PetitPotam"]} if has_finding else {},
+        "coercion_dcs": {
+            "DC1": ["DFSCoerce", "MSEven", "PetitPotam", "WebDAV"], "DC2": ["other"],
+        } if has_finding else {},
         "spooler_dcs": [],
     })
 
     @contextmanager
     def evidence():
-        yield [CheckEvidence(
-            "coercion-plus", ["nxc", "-p", "***"],
-            "SMB 192.0.2.2 445 DC2 VULNERABLE, other\n"
-            "SMB 192.0.2.1 445 DC1 VULNERABLE, PetitPotam",
-            "",
-        )]
+        yield [
+            CheckEvidence(
+                "coercion-plus", ["nxc", "-p", "***", "-M", "coerce_plus"],
+                "SMB 192.0.2.1 445 DC1 VULNERABLE, DFSCoerce\n"
+                "SMB 192.0.2.2 445 DC2 VULNERABLE, other\n"
+                "SMB 192.0.2.1 445 DC1 VULNERABLE, MSEven\n"
+                "SMB 192.0.2.1 445 DC1 VULNERABLE, PetitPotam",
+                "",
+            ),
+            CheckEvidence(
+                "coercion-webdav", ["nxc", "-p", "***", "-M", "webdav"],
+                "SMB 192.0.2.1 445 DC1 WebClient Service enabled\n"
+                "SMB 192.0.2.2 445 DC2 WebClient Service enabled",
+                "",
+            ),
+        ]
 
     monkeypatch.setattr(privileged, "capture_check_evidence", evidence)
     privileged.run_coercion_checks("password")
     text = output.getvalue()
     assert ("Command Evidence" in text) is has_finding
     assert ("VULNERABLE, PetitPotam" in text) is has_finding
+    assert ("VULNERABLE, DFSCoerce" in text) is has_finding
+    assert ("VULNERABLE, MSEven" in text) is has_finding
+    assert ("DC1 WebClient Service enabled" in text) is has_finding
     assert "DC2 VULNERABLE" not in text
+    assert "DC2 WebClient Service enabled" not in text
     assert "password" not in text
 
 
@@ -187,6 +205,65 @@ def test_coercion_methods_are_shown_for_each_host(monkeypatch):
     assert "DCs with Print Spooler" not in output.getvalue()
     assert any("Print Spooler" in evidence and "DC3" in evidence
                for finding in recorded_findings for evidence in finding.evidence)
+    finding = recorded_findings[0]
+    markdown = format_finding_sections(finding)["Evidence"]
+    assert "The following Domain Controllers exposed" in markdown
+    assert "| Hostname | Coercion Methods |" in markdown
+    assert "| DC1 | PetitPotam, WebDAV |" in markdown
+    assert "| DC2 | DFSCoerce |" in markdown
+    assert "1. Domain Controller" not in markdown
+    html = render_html([finding])
+    assert "<th>Hostname</th><th>Coercion Methods</th>" in html
+    assert "<td>DC1</td><td>PetitPotam, WebDAV</td>" in html
+    assert "<td>DC2</td><td>DFSCoerce</td>" in html
+    assert "Print Spooler" in html
+
+
+def test_coercion_evidence_table_escapes_cells():
+    finding = privileged.load_finding("coercion", "COERCE-001")
+    finding.evidence_table = privileged.EvidenceTable(
+        "Detected methods:", ("Hostname", "Coercion Methods"), [("DC|1", "<method>")]
+    )
+    markdown = format_finding_sections(finding)["Evidence"]
+    assert r"| DC\|1 | &lt;method&gt; |" in markdown
+    html = render_html([finding])
+    assert "<td>DC|1</td><td>&lt;method&gt;</td>" in html
+
+
+def test_spooler_only_coercion_shows_matching_service_evidence(monkeypatch):
+    output = io.StringIO()
+    findings = []
+    monkeypatch.setattr(privileged, "console", Console(file=output, width=160))
+    monkeypatch.setattr(privileged, "print_section", lambda *_args: None)
+    monkeypatch.setattr(privileged, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(privileged, "record_findings", findings.extend)
+    monkeypatch.setattr(privileged, "require_session", lambda: {"standard_user": "user"})
+    monkeypatch.setattr(privileged, "coercion_check", lambda *_args: {
+        "coercion_dcs": {}, "spooler_dcs": ["DC1"],
+    })
+
+    @contextmanager
+    def evidence():
+        yield [CheckEvidence(
+            "coercion-spooler", ["nxc", "-M", "spooler"],
+            "SMB 192.0.2.1 445 DC1 Spooler service enabled\n"
+            "SMB 192.0.2.2 445 DC2 Spooler service enabled", "",
+        )]
+
+    monkeypatch.setattr(privileged, "capture_check_evidence", evidence)
+    privileged.run_coercion_checks("pw")
+    assert "DC1 Spooler service enabled" in output.getvalue()
+    assert "DC2 Spooler service enabled" not in output.getvalue()
+    assert findings[0].evidence_table is None
+    assert "DC1" in findings[0].evidence[0]
+
+
+def test_coercion_commentary_combines_explanation_and_examples():
+    finding = privileged.load_finding("coercion", "COERCE-001")
+    commentary = format_finding_sections(finding)["Commentary"]
+    assert (
+        "attacker-controlled systems. Techniques such as PrinterBug" in commentary
+    )
 
 
 @pytest.mark.parametrize("kind", ["local_admin", "adcs", "pre2k", "tombstone"])

@@ -26,7 +26,6 @@ COERCE-001:
     Authentication coercion techniques abuse legitimate Windows services and
     RPC interfaces to trigger outbound authentication requests to
     attacker-controlled systems.
-
     Techniques such as PrinterBug, PetitPotam, DFSCoerce, MSEven, and WebDAV
     may be used to coerce DCs into performing outbound authentication to 
     attacker-controlled endpoints. PrinterBug depends on the Print Spooler

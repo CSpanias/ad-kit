@@ -35,9 +35,10 @@ DFSCoerce, and MSEven), and whether the WebClient service is enabled
 The table lists affected Domain Controllers and the detected coercion methods
 for each host. Print Spooler status is assessed separately and included in the
 finding when enabled; it is not by itself proof of a coercion method. When a
-finding is present and matching output is available, one redacted command and
-matching result line are shown as an example; full evidence remains available
-on disk.
+finding is present and matching output is available, redacted commands and
+matching result lines are shown for one Domain Controller; full evidence
+remains available on disk. The finding evidence lists detected methods by
+hostname.
 
 ## How it works
 

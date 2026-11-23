@@ -53,7 +53,21 @@ def render_html(findings: list[Finding], incomplete: list[str] | None = None) ->
                     + _list_section("Affected Assets", finding.affected_assets)
                 )
             elif label == "Evidence":
-                body = _list_section("", finding.evidence, ordered=True)
+                body = ""
+                if finding.evidence_table:
+                    table = finding.evidence_table
+                    headers = "".join(f"<th>{escape(value)}</th>" for value in table.columns)
+                    rows = "".join(
+                        "<tr>" + "".join(f"<td>{escape(value)}</td>" for value in row) + "</tr>"
+                        for row in table.rows
+                    )
+                    body = (
+                        f"<p>{escape(table.introduction)}</p>"
+                        '<div class="table-container"><table>'
+                        f"<thead><tr>{headers}</tr></thead><tbody>{rows}</tbody>"
+                        "</table></div>"
+                    )
+                body += _list_section("", finding.evidence, ordered=True)
             else:
                 body = (
                     f'<div class="text">{escape(format_paragraphs(finding.remediation))}</div>'
@@ -116,6 +130,9 @@ def render_html(findings: list[Finding], incomplete: list[str] | None = None) ->
     .finding summary {{ cursor: pointer; font-weight: 650; }}
     .copy-controls {{ margin: .75rem 0; }}
     .text {{ white-space: pre-wrap; line-height: 1.55; }}
+    .table-container {{ overflow-x: auto; }}
+    table {{ border-collapse: collapse; width: 100%; }}
+    th, td {{ border: 1px solid #dce3ed; padding: .5rem; text-align: left; }}
     .status, #count, footer {{ color: #53647b; }}
     .copy-buffer {{ position: fixed; left: -9999px; top: 0; }}
     .incomplete {{

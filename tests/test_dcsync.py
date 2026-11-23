@@ -1,13 +1,11 @@
 import io
 from contextlib import nullcontext
-from types import SimpleNamespace
 
 import pytest
 from rich.console import Console
 
 from ad_kit.checks import dcsync
 from ad_kit.commands.checks import privileged
-from ad_kit.core import util
 from ad_kit.core.exceptions import ADKitError
 
 DOMAIN_SID = "S-1-5-21-1-2-3"
@@ -88,100 +86,29 @@ def test_dcsync_check_reports_unexpected_trustees_and_excludes_defaults(
     ]
 
 
-def test_expected_trustee_selection_is_saved_by_sid_and_can_be_edited(monkeypatch):
-    session = {"domain": "example.test"}
-    trustees = [
-        {
-            "name": "service", "sid": f"{DOMAIN_SID}-1001",
-            "rights": ["right"], "complete": True,
-        },
-        {"name": "other", "sid": f"{DOMAIN_SID}-1002", "rights": ["right"], "complete": True},
-        {"name": "partial", "sid": f"{DOMAIN_SID}-1003", "rights": ["right"], "complete": False},
-        {"name": "EXAMPLE\\msol_connector", "sid": f"{DOMAIN_SID}-1004",
-         "rights": ["right"], "complete": True},
-    ]
-    saved = []
-    choices_seen = []
-    selected = [f"{DOMAIN_SID}-1001"]
-    monkeypatch.setattr(privileged.sys, "stdin", SimpleNamespace(isatty=lambda: True))
-    monkeypatch.setattr(privileged, "save_session", lambda data: saved.append(dict(data)))
-
-    def checkbox(_message, *, choices):
-        choices_seen.append(choices)
-        return SimpleNamespace(ask=lambda: selected.copy())
-
-    monkeypatch.setattr(privileged.questionary, "checkbox", checkbox)
-    assert privileged._expected_dcsync_sids(session, trustees) == {f"{DOMAIN_SID}-1001"}
-    assert saved[-1]["expected_dcsync_sids"] == [f"{DOMAIN_SID}-1001"]
-    assert [choice.value for choice in choices_seen[0]] == [
-        f"{DOMAIN_SID}-1001", f"{DOMAIN_SID}-1002",
-    ]
-    assert all(not choice.checked for choice in choices_seen[0])
-
-    selected.clear()
-    assert privileged._expected_dcsync_sids(session, trustees) == set()
-    assert choices_seen[1][0].checked and not choices_seen[1][1].checked
-    assert saved[-1]["expected_dcsync_sids"] == []
-
-
-def test_hidden_selected_sids_remain_saved_without_appearing_in_prompt(monkeypatch):
-    session = {"expected_dcsync_sids": [f"{DOMAIN_SID}-1001", f"{DOMAIN_SID}-1002"]}
-    trustees = [
-        {"name": "partial", "sid": f"{DOMAIN_SID}-1001", "rights": [], "complete": False},
-        {"name": "MSOL_service", "sid": f"{DOMAIN_SID}-1002", "rights": [], "complete": True},
-        {"name": "review", "sid": f"{DOMAIN_SID}-1003", "rights": [], "complete": True},
-    ]
-    choices_seen = []
-    monkeypatch.setattr(privileged.sys, "stdin", SimpleNamespace(isatty=lambda: True))
-    monkeypatch.setattr(privileged, "save_session", lambda *_args: None)
-
-    def checkbox(_message, *, choices):
-        choices_seen.extend(choices)
-        return SimpleNamespace(ask=lambda: [])
-
-    monkeypatch.setattr(privileged.questionary, "checkbox", checkbox)
-    assert privileged._expected_dcsync_sids(session, trustees) == {
-        f"{DOMAIN_SID}-1001", f"{DOMAIN_SID}-1002",
-    }
-    assert [choice.value for choice in choices_seen] == [f"{DOMAIN_SID}-1003"]
-    assert session["expected_dcsync_sids"] == [f"{DOMAIN_SID}-1001", f"{DOMAIN_SID}-1002"]
-
-
-def test_expected_sids_apply_noninteractively_and_invalid_state_is_rejected(monkeypatch):
-    monkeypatch.setattr(privileged.sys, "stdin", SimpleNamespace(isatty=lambda: False))
+def test_saved_expected_sids_are_validated():
     assert privileged._expected_dcsync_sids(
-        {"expected_dcsync_sids": [f"{DOMAIN_SID.lower()}-1001"]}, []
+        {"expected_dcsync_sids": [f"{DOMAIN_SID.lower()}-1001"]}
     ) == {f"{DOMAIN_SID}-1001"}
     with pytest.raises(ADKitError, match="Invalid expected DCSync SID"):
-        privileged._expected_dcsync_sids({"expected_dcsync_sids": ["MSOL_example"]}, [])
-
-
-def test_selection_persists_in_assessment_session(monkeypatch, tmp_path):
-    session = {"domain": "example.test"}
-    trustee = {
-        "name": "service", "sid": f"{DOMAIN_SID}-1001",
-        "rights": ["right"], "complete": True,
-    }
-    monkeypatch.setattr(util, "ARTEFACTS_DIR", tmp_path)
-    monkeypatch.setattr(privileged.sys, "stdin", SimpleNamespace(isatty=lambda: True))
-    monkeypatch.setattr(
-        privileged.questionary, "checkbox",
-        lambda *_args, **_kwargs: SimpleNamespace(ask=lambda: [trustee["sid"]]),
-    )
-    privileged._expected_dcsync_sids(session, [trustee])
-    assert util.load_session()["expected_dcsync_sids"] == [trustee["sid"]]
-    monkeypatch.setattr(privileged.sys, "stdin", SimpleNamespace(isatty=lambda: False))
-    assert privileged._expected_dcsync_sids(util.load_session(), [trustee]) == {trustee["sid"]}
+        privileged._expected_dcsync_sids({"expected_dcsync_sids": ["MSOL_example"]})
 
 
 def test_no_finding_when_all_trustees_are_excluded():
     assert dcsync.dcsync_findings([]) == []
 
 
-def test_selected_sid_is_excluded_from_table_and_finding(monkeypatch):
+@pytest.mark.parametrize("unknown_count", [0, 1, 2])
+@pytest.mark.parametrize("cisco_complete", [False, True])
+def test_dcsync_output_and_findings(monkeypatch, unknown_count, cisco_complete):
     output = io.StringIO()
     findings = []
-    session = {"dc_ip": "dc", "domain": "example.test", "standard_user": "user"}
+    session = {
+        "dc_ip": "dc", "domain": "example.test", "standard_user": "user",
+        "expected_dcsync_sids": [
+            f"{DOMAIN_SID}-1001", f"{DOMAIN_SID}-1006", f"{DOMAIN_SID}-1010",
+        ],
+    }
     trustees = [
         {
             "name": "expected", "sid": f"{DOMAIN_SID}-1001",
@@ -192,9 +119,18 @@ def test_selected_sid_is_excluded_from_table_and_finding(monkeypatch):
         {"name": "EXAMPLE\\mSoL_connector", "sid": f"{DOMAIN_SID}-1004",
          "rights": ["right"], "complete": True},
         {"name": "msolother", "sid": f"{DOMAIN_SID}-1005", "rights": ["right"], "complete": True},
+        {"name": "Cisco_Connector", "sid": f"{DOMAIN_SID}-1006",
+         "rights": ["right"], "complete": cisco_complete},
+        {"name": "UNKNOWN", "sid": f"{DOMAIN_SID}-1007", "rights": ["right"], "complete": False},
     ]
+    trustees.extend(
+        {"name": "UNKNOWN", "sid": f"{DOMAIN_SID}-{1010 + i}",
+         "rights": ["right"], "complete": True}
+        for i in range(unknown_count)
+    )
     monkeypatch.setattr(privileged, "console", Console(file=output, width=160))
     monkeypatch.setattr(privileged, "print_section", lambda *_args: None)
+    monkeypatch.setattr(privileged, "print_info", lambda message: print(message, file=output))
     monkeypatch.setattr(privileged, "progress", lambda *_args: nullcontext())
     monkeypatch.setattr(privileged, "record_findings", findings.extend)
     monkeypatch.setattr(privileged, "require_session", lambda: session)
@@ -211,18 +147,23 @@ def test_selected_sid_is_excluded_from_table_and_finding(monkeypatch):
     }, []))
     monkeypatch.setattr(privileged, "load_dc_hostnames", lambda: [])
     monkeypatch.setattr(privileged, "dcsync_check", lambda *_args: trustees)
-    monkeypatch.setattr(
-        privileged, "_expected_dcsync_sids", lambda *_args: {f"{DOMAIN_SID}-1001"}
-    )
-
     privileged.run_privileged_group_checks("pw")
-    assert f"{DOMAIN_SID}-1001" not in output.getvalue()
-    assert "unexpected" in output.getvalue()
-    assert "partial" not in output.getvalue()
-    assert "mSoL_connector" not in output.getvalue()
-    assert "msolother" in output.getvalue()
+    text = output.getvalue()
+    assert f"{DOMAIN_SID}-1001" not in text
+    assert "unexpected" in text
+    assert "partial" not in text
+    assert "mSoL_connector" not in text
+    assert "msolother" in text
+    assert ("Cisco_Connector" in text) is cisco_complete
+    assert "Select confirmed expected" not in text
+    assert "UNKNOWN" not in text
+    assert ("unresolved trustee" in text) is (unknown_count > 0)
+    if unknown_count:
+        assert f"{unknown_count} unresolved" in text
     finding = next(finding for finding in findings if finding.id == "PRIV-005")
-    assert len(finding.evidence) == 2
+    assert len(finding.evidence) == 2 + unknown_count + int(cisco_complete)
     assert "unexpected" in finding.evidence[0]
     assert "msolother" in finding.evidence[1]
+    assert sum("UNKNOWN" in item for item in finding.evidence) == unknown_count
+    assert any("Cisco_Connector" in item for item in finding.evidence) is cisco_complete
     assert all("mSoL_connector" not in item and "partial" not in item for item in finding.evidence)

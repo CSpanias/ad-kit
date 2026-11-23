@@ -1,15 +1,11 @@
 import re
-import sys
 
-import questionary
-import typer
 from rich.table import Table
 
 from ad_kit.checks.adcs import SUPPORTED_ESC_CLASSES, adcs_check
 from ad_kit.checks.builtin_accounts import builtin_accounts_check
 from ad_kit.checks.coercion import coercion_check, extract_hostname
 from ad_kit.checks.dcsync import (
-    DCSyncTrustee,
     dcsync_check,
     dcsync_findings,
     is_msol_trustee,
@@ -23,66 +19,29 @@ from ad_kit.checks.privileged_excessive import (
     privileged_excessive_check,
 )
 from ad_kit.core.checks import (
+    CheckEvidence,
     capture_check_evidence,
     format_check_evidence,
     load_dc_hostnames,
 )
 from ad_kit.core.console import console, object_text, print_info, print_section
 from ad_kit.core.exceptions import ADKitError
+from ad_kit.core.finding import EvidenceTable
 from ad_kit.core.findings import load_finding, load_finding_definition
-from ad_kit.core.util import progress, require_session, save_session
+from ad_kit.core.util import progress, require_session
 from ad_kit.reporting.results import record_findings
 
 from .credentials import authenticate_standard_user
 
 
-def _expected_dcsync_sids(
-    session_data: dict, trustees: list[DCSyncTrustee]
-) -> set[str]:
+def _expected_dcsync_sids(session_data: dict) -> set[str]:
     saved = session_data.get("expected_dcsync_sids", [])
     if not isinstance(saved, list) or not all(
         isinstance(sid, str) and re.fullmatch(r"S-\d+(?:-\d+)+", sid, re.IGNORECASE)
         for sid in saved
     ):
         raise ADKitError("Invalid expected DCSync SID list in assessment session.")
-    expected = {sid.upper() for sid in saved}
-    eligible = [
-        trustee for trustee in trustees
-        if trustee["complete"] and not is_msol_trustee(trustee)
-    ]
-    if not sys.stdin.isatty():
-        if eligible and "expected_dcsync_sids" not in session_data:
-            print_info("Run interactively to select expected DCSync trustees.")
-        return expected
-
-    choices = [
-        questionary.Choice(
-            title=f"{trustee['name']} ({trustee['sid']})",
-            value=trustee["sid"].upper(),
-            checked=trustee["sid"].upper() in expected,
-        )
-        for trustee in eligible
-    ]
-    current_sids = {trustee["sid"].upper() for trustee in trustees}
-    hidden_sids = current_sids - {trustee["sid"].upper() for trustee in eligible}
-    choices.extend(
-        questionary.Choice(
-            title=f"{sid} (not currently observed)", value=sid, checked=True
-        )
-        for sid in sorted(expected - current_sids)
-    )
-    if not choices:
-        return expected
-    selected = questionary.checkbox(
-        "Select confirmed expected DCSync trustees (Space to select, Enter to confirm):",
-        choices=choices,
-    ).ask()
-    if selected is None:
-        raise typer.Abort()
-    selected = set(selected) | (expected & hidden_sids)
-    session_data["expected_dcsync_sids"] = sorted(selected)
-    save_session(session_data)
-    return selected
+    return {sid.upper() for sid in saved}
 
 
 def run_privileged_group_checks(
@@ -146,14 +105,26 @@ def run_privileged_group_checks(
             dc_hostnames,
         )
 
-    expected_dcsync_sids = _expected_dcsync_sids(session_data, dcsync_trustees)
+    expected_dcsync_sids = _expected_dcsync_sids(session_data)
     dcsync_trustees = [
         trustee for trustee in dcsync_trustees
         if trustee["complete"]
         and not is_msol_trustee(trustee)
-        and trustee["sid"].upper() not in expected_dcsync_sids
+        and (
+            trustee["name"].strip().casefold() == "unknown"
+            or trustee["name"].strip().rsplit("\\", 1)[-1].casefold() == "cisco_connector"
+            or trustee["sid"].upper() not in expected_dcsync_sids
+        )
     ]
     record_findings(dcsync_findings(dcsync_trustees))
+    unresolved = [
+        trustee for trustee in dcsync_trustees
+        if trustee["name"].strip().casefold() == "unknown"
+    ]
+    resolved = [
+        trustee for trustee in dcsync_trustees
+        if trustee["name"].strip().casefold() != "unknown"
+    ]
 
     table = Table()
 
@@ -221,18 +192,24 @@ def run_privileged_group_checks(
     dcsync_table.add_column("SID", style="green")
     dcsync_table.add_column("Replication Rights", style="yellow")
 
-    if dcsync_trustees:
-        for trustee in dcsync_trustees:
+    if resolved:
+        for trustee in resolved:
             dcsync_table.add_row(
                 trustee["name"],
                 trustee["sid"],
                 ", ".join(trustee["rights"]),
             )
     else:
-        dcsync_table.add_row("No unexpected trustees found", "", "")
+        dcsync_table.add_row("No resolved unexpected trustees found", "", "")
 
     console.print()
     console.print(dcsync_table)
+    if unresolved:
+        count = len(unresolved)
+        print_info(
+            f"{count} unresolved {'trustee has' if count == 1 else 'trustees have'} both "
+            "core DCSync rights. See the finding and raw evidence for their SIDs."
+        )
 
 def run_delegation_checks(
     std_pass: str | None = None,
@@ -585,12 +562,13 @@ def run_coercion_checks(
 
         finding = load_finding("coercion", "COERCE-001")
 
-        for host, techniques in (coercion_results["coercion_dcs"].items()):
-
-            finding.evidence.append(
-                f"Domain Controller `{host}` exposed the following "
-                "authentication coercion technique(s): "
-                f"{', '.join(techniques)}."
+        if coercible_dcs:
+            finding.evidence_table = EvidenceTable(
+                introduction=(
+                    "The following Domain Controllers exposed authentication coercion techniques:"
+                ),
+                columns=("Hostname", "Coercion Methods"),
+                rows=[(host, ", ".join(techniques)) for host, techniques in coercible_dcs.items()],
             )
 
         for dc in coercion_results["spooler_dcs"]:
@@ -603,25 +581,40 @@ def run_coercion_checks(
         findings.append(finding)
 
     if findings:
-        for name, marker, hosts in (
-            ("coercion-plus", "VULNERABLE,", coercion_results["coercion_dcs"]),
-            ("coercion-webdav", "WebClient Service enabled", coercion_results["coercion_dcs"]),
-            ("coercion-spooler", "Spooler service enabled", coercion_results["spooler_dcs"]),
+        matches: list[tuple[CheckEvidence, list[tuple[str, str]]]] = []
+        for name, marker in (
+            ("coercion-plus", "VULNERABLE,"),
+            ("coercion-webdav", "WebClient Service enabled"),
+            ("coercion-spooler", "Spooler service enabled"),
         ):
             record = next((item for item in evidence if item.name == name), None)
             if record is None:
                 continue
-            line = next(
-                (
-                    line for line in record.stdout.splitlines()
-                    if marker in line and extract_hostname(line) in hosts
-                ),
-                None,
-            )
-            if line:
-                print_section("Authentication Coercion - Command Evidence")
-                console.print(format_check_evidence(record, line), markup=False, highlight=False)
-                console.print()
-                break
+            lines = []
+            for line in record.stdout.splitlines():
+                if marker not in line or (host := extract_hostname(line)) is None:
+                    continue
+                if name == "coercion-plus":
+                    method = line.split(marker, 1)[1].strip()
+                    confirmed = method in coercible_dcs.get(host, [])
+                elif name == "coercion-webdav":
+                    confirmed = "WebDAV" in coercible_dcs.get(host, [])
+                else:
+                    confirmed = host in coercion_results["spooler_dcs"]
+                if confirmed:
+                    lines.append((host, line))
+            if lines:
+                matches.append((record, lines))
+
+        if matches:
+            sample_host = matches[0][1][0][0]
+            print_section("Authentication Coercion - Command Evidence")
+            for record, lines in matches:
+                sample = "\n".join(line for host, line in lines if host == sample_host)
+                if sample:
+                    console.print(
+                        format_check_evidence(record, sample), markup=False, highlight=False
+                    )
+                    console.print()
 
     record_findings(findings)

@@ -47,23 +47,26 @@ ad-kit:
   [`dacledit.py`](https://github.com/fortra/impacket/blob/master/examples/dacledit.py)
   to find non-default principals with DCSync-related replication rights.
 
-After the DCSync check, an interactive selection lets you mark verified
-trustees as expected. Selections are stored as SIDs in the current assessment
-session and can be changed on later interactive runs. Selected trustees are
-omitted from the unexpected-principals table and finding; other trustees
-remain visible. Noninteractive runs use saved selections without prompting.
+Previously saved expected trustee SIDs remain excluded for resolved trustees
+other than `Cisco_Connector`; the check no longer prompts for selections.
+Rerunning `ad-kit enum` creates a new session and resets those saved selections.
+Unresolved trustees with both core rights are counted in the console and
+retained in the finding with their SIDs, even if they were previously selected.
+An unresolved SID does not necessarily indicate a deleted account.
+
 Trustees named `MSOL_*` are automatically excluded. Microsoft Entra Connect
 express setup creates an `MSOL_`-prefixed AD DS Connector account, and password
 hash synchronisation requires both core replication rights. A name prefix
 alone does not verify an account's purpose; review the raw DACL evidence when
-that assumption is uncertain. Rerunning `ad-kit enum` creates a new session
-and resets manual selections.
+that assumption is uncertain.
 
-Only trustees with both core rights are shown in the selection, table and
-finding. Partial rights remain in the raw DACL evidence. This is not an
-effective-permissions calculation: permissions can also be inherited or
-combined through group membership, so hiding partial trustees can miss
-effective access.
+Only trustees with both core rights are included in the table or finding.
+Partial rights remain in the raw DACL evidence. Cisco's AD Connector requires
+Replicating Directory Changes but not Replicating Directory Changes All; an
+account such as `Cisco_Connector` is reported if it has both core rights.
+This is not an effective-permissions calculation: permissions can also be
+inherited or combined through group membership, so hiding partial trustees can
+miss effective access.
 
 ## How it works
 

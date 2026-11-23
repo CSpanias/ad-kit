@@ -10,6 +10,13 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class EvidenceTable:
+    introduction: str
+    columns: tuple[str, str]
+    rows: list[tuple[str, str]]
+
+
+@dataclass
 class Finding:
     """
     Represents a security finding identified during an
@@ -35,6 +42,9 @@ class Finding:
         references:
             External references and supporting
             documentation.
+
+        evidence_table:
+            Optional tabular evidence with an introduction.
     """
 
     id: str
@@ -46,3 +56,4 @@ class Finding:
     affected_assets: list[str] = field(default_factory=list)
     evidence: list[str] = field(default_factory=list)
     references: list[str] = field(default_factory=list)
+    evidence_table: EvidenceTable | None = None

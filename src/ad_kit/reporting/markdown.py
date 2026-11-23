@@ -70,11 +70,27 @@ def format_finding_sections(finding: Finding, *, heading_level: int = 1) -> dict
             ])
         sections["Commentary"] = "\n\n".join(part for part in parts if part)
 
-    if finding.evidence:
-        evidence = "\n".join(
-            f"{index}. {item}" for index, item in enumerate(finding.evidence, start=1)
-        )
-        sections["Evidence"] = f"{heading} Evidence\n\n{evidence}"
+    if finding.evidence or finding.evidence_table:
+        parts = [f"{heading} Evidence"]
+        if finding.evidence_table:
+            table = finding.evidence_table
+
+            def cell(value: str) -> str:
+                return (value.replace("\\", "\\\\").replace("|", "\\|")
+                        .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                        .replace("\r", " ").replace("\n", " "))
+
+            rows = [table.columns, ("---", "---"), *table.rows]
+            parts.extend([
+                table.introduction,
+                "\n".join("| " + " | ".join(cell(value) for value in row) + " |"
+                          for row in rows),
+            ])
+        if finding.evidence:
+            parts.append("\n".join(
+                f"{index}. {item}" for index, item in enumerate(finding.evidence, start=1)
+            ))
+        sections["Evidence"] = "\n\n".join(parts)
 
     if finding.remediation or finding.references:
         parts = [f"{heading} Remediation", format_paragraphs(finding.remediation)]
