@@ -16,8 +16,21 @@ from ad_kit.checks.ldap_info import is_sensitive_value
 from ad_kit.commands.checks import policy, privileged, unauthenticated
 from ad_kit.core.checks import CheckEvidence
 from ad_kit.core.exceptions import CheckExecutionError
+from ad_kit.core.finding import Finding
+from ad_kit.core.findings import format_counted_commentary
 from ad_kit.reporting.html import render_html
 from ad_kit.reporting.markdown import format_finding_sections
+
+
+@pytest.mark.parametrize(("count", "expected"), [
+    (0, "0"), (1, "one"), (2, "two"), (3, "three"), (4, "four"),
+    (5, "five"), (6, "six"), (7, "seven"), (8, "eight"), (9, "nine"), (10, "10"),
+])
+def test_finding_commentary_spells_out_small_counts(count, expected):
+    finding = Finding("TEST-001", "Example", "Found {count} {subject}.", "")
+    format_counted_commentary(finding, count, "system", "systems")
+    subject = "system" if count == 1 else "systems"
+    assert finding.commentary == f"Found {expected} {subject}."
 
 
 @pytest.mark.parametrize(
@@ -65,10 +78,10 @@ def test_kerberoast_parses_names_not_spns_and_ignores_other_output(monkeypatch, 
     assert result["accounts"] == ["SQL Service", "websvc"]
     assert result["account_count"] == 2
     assert [finding.id for finding in findings] == ["KERB-001", "KERB-002"]
-    assert "identified\n2 accounts associated" in findings[0].commentary
-    assert "identified 1\nprivileged account associated" in findings[1].commentary
-    assert "2 Kerberoastable accounts were identified." in findings[0].evidence[-1]
-    assert "1 privileged Kerberoastable account was identified." in findings[1].evidence[-1]
+    assert "identified\ntwo accounts associated" in findings[0].commentary
+    assert "identified one\nprivileged account associated" in findings[1].commentary
+    assert "two Kerberoastable accounts were identified." in findings[0].evidence[-1]
+    assert "one privileged Kerberoastable account was identified." in findings[1].evidence[-1]
     for finding in findings:
         assert "Service Principal Names (SPNs)" in finding.commentary
         assert all("Service Principal Name" not in entry for entry in finding.evidence)
@@ -106,18 +119,23 @@ def test_asreproast_finding_counts_use_correct_grammar(monkeypatch, tmp_path, co
     _, privileged_findings = asreproast.asreproast_privileged_check(
         "dc", result["accounts"], "user", "pw"
     )
-    assert f"{count} AS-REP roastable {phrase} identified." in findings[0].evidence[-1]
-    assert f"{count} privileged AS-REP roastable {phrase} identified." in (
+    count_word = {1: "one", 2: "two"}[count]
+    assert f"{count_word} AS-REP roastable {phrase} identified." in findings[0].evidence[-1]
+    assert f"{count_word} privileged AS-REP roastable {phrase} identified." in (
         privileged_findings[0].evidence[-1]
     )
-    assert f"A total of {count} {phrase.split()[0]} configured" in (
+    assert f"A total of {count_word} {phrase.split()[0]} configured" in (
         privileged_findings[0].commentary
     )
 
 
 @pytest.mark.parametrize("module", [password_not_required, password_never_expires])
-@pytest.mark.parametrize(("count", "noun"), [(1, "account"), (2, "accounts")])
-def test_password_account_commentary_uses_actual_count(monkeypatch, module, count, noun):
+@pytest.mark.parametrize(("count", "noun", "count_word"), [
+    (1, "account", "one"), (2, "accounts", "two"),
+])
+def test_password_account_commentary_uses_actual_count(
+    monkeypatch, module, count, noun, count_word
+):
     output = "\n".join(
         f"LDAP dc 389 DC User: user{i} Status: enabled" for i in range(count)
     )
@@ -127,15 +145,17 @@ def test_password_account_commentary_uses_actual_count(monkeypatch, module, coun
         if module is password_not_required else module.password_never_expires_check
     )
     _, findings = check("dc", "user", "password")
-    assert f"identified {count} {noun} with the" in findings[0].commentary
+    assert f"identified {count_word} {noun} with the" in findings[0].commentary
 
 
-@pytest.mark.parametrize(("count", "noun"), [(1, "account"), (2, "accounts")])
-def test_pre2k_commentary_counts_identified_accounts(monkeypatch, count, noun):
+@pytest.mark.parametrize(("count", "noun", "count_word"), [
+    (1, "account", "one"), (2, "accounts", "two"),
+])
+def test_pre2k_commentary_counts_identified_accounts(monkeypatch, count, noun, count_word):
     output = f"Found {count} pre-created computer accounts\nSuccessfully obtained TGT"
     monkeypatch.setattr(pre2k, "run_check", lambda *_args: output)
     _, findings = pre2k.pre2k_check("dc", "user", "password")
-    assert f"{count} pre-created computer\n{noun}" in findings[0].commentary
+    assert f"{count_word} pre-created computer\n{noun}" in findings[0].commentary
     assert "Ticket Granting Ticket (TGT)" in findings[0].commentary
     assert "A Kerberos TGT was successfully" in findings[0].evidence[-1]
 
@@ -177,7 +197,7 @@ def test_delegation_parses_enabled_accounts_from_netexec_table(monkeypatch):
         "protocol_transition": ["SQL Service"],
     }
     assert [finding.id for finding in findings] == ["DELEG-001", "DELEG-002", "DELEG-003"]
-    assert "1 privileged delegated account was identified." in findings[-1].evidence[-1]
+    assert "one privileged delegated account was identified." in findings[-1].evidence[-1]
 
 
 @pytest.mark.parametrize("output", [
@@ -340,7 +360,7 @@ def test_coercion_methods_are_shown_for_each_host(monkeypatch):
     assert any("Print Spooler" in evidence and "DC3" in evidence
                for finding in recorded_findings for evidence in finding.evidence)
     finding = recorded_findings[0]
-    assert "identified 3\nsystems exposing" in finding.commentary
+    assert "identified three\nsystems exposing" in finding.commentary
     markdown = format_finding_sections(finding)["Evidence"]
     assert "Domain Controller (DC)" in finding.commentary
     assert "The following DCs exposed" in markdown
@@ -392,7 +412,7 @@ def test_spooler_only_coercion_shows_matching_service_evidence(monkeypatch):
     assert "DC2 Spooler service enabled" not in output.getvalue()
     assert findings[0].evidence_table is None
     assert "DC1" in findings[0].evidence[0]
-    assert "identified 1\nsystem exposing" in findings[0].commentary
+    assert "identified one\nsystem exposing" in findings[0].commentary
 
 
 def test_coercion_commentary_combines_explanation_and_examples():
@@ -449,11 +469,11 @@ def test_other_checks_show_known_affected_objects(monkeypatch, kind):
         expected = "deleted-user"
     assert expected in output.getvalue()
     if kind == "local_admin":
-        assert "1\ndomain-joined system" in recorded_findings[0].commentary
-        assert "1 host permitted" in recorded_findings[0].evidence[-1]
+        assert "one\ndomain-joined system" in recorded_findings[0].commentary
+        assert "one host permitted" in recorded_findings[0].evidence[-1]
     if kind == "tombstone":
-        assert "on 1 Domain Controller" in recorded_findings[0].commentary
-        assert "1 deleted object on 'DC1'" in recorded_findings[0].evidence[0]
+        assert "on one Domain Controller" in recorded_findings[0].commentary
+        assert "one deleted object on 'DC1'" in recorded_findings[0].evidence[0]
 
 
 def test_privileged_summary_omits_member_list(monkeypatch):

@@ -12,7 +12,7 @@ from ad_kit.core.checks import run_check
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import format_counted_commentary, load_finding
 from ad_kit.core.privileged import get_privileged_users
-from ad_kit.core.util import count_form, get_artefacts_dir
+from ad_kit.core.util import count_form, count_text, get_artefacts_dir
 
 
 def _parse_asrep_account(
@@ -131,7 +131,7 @@ def asreproast_check(
             )
 
         finding.evidence.append(
-            f"A total of {results['account_count']} AS-REP roastable "
+            f"A total of {count_text(results['account_count'])} AS-REP roastable "
             f"{count_form(results['account_count'], 'account was', 'accounts were')} identified."
         )
 
@@ -180,7 +180,7 @@ def asreproast_privileged_check(
             )
 
         finding.evidence.append(
-            f"A total of {len(privileged_accounts)} privileged AS-REP "
+            f"A total of {count_text(len(privileged_accounts))} privileged AS-REP "
             f"roastable {count_form(len(privileged_accounts), 'account was', 'accounts were')} "
             "identified."
         )

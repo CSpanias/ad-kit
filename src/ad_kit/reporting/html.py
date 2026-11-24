@@ -6,6 +6,7 @@ from pathlib import Path
 
 from ad_kit.core.finding import Finding
 from ad_kit.core.util import count_form
+from ad_kit.reporting.introductions import group_findings, group_introduction, group_title
 from ad_kit.reporting.markdown import format_finding_sections, format_findings, format_paragraphs
 
 
@@ -41,65 +42,78 @@ def _references_section(references: list[str]) -> str:
     return f"<h3>References</h3><ul>{''.join(entries)}</ul>"
 
 
+def _render_finding(finding: Finding) -> str:
+    sections = format_finding_sections(finding)
+    details = []
+    for label, markdown in sections.items():
+        if label == "Commentary":
+            body = (
+                f'<div class="text">{escape(format_paragraphs(finding.commentary))}</div>'
+                + (
+                    f'<p><strong>Note:</strong> '
+                    f'{escape(format_paragraphs(finding.commentary_note))}</p>'
+                    if finding.commentary_note else ""
+                )
+                + (
+                    _list_section("Affected Assets", finding.affected_assets)
+                    if finding.show_affected_assets else ""
+                )
+            )
+        elif label == "Evidence":
+            body = (
+                f"<p>{escape(finding.evidence_introduction)}</p>"
+                if finding.evidence_introduction else ""
+            )
+            if finding.evidence_table:
+                table = finding.evidence_table
+                headers = "".join(f"<th>{escape(value)}</th>" for value in table.columns)
+                rows = "".join(
+                    "<tr>" + "".join(f"<td>{escape(value)}</td>" for value in row) + "</tr>"
+                    for row in table.rows
+                )
+                body += (
+                    f"<p>{escape(table.introduction)}</p>"
+                    '<div class="table-container"><table>'
+                    f"<thead><tr>{headers}</tr></thead><tbody>{rows}</tbody>"
+                    "</table></div>"
+                )
+            body += _list_section("", finding.evidence, ordered=True)
+        else:
+            body = (
+                f'<div class="text">{escape(format_paragraphs(finding.remediation))}</div>'
+                + _references_section(finding.references)
+            )
+        markdown = markdown.partition("\n\n")[2]
+        details.append(
+            f"<details><summary>{label}</summary>"
+            + _copy_controls(markdown, label)
+            + body
+            + "</details>"
+        )
+    return (
+        '<article class="finding">'
+        f"<h2>{escape(finding.id)} - {escape(finding.title)}</h2>"
+        + _copy_controls(format_findings([finding]), "finding")
+        + "".join(details)
+        + "</article>"
+    )
+
+
 def render_html(findings: list[Finding], incomplete: list[str] | None = None) -> str:
     """Render the complete report without external assets or network access."""
-    cards = []
-    for finding in findings:
-        sections = format_finding_sections(finding)
-        details = []
-        for label, markdown in sections.items():
-            if label == "Commentary":
-                body = (
-                    f'<div class="text">{escape(format_paragraphs(finding.commentary))}</div>'
-                    + (
-                        f'<p><strong>Note:</strong> '
-                        f'{escape(format_paragraphs(finding.commentary_note))}</p>'
-                        if finding.commentary_note else ""
-                    )
-                    + (
-                        _list_section("Affected Assets", finding.affected_assets)
-                        if finding.show_affected_assets else ""
-                    )
-                )
-            elif label == "Evidence":
-                body = (
-                    f"<p>{escape(finding.evidence_introduction)}</p>"
-                    if finding.evidence_introduction else ""
-                )
-                if finding.evidence_table:
-                    table = finding.evidence_table
-                    headers = "".join(f"<th>{escape(value)}</th>" for value in table.columns)
-                    rows = "".join(
-                        "<tr>" + "".join(f"<td>{escape(value)}</td>" for value in row) + "</tr>"
-                        for row in table.rows
-                    )
-                    body += (
-                        f"<p>{escape(table.introduction)}</p>"
-                        '<div class="table-container"><table>'
-                        f"<thead><tr>{headers}</tr></thead><tbody>{rows}</tbody>"
-                        "</table></div>"
-                    )
-                body += _list_section("", finding.evidence, ordered=True)
-            else:
-                body = (
-                    f'<div class="text">{escape(format_paragraphs(finding.remediation))}</div>'
-                    + _references_section(finding.references)
-                )
-            markdown = markdown.partition("\n\n")[2]
-            details.append(
-                f"<details><summary>{label}</summary>"
-                + _copy_controls(markdown, label)
-                + body
-                + "</details>"
+    content_parts = []
+    for topic, group in group_findings(findings):
+        if len(group) > 1:
+            introduction = group_introduction(topic, group)
+            title = escape(group_title(topic))
+            content_parts.append(
+                '<section class="group-introduction">'
+                f"<h2>{title} overview</h2>"
+                + _copy_controls(introduction, f"{title} overview")
+                + f'<div class="text">{escape(introduction)}</div></section>'
             )
-        cards.append(
-            '<article class="finding">'
-            f"<h2>{escape(finding.id)} - {escape(finding.title)}</h2>"
-            + _copy_controls(format_findings([finding]), "finding")
-            + "".join(details)
-            + "</article>"
-        )
-    content = "\n".join(cards) or '<p class="empty">No findings were generated.</p>'
+        content_parts.extend(_render_finding(finding) for finding in group)
+    content = "\n".join(content_parts) or '<p class="empty">No findings were generated.</p>'
     finding_label = count_form(len(findings), "finding", "findings")
     incomplete_section = (
         '<details class="incomplete">'
@@ -135,6 +149,11 @@ def render_html(findings: list[Finding], incomplete: list[str] | None = None) ->
       background: white; border: 1px solid #dce3ed; border-left: 5px solid #607d9d;
       border-radius: .6rem; margin: 1rem 0; padding: 1rem; overflow-wrap: anywhere;
     }}
+    .group-introduction {{
+      background: white; border: 1px solid #dce3ed; border-radius: .6rem;
+      margin: 1rem 0; padding: 1rem; overflow-wrap: anywhere;
+    }}
+    .group-introduction h2 {{ margin-top: 0; }}
     .finding h2 {{ margin-top: 0; }}
     .finding h3 {{ margin-bottom: .4rem; }}
     .finding details {{
@@ -168,9 +187,11 @@ def render_html(findings: list[Finding], incomplete: list[str] | None = None) ->
   </main>
   <script>
     const cards = [...document.querySelectorAll(".finding")];
+    const introductions = [...document.querySelectorAll(".group-introduction")];
     const search = document.getElementById("search");
     search.addEventListener("input", () => {{
       const query = search.value.trim().toLowerCase();
+      for (const introduction of introductions) introduction.hidden = Boolean(query);
       let visible = 0;
       for (const card of cards) {{
         card.hidden = !card.textContent.toLowerCase().includes(query);

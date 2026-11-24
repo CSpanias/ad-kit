@@ -186,6 +186,7 @@ def test_share_table_and_finding_only_include_write_related_permissions(monkeypa
             {"name": "SYSVOL", "permissions": ("READ",)},
             {"name": "Writable", "permissions": ("READ", "WRITE")},
             {"name": "Shared", "permissions": ("READ", "WRITE")},
+            {"name": "Reversed", "permissions": ("WRITE", "READ")},
             {"name": "ACL", "permissions": ("READ", "WRITE (ACL)")},
         ],
         "host-B": [
@@ -218,10 +219,9 @@ def test_share_table_and_finding_only_include_write_related_permissions(monkeypa
     assert "identified multiple Server Message Block (SMB) shares" in finding.commentary
     assert "access control list (ACL)" in markdown.format_paragraphs(finding.commentary)
     assert finding.evidence_table is not None
-    assert finding.evidence_table.columns == ("Hostname or IP address", "Share", "Permissions")
+    assert finding.evidence_table.columns == ("Hostname or IP address", "Share(s)", "Permissions")
     assert finding.evidence_table.rows == [
-        ("host-A", "Writable", "READ, WRITE"),
-        ("host-A", "Shared", "READ, WRITE"),
+        ("host-A", "Writable, Shared, Reversed", "READ, WRITE"),
         ("host-A", "ACL", "READ, WRITE (ACL)"),
         ("host-B", "IPC$", "READ, WRITE"),
         ("host-B", "print$", "WRITE (SUBDIR)"),
@@ -230,12 +230,14 @@ def test_share_table_and_finding_only_include_write_related_permissions(monkeypa
     rendered = markdown.format_findings([finding])
     assert "Affected Assets" not in rendered
     assert "**Note:** The check does not create or modify files." in rendered
-    assert "| Hostname or IP address | Share | Permissions |" in rendered
+    assert "| Hostname or IP address | Share(s) | Permissions |" in rendered
     assert "| --- | --- | --- |" in rendered
+    assert "| host-A | Writable, Shared, Reversed | READ, WRITE |" in rendered
     assert "| host-B | print$ | WRITE (SUBDIR) |" in rendered
     report = html.render_html([finding])
     assert "<strong>Note:</strong>" in report
-    assert "<th>Hostname or IP address</th><th>Share</th><th>Permissions</th>" in report
+    assert "<th>Hostname or IP address</th><th>Share(s)</th><th>Permissions</th>" in report
+    assert "<td>Writable, Shared, Reversed</td>" in report
     assert "Affected Assets" not in report
     json.reset()
     json.collect([finding])

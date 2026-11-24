@@ -74,5 +74,5 @@ def test_adcs_commentary_counts_unique_templates(monkeypatch):
     monkeypatch.setattr(adcs, "load_finding", load_finding)
     _, findings = adcs.adcs_check("dc", "example.test", "user", "password")
     by_id = {finding.id: finding for finding in findings}
-    assert "2 certificate templates vulnerable" in by_id["ADCS-ESC1"].commentary
-    assert "1 certificate template vulnerable" in by_id["ADCS-ESC15"].commentary
+    assert "two certificate templates vulnerable" in by_id["ADCS-ESC1"].commentary
+    assert "one certificate template vulnerable" in by_id["ADCS-ESC15"].commentary

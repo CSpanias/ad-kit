@@ -74,7 +74,7 @@ def format_finding_sections(finding: Finding, *, heading_level: int = 1) -> dict
             ])
         sections["Commentary"] = "\n\n".join(part for part in parts if part)
 
-    if finding.evidence or finding.evidence_table:
+    if finding.show_evidence and (finding.evidence or finding.evidence_table):
         parts = [f"{heading} Evidence"]
         if finding.evidence_introduction:
             parts.append(finding.evidence_introduction)

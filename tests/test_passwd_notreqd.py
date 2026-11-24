@@ -48,7 +48,7 @@ LDAP 192.168.239.130 389 MOLLYSEC-DC01 User: Guest Status: disabled
         "account_count": 3,
     }
     assert [finding.id for finding in findings] == ["PASS-002"]
-    assert findings[0].evidence[0].startswith("A total of 3 enabled user accounts have")
+    assert findings[0].evidence[0].startswith("A total of three enabled user accounts have")
     assert loaded_findings == ["PASS-002"]
 
 
@@ -112,5 +112,5 @@ LDAP 192.168.239.130 389 MOLLYSEC-DC01 User: GAVIN_HEAD Status: enabled
     }
     assert [finding.id for finding in findings] == ["PASS-002"]
     assert findings[0].evidence[0].startswith(
-        "A total of 1 enabled user account has the PASSWD_NOTREQD flag set"
+        "A total of one enabled user account has the PASSWD_NOTREQD flag set"
     )

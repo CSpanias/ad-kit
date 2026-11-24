@@ -34,6 +34,12 @@ def count_form(count: int, singular: str, plural: str) -> str:
     return singular if count == 1 else plural
 
 
+def count_text(count: int) -> str:
+    """Spell out small counts in report prose."""
+    words = ("one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
+    return words[count - 1] if 1 <= count <= len(words) else str(count)
+
+
 def require_collected_data(session_data: dict, key: str, label: str) -> None:
     if session_data.get(key) is not True:
         raise ADKitError(

@@ -42,6 +42,9 @@ class Finding:
         show_affected_assets:
             Whether the affected asset list is displayed in reports.
 
+        show_evidence:
+            Whether the evidence section is displayed in reports.
+
         commentary_note:
             Optional note displayed after the commentary.
 
@@ -69,3 +72,4 @@ class Finding:
     evidence_introduction: str = ""
     show_affected_assets: bool = True
     commentary_note: str = ""
+    show_evidence: bool = True

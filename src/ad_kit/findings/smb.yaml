@@ -63,8 +63,7 @@ SMB-002:
     lacks security protections available in SMB version 2 (SMBv2) and version 3
     (SMBv3), and implementations have been affected by vulnerabilities that
     can permit information disclosure, denial of service, or remote code
-    execution. SMBv1 vulnerabilities were exploited in the WannaCry and
-    NotPetya malware campaigns.
+    execution.
 
     Continued availability of SMBv1 increases the attack surface, particularly
     on unpatched or unsupported systems. Its presence may also indicate a
@@ -99,11 +98,18 @@ SMB-003:
 
   commentary: |
     A Server Message Block (SMB) null session is a connection established without an
-    authenticated user identity. Depending on server configuration, a connection using
-    empty credentials may instead be mapped to the Guest account.
+    authenticated user identity. Historically, anonymous SMB connections have been
+    used to access certain services and information without supplying credentials.
+    Depending on server configuration, a connection using empty credentials may
+    instead be mapped to the Guest account.
 
-    If enumeration is permitted, an unauthenticated user may obtain account or share
-    information that can help identify targets and plan further attacks.
+    When enumeration is permitted, an unauthenticated user may obtain account or
+    share names and other information about the environment. Account information
+    can reveal naming conventions and potential targets for password guessing,
+    while share names may indicate the purpose or location of network resources.
+    These details can help an attacker build a picture of the environment and
+    plan further attacks, although their usefulness depends on the information
+    exposed and other security controls in place.
 
     During the assessment, {session_description} allowed enumeration of
     {enumerated_information} on {count} {subject}.{share_access_caveat}

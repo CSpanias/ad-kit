@@ -47,26 +47,31 @@ ad-kit records:
   on Domain Controllers, when enumeration succeeds.
 - **Share access** - readable and write-related share permissions reported for
   the Standard User without writing any files. Only write-related permissions
-  generate a finding. Its evidence table lists each affected host, share and
-  reported permissions; write-related permissions alone do not prove direct
-  file-write access.
+  generate a finding. Its evidence table groups shares by host and reported
+  permissions; write-related permissions alone do not prove direct file-write
+  access.
 
 The signing, SMBv1, and anonymous checks are unauthenticated. The
 share-access checks use the Standard User account and are prompted only when
 needed.
 
-The host configuration table shows counts for signing and SMBv1 instead of
-individual hosts. Unknown counts include hosts without usable results. Its
-empty-credential enumeration counts distinguish **Permitted** from **Guest**
-and **Denied / unverified**. The DC table uses the same enumeration status.
+The host configuration table summarises signing, SMBv1, and anonymous
+enumeration counts in one row each. Unknown counts include hosts without usable
+results. A separate Guest column appears when enumeration succeeds through a
+Guest-mapped session.
+
+Both tables report anonymous enumeration as **Enabled** when share names or
+users are observed, **Guest** when those results are obtained through a
+Guest-mapped session, and **Disabled** when empty-credential authentication is
+denied or all attempted enumerations complete without returning objects.
+Inconclusive results are **Unknown**. User enumeration is attempted only on
+DCs. The DC table includes share and user count columns only when the
+corresponding objects are observed on at least one DC. This status describes
+enumeration results, not whether a null session was established.
 The SMB signing and SMBv1 findings summarise the number of affected systems,
 including the number of Domain Controllers where applicable, rather than
 listing each host. Raw per-host command output remains in the evidence
 directory.
-Enumeration is verified when a share or user listing completes, even if it is
-empty, or when partial user results contain observed accounts. **Denied /
-unverified** includes explicit authentication denials as well as errors and
-other inconclusive results; it does not prove that access was denied.
 Incomplete checks are also recorded in the HTML report. Enumeration counts
 reflect objects reported by NetExec, not whether shares are readable.
 Partially returned account counts are marked as incomplete.
@@ -74,8 +79,9 @@ The anonymous-enumeration finding describes share names, user account
 information, or both according to the objects actually observed across hosts.
 It notes that enumeration does not prove access to share contents only when
 share names were observed. Its commentary summarises the number of affected
-systems and distinguishes null and Guest-mapped sessions; host details remain
-in the finding evidence rather than a separate affected-assets list.
+systems and distinguishes null and Guest-mapped sessions. Its affected-assets
+and evidence sections are omitted from the report; raw per-host command output
+remains in the evidence directory.
 
 For confirmed anonymous-enumeration findings, the console displays one current-run sample:
 up to ten anonymous user rows from a Domain Controller where available,

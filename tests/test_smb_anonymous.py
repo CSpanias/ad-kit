@@ -84,14 +84,12 @@ def test_smb_scopes_anonymous_users_and_displays_enumeration_status(monkeypatch,
         "SMB Checks - Hosts", 1
     )[0]
     host_section = table_output.split("SMB Checks - Hosts", 1)[1]
-    assert "Empty-Credential Enumeration" in dc_section
-    assert "Empty-Credential Enumeration" in host_section
-    assert any("DC.EXAMPLE" in line and "Permitted" in line for line in dc_section.splitlines())
+    assert "Anonymous Enumeration" in dc_section
+    assert "Anonymous Enumeration" in host_section
+    assert any("DC.EXAMPLE" in line and "Enabled" in line for line in dc_section.splitlines())
     assert "NO-NULL" not in host_section
-    assert re.search(r"Empty-Credential Enumeration\s+│\s+Permitted\s+│\s+1", host_section)
-    assert re.search(
-        r"Empty-Credential Enumeration\s+│\s+Denied / unverified\s+│\s+2", host_section
-    )
+    assert re.search(r"Anonymous Enumeration\s+│\s+1\s+│\s+1\s+│\s+1\s+│", host_section)
+    assert "Guest" not in host_section
     assert "Anon Users" not in host_section
     assert "Not attempted" not in table_output
     assert table_output.count("Anonymous evidence - ") == 1
@@ -100,10 +98,84 @@ def test_smb_scopes_anonymous_users_and_displays_enumeration_status(monkeypatch,
     assert sorted(share_hosts) == ["DC.EXAMPLE", "FAIL", "HOST", "NO-NULL"]
     assert any("FAIL" in entry and "share enumeration" in entry for entry in results._incomplete)
     finding = next(finding for finding in results._findings if finding.id == "SMB-003")
-    assert any("DC.EXAMPLE" in entry and "1 account," in entry for entry in finding.evidence)
-    assert any("DC.EXAMPLE" in entry and "1 share." in entry for entry in finding.evidence)
+    assert any("DC.EXAMPLE" in entry and "one account," in entry for entry in finding.evidence)
+    assert any("DC.EXAMPLE" in entry and "one share." in entry for entry in finding.evidence)
     assert not any("'HOST'" in entry and "account" in entry for entry in finding.evidence)
     results.reset()
+
+
+@pytest.mark.parametrize(("observations", "expected_columns", "statuses"), [
+    ([(0, 0, True, False, False)], [], ["Disabled"]),
+    ([(0, 0, True, True, False)], [], ["Disabled"]),
+    ([(None, None, False, False, False)], [], ["Disabled"]),
+    ([(0, 2, True, True, False)], ["Anon Users"], ["Enabled"]),
+    ([(3, 0, True, True, False)], ["Anon Shares"], ["Enabled"]),
+    ([(3, 2, True, True, False)], ["Anon Shares", "Anon Users"], ["Enabled"]),
+    ([(0, 2, True, True, False), (3, 0, True, True, False)],
+     ["Anon Shares", "Anon Users"], ["Enabled", "Enabled"]),
+    ([(None, None, False, True, False)], [], ["Unknown"]),
+    ([(None, None, False, None, False)], [], ["Unknown"]),
+    ([(0, None, False, True, False)], [], ["Unknown"]),
+    ([(None, 2, False, True, False)], ["Anon Users"], ["Enabled"]),
+    ([(2, None, False, None, True)], ["Anon Shares"], ["Guest"]),
+    ([(0, 0, True, None, True)], [], ["Disabled"]),
+])
+def test_dc_table_only_shows_observed_enumeration_columns(
+    monkeypatch, tmp_path, observations, expected_columns, statuses
+):
+    results.reset()
+    output = io.StringIO()
+    monkeypatch.setattr(unauthenticated, "console", Console(file=output, width=200))
+    monkeypatch.setattr(unauthenticated, "print_section", lambda title: print(title, file=output))
+    monkeypatch.setattr(unauthenticated, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(unauthenticated, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "", "domain_computers_exported": True,
+    })
+    hosts = [f"DC{i}" for i in range(len(observations))]
+    monkeypatch.setattr(unauthenticated, "load_domain_computers", lambda: hosts)
+    monkeypatch.setattr(unauthenticated, "load_dc_hostnames", lambda: hosts)
+    monkeypatch.setattr(unauthenticated, "get_artefacts_dir", lambda: tmp_path)
+
+    def configuration(host, _dc, *, enumerate_users):
+        shares, users, complete, null_auth, guest = observations[int(host[2:])]
+        return {
+            "host": host, "signing": "[green]✓ Enabled[/green]",
+            "smbv1": "[green]✓ Disabled[/green]", "null_auth": null_auth,
+            "guest_auth": guest, "anonymous_shares": shares, "anonymous_users": users,
+            "anonymous_users_complete": complete, "anonymous_incomplete": [],
+        }
+
+    monkeypatch.setattr(unauthenticated, "smb_configuration_check", configuration)
+    unauthenticated.run_smb_checks()
+    table = output.getvalue().split("SMB Checks - Domain Controllers", 1)[1].split(
+        "SMB Checks - Hosts", 1
+    )[0]
+    assert "Anonymous Enumeration" in table
+    for column in ("Anon Shares", "Anon Users"):
+        assert (column in table) == (column in expected_columns)
+    for host, status, (shares, users, *_rest) in zip(hosts, statuses, observations):
+        row = next(line for line in table.splitlines() if host in line)
+        assert status in row
+        cells = [cell.strip() for cell in row.split("│")[1:-1]]
+        counts = cells[4:]
+        expected_counts = [
+            count for column, count in (("Anon Shares", shares), ("Anon Users", users))
+            if column in expected_columns
+        ]
+        assert len(counts) == len(expected_counts)
+        for cell, count in zip(counts, expected_counts):
+            if count is not None:
+                assert re.search(rf"\b{count}\b", cell)
+    results.reset()
+
+
+def test_dc_enumeration_is_unknown_when_empty_results_are_incomplete():
+    result = {
+        "null_auth": True, "guest_auth": False, "anonymous_shares": 0,
+        "anonymous_users": 0, "anonymous_users_complete": True,
+        "anonymous_incomplete": ["Share enumeration reported an error"],
+    }
+    assert unauthenticated._anonymous_enumeration_status(result, enumerate_users=True) == "Unknown"
 
 
 def test_anonymous_counts_require_evidence_of_completion():
@@ -234,19 +306,14 @@ def test_smb_host_summary_counts_verified_and_incomplete_results(monkeypatch, tm
     summary = output.getvalue().split("SMB Checks - Hosts", 1)[1].split(
         "SMB Checks - Share Access", 1
     )[0]
-    for label, status, count in [
-        ("SMB Signing", "Enabled", 5),
-        ("SMB Signing", "Disabled", 1),
-        ("SMB Signing", "Unknown", 2),
-        ("SMBv1", "Enabled", 1),
-        ("SMBv1", "Disabled", 6),
-        ("SMBv1", "Unknown", 1),
-        ("Empty-Credential Enumeration", "Permitted", 2),
-        ("Empty-Credential Enumeration", "Guest", 1),
-        ("Empty-Credential Enumeration", "Denied / unverified", 5),
+    for label, enabled, disabled, unknown, guest in [
+        ("SMB Signing", 5, 1, 2, "-"),
+        ("SMBv1", 1, 6, 1, "-"),
+        ("Anonymous Enumeration", 1, 2, 4, "1"),
     ]:
         assert re.search(
-            rf"{re.escape(label)}\s+│\s+{re.escape(status)}\s+│\s+{count}\s+│",
+            rf"{re.escape(label)}\s+│\s+{enabled}\s+│\s+{disabled}\s+│"
+            rf"\s+{unknown}\s+│\s+{guest}\s+│",
             summary,
         )
     assert any("SMB configuration - F" in entry for entry in results._incomplete)
@@ -258,18 +325,20 @@ def test_smb_host_summary_counts_verified_and_incomplete_results(monkeypatch, tm
 
 @pytest.mark.parametrize(("unsigned", "controllers", "expected"), [
     ([], ["DC"], None),
-    (["HOST"], [], "1 system did not require SMB signing."),
-    (["HOST", "SERVER"], [], "2 systems did not require SMB signing."),
+    (["HOST"], [], "one system did not require SMB signing."),
+    (["HOST", "SERVER"], [], "two systems did not require SMB signing."),
     (
         ["HOST", "DC."],
         ["dc"],
-        "2 systems, including 1 domain controller, did not require SMB signing.",
+        "two systems, including one domain controller, did not require SMB signing.",
     ),
     (
         ["DC1", "DC2", "HOST"],
         ["dc1.", "dc2"],
-        "3 systems, including 2 domain controllers, did not require SMB signing.",
+        "three systems, including two domain controllers, did not require SMB signing.",
     ),
+    ([f"HOST{i}" for i in range(9)], [], "nine systems did not require SMB signing."),
+    ([f"HOST{i}" for i in range(10)], [], "10 systems did not require SMB signing."),
 ])
 def test_smb_signing_finding_summarises_affected_systems(
     monkeypatch, tmp_path, unsigned, controllers, expected
@@ -309,17 +378,22 @@ def test_smb_signing_finding_summarises_affected_systems(
 
 @pytest.mark.parametrize(("enabled", "controllers", "expected"), [
     ([], ["DC"], None),
-    (["HOST"], [], "1 system had SMBv1 enabled."),
-    (["HOST", "SERVER"], [], "2 systems had SMBv1 enabled."),
+    (["HOST"], [], "one system had SMBv1 enabled."),
+    (["HOST", "SERVER"], [], "two systems had SMBv1 enabled."),
     (
         ["HOST", "DC."],
         ["dc"],
-        "2 systems, including 1 domain controller, had SMBv1 enabled.",
+        "two systems, including one domain controller, had SMBv1 enabled.",
     ),
     (
         ["DC1", "DC2", "HOST"],
         ["dc1.", "dc2"],
-        "3 systems, including 2 domain controllers, had SMBv1 enabled.",
+        "three systems, including two domain controllers, had SMBv1 enabled.",
+    ),
+    (
+        ["HOST", "DC1", "DC2", "DC3", "DC4"],
+        ["DC1", "DC2"],
+        "five systems, including two domain controllers, had SMBv1 enabled.",
     ),
 ])
 def test_smbv1_finding_summarises_affected_systems(
@@ -376,26 +450,28 @@ def test_smb_partial_share_results_are_retained_and_marked_incomplete(monkeypatc
     result = smb.smb_configuration_check("host", "dc")
     assert result["anonymous_shares"] == 1
     assert result["anonymous_incomplete"] == ["Share enumeration reported an error; see evidence"]
-    assert unauthenticated._verified_enumeration_status(result) == "Permitted"
+    assert unauthenticated._anonymous_enumeration_status(result, enumerate_users=False) == "Enabled"
 
 
 @pytest.mark.parametrize(("shares", "users", "complete", "guest", "expected"), [
-    (None, None, False, False, "Denied / unverified"),
-    (0, None, False, False, "Permitted"),
-    (None, 1, False, False, "Permitted"),
-    (None, 0, False, False, "Denied / unverified"),
-    (None, 0, True, False, "Permitted"),
-    (0, None, False, True, "Guest"),
-    (None, None, False, True, "Denied / unverified"),
+    (None, None, False, False, "Unknown"),
+    (0, None, False, False, "Unknown"),
+    (None, 1, False, False, "Enabled"),
+    (None, 0, False, False, "Unknown"),
+    (0, 0, True, False, "Disabled"),
+    (1, None, False, True, "Guest"),
+    (None, None, False, True, "Unknown"),
 ])
-def test_verified_enumeration_distinguishes_complete_partial_and_guest(
+def test_anonymous_enumeration_distinguishes_complete_partial_and_guest(
     shares, users, complete, guest, expected
 ):
     result = {
         "anonymous_shares": shares, "anonymous_users": users,
-        "anonymous_users_complete": complete, "null_auth": not guest, "guest_auth": guest,
+        "anonymous_users_complete": complete, "null_auth": None if guest else True,
+        "guest_auth": guest,
+        "anonymous_incomplete": [],
     }
-    assert unauthenticated._verified_enumeration_status(result) == expected
+    assert unauthenticated._anonymous_enumeration_status(result, enumerate_users=True) == expected
 
 
 @pytest.mark.parametrize("dc_evidence_shown", [False, True])
@@ -623,12 +699,15 @@ def test_guest_session_is_visible_and_included_in_enumeration_finding(monkeypatc
 
     monkeypatch.setattr(smb, "run_check", run)
     unauthenticated.run_smb_checks("pw")
-    assert re.search(r"Empty-Credential Enumeration\s+│\s+Guest\s+│\s+1", output.getvalue())
+    assert re.search(
+        r"Anonymous Enumeration\s+│\s+0\s+│\s+0\s+│\s+0\s+│\s+1\s+│",
+        output.getvalue(),
+    )
     assert "Anonymous evidence - HOST" in output.getvalue()
     finding = next(finding for finding in results._findings if finding.id == "SMB-003")
     assert any("mapped to Guest" in entry and "'HOST'" in entry for entry in finding.evidence)
     assert "a Guest-mapped SMB session established with empty credentials" in finding.commentary
-    assert "allowed enumeration of\nshare names on 1 system" in finding.commentary
+    assert "allowed enumeration of\nshare names on one system" in finding.commentary
     assert not results._incomplete
     results.reset()
 
@@ -676,11 +755,15 @@ def test_anonymous_finding_commentary_matches_observed_objects(
         results.reset()
         return
     assert finding is not None
+    count_word = {1: "one", 2: "two"}[len(hosts)]
     assert (
-        f"allowed enumeration of\n{expected} on {len(hosts)} "
+        f"allowed enumeration of\n{expected} on {count_word} "
         f"{'domain controller' if len(hosts) == 1 else 'domain controllers'}."
     ) in finding.commentary
-    assert "help identify targets and plan further attacks" in finding.commentary
+    assert "naming conventions and potential targets for password guessing" in finding.commentary
+    assert "share names may indicate the purpose or location of network resources" in (
+        markdown.format_paragraphs(finding.commentary)
+    )
     assert ("Enumerating share names does not by itself demonstrate access to share contents."
             in finding.commentary) is any(shares for shares, _, _ in observations)
     assert "session setup alone" not in finding.commentary
@@ -688,8 +771,13 @@ def test_anonymous_finding_commentary_matches_observed_objects(
         assert "anonymous and Guest-mapped SMB sessions" in finding.commentary
     assert sorted(finding.affected_assets) == hosts
     assert all(any(f"'{host}'" in entry for entry in finding.evidence) for host in hosts)
-    assert "Affected Assets" not in markdown.format_findings([finding])
-    assert "Affected Assets" not in html.render_html([finding])
+    formatted = markdown.format_findings([finding])
+    report = html.render_html([finding])
+    assert "Affected Assets" not in formatted
+    assert "### Evidence" not in formatted
+    assert "Affected Assets" not in report
+    assert "<summary>Evidence</summary>" not in report
+    assert "Remediation" in report
     results.reset()
 
 

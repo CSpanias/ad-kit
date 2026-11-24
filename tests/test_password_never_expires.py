@@ -47,7 +47,7 @@ LDAP 192.168.239.130 389 MOLLYSEC-DC01 User: Guest Status: disabled
         "account_count": 2,
     }
     assert [finding.id for finding in findings] == ["PASS-003"]
-    assert findings[0].evidence[0].startswith("A total of 2 enabled user accounts have passwords")
+    assert findings[0].evidence[0].startswith("A total of two enabled user accounts have passwords")
     assert loaded_findings == ["PASS-003"]
 
 
@@ -101,5 +101,5 @@ LDAP 192.168.239.130 389 MOLLYSEC-DC01 User: GAVIN_HEAD Status: enabled
     }
     assert [finding.id for finding in findings] == ["PASS-003"]
     assert findings[0].evidence[0].startswith(
-        "A total of 1 enabled user account has a password configured to never expire"
+        "A total of one enabled user account has a password configured to never expire"
     )

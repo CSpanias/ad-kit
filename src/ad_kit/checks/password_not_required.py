@@ -5,7 +5,7 @@ Accounts configured without a required password assessment check.
 from ad_kit.core.checks import run_check
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import format_counted_commentary, load_finding
-from ad_kit.core.util import count_form
+from ad_kit.core.util import count_form, count_text
 
 
 def password_not_required_check(
@@ -68,7 +68,7 @@ def password_not_required_check(
         finding = load_finding("password_policy", "PASS-002")
         format_counted_commentary(finding, len(enabled_accounts), "account", "accounts")
         finding.evidence.append(
-            f"A total of {len(enabled_accounts)} enabled user "
+            f"A total of {count_text(len(enabled_accounts))} enabled user "
             f"{count_form(len(enabled_accounts), 'account has', 'accounts have')} "
             "the PASSWD_NOTREQD flag set:"
         )

@@ -74,11 +74,12 @@ def test_admin_count_report_uses_correct_account_form(monkeypatch, count, noun):
     )
     _, findings = privileged_excessive.privileged_excessive_check("dc", "user", "password")
     finding = next(finding for finding in findings if finding.id == "PRIV-002")
-    sentence = f"The `adminCount=1` attribute was set on {count} enabled user {noun},"
+    count_word = {1: "one", 2: "two"}[count]
+    sentence = f"The `adminCount=1` attribute was set on {count_word} enabled user {noun},"
     assert sentence in finding.evidence[1]
     assert sentence in format_findings([finding])
     assert sentence in render_html([finding])
-    assert f"contained {count} enabled user {noun}" in finding.evidence[0]
+    assert f"contained {count_word} enabled user {noun}" in finding.evidence[0]
 
 
 def test_enabled_user_parser_preserves_names_and_zero_admin_count():

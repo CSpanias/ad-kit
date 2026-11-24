@@ -315,7 +315,8 @@ def test_password_history_report_uses_correct_form(monkeypatch, value, word):
     values, _ = _assess_policy(password_history=value)
     findings, incomplete = _run_policy(monkeypatch, values)
     assert not incomplete
-    expected = f"Password history retained {value} previous {word},"
+    count_word = {"0": "0", "1": "one"}[value]
+    expected = f"Password history retained {count_word} previous {word},"
     assert expected in findings[0].commentary
     assert expected in render_html(findings)
 
@@ -325,7 +326,8 @@ def test_minimum_length_report_uses_correct_form(monkeypatch, value, word):
     values, _ = _assess_policy(minimum_length=value)
     findings, incomplete = _run_policy(monkeypatch, values)
     assert not incomplete
-    assert f"Minimum password length was {value} {word};" in findings[0].commentary
+    count_word = {"0": "0", "1": "one"}[value]
+    assert f"Minimum password length was {count_word} {word};" in findings[0].commentary
 
 
 def test_multiple_weak_settings_get_only_relevant_guidance_and_deduplicated_references(monkeypatch):
@@ -334,7 +336,7 @@ def test_multiple_weak_settings_get_only_relevant_guidance_and_deduplicated_refe
     assert not incomplete
     assert len(findings) == 1
     finding = findings[0]
-    assert "Minimum password length was 8" in finding.commentary
+    assert "Minimum password length was eight" in finding.commentary
     assert "complexity requirement was Disabled" in finding.commentary
     assert "blocklists" in finding.remediation
     assert "lockout threshold" not in finding.remediation
@@ -480,7 +482,11 @@ def test_minimum_age_below_baseline_reports_actual_value(monkeypatch):
 @pytest.mark.parametrize(
     ("setting", "value", "commentary", "reference"),
     [
-        ("password_history", "1", "Password history retained 1", "enforce-password-history"),
+        ("password_history", "1", "Password history retained one", "enforce-password-history"),
+        (
+            "observation_window", "1 minute", "observation window was one minute",
+            "reset-account-lockout-counter-after",
+        ),
         ("observation_window", "10 minutes", "observation window was 10 minutes", "reset-account-lockout-counter-after"),
         ("lockout_duration", "10 minutes", "lockout duration was 10 minutes", "account-lockout-duration"),
         ("lockout_threshold", "11", "lockout threshold was 11", "account-lockout-threshold"),

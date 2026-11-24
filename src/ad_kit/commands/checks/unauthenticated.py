@@ -27,6 +27,7 @@ from ad_kit.core.finding import EvidenceTable, Finding
 from ad_kit.core.findings import format_counted_commentary, load_finding
 from ad_kit.core.util import (
     count_form,
+    count_text,
     get_artefacts_dir,
     parallel_items,
     progress,
@@ -268,7 +269,8 @@ def run_tombstone_checks(
             deleted_objects = result["deleted_objects"]
             evidence = (
                 f"Standard User '{standard_user}' enumerated "
-                f"{deleted_objects} deleted {count_form(deleted_objects, 'object', 'objects')} "
+                f"{count_text(deleted_objects)} deleted "
+                f"{count_form(deleted_objects, 'object', 'objects')} "
                 f"on '{dc_hostname}'."
             )
             sam_account_names = result["sam_account_names"]
@@ -288,18 +290,25 @@ def run_tombstone_checks(
 
     record_findings(findings)
 
-def _verified_enumeration_status(result: dict) -> str:
-    users = result["anonymous_users"]
-    verified = result["anonymous_shares"] is not None or (
-        users is not None
-        and (users > 0 or result.get("anonymous_users_complete", False))
-    )
-    if verified:
-        if result.get("guest_auth", False):
-            return "Guest"
-        if result["null_auth"] is True:
-            return "Permitted"
-    return "Denied / unverified"
+def _anonymous_enumeration_status(result: dict, *, enumerate_users: bool) -> str:
+    if result["anonymous_shares"] or result["anonymous_users"]:
+        return "Guest" if result.get("guest_auth", False) else "Enabled"
+    if result["null_auth"] is False:
+        return "Disabled"
+    if (
+        (result["null_auth"] is True or result.get("guest_auth", False))
+        and result["anonymous_shares"] == 0
+        and (
+            not enumerate_users
+            or (
+                result["anonymous_users"] == 0
+                and result.get("anonymous_users_complete", False)
+            )
+        )
+        and not result["anonymous_incomplete"]
+    ):
+        return "Disabled"
+    return "Unknown"
 
 
 def _summarise_smb_systems(finding: Finding, hosts: list[str], dcs: set[str]) -> None:
@@ -307,10 +316,10 @@ def _summarise_smb_systems(finding: Finding, hosts: list[str], dcs: set[str]) ->
     count = len(finding.affected_assets)
     dc_count = sum(host.rstrip(".").casefold() in dcs for host in finding.affected_assets)
     finding.commentary = finding.commentary.format(
-        count=count,
+        count=count_text(count),
         subject=count_form(count, "system", "systems"),
         dc_summary=(
-            f", including {dc_count} "
+            f", including {count_text(dc_count)} "
             f"{count_form(dc_count, 'domain controller', 'domain controllers')},"
             if dc_count else ""
         ),
@@ -459,24 +468,36 @@ def run_smb_checks(
     dc_table.add_column("Host", style="cyan")
     dc_table.add_column("Signing", style="green")
     dc_table.add_column("SMBv1", style="green")
-    dc_table.add_column("Empty-Credential Enumeration", style="yellow")
-    dc_table.add_column("Anon Shares (count)", style="yellow")
-    dc_table.add_column("Anon Users (count)", style="yellow")
+    dc_table.add_column("Anonymous Enumeration")
+    show_shares = any(result["anonymous_shares"] for result in dc_results)
+    show_users = any(result["anonymous_users"] for result in dc_results)
+    if show_shares:
+        dc_table.add_column("Anon Shares (count)", style="yellow")
+    if show_users:
+        dc_table.add_column("Anon Users (count)", style="yellow")
 
     for result in dc_results:
-
-        dc_table.add_row(
+        status = _anonymous_enumeration_status(result, enumerate_users=True)
+        row = [
             result["host"],
             result["signing"],
             result["smbv1"],
-            _verified_enumeration_status(result),
-            _anonymous_count(result["anonymous_shares"], result["null_auth"]),
-            _anonymous_count(
+            {
+                "Enabled": "[red]✗ Enabled[/red]",
+                "Disabled": "[green]✓ Disabled[/green]",
+                "Unknown": "[yellow]⚠ Unknown[/yellow]",
+                "Guest": "[yellow]⚠ Guest[/yellow]",
+            }[status],
+        ]
+        if show_shares:
+            row.append(_anonymous_count(result["anonymous_shares"], result["null_auth"]))
+        if show_users:
+            row.append(_anonymous_count(
                 result["anonymous_users"],
                 result["null_auth"],
                 complete=result.get("anonymous_users_complete", True),
-            ),
-        )
+            ))
+        dc_table.add_row(*row)
 
     console.print(dc_table)
     dc_evidence_shown = _show_anonymous_evidence(
@@ -495,8 +516,16 @@ def run_smb_checks(
     host_table = Table()
 
     host_table.add_column("Check", style="cyan")
-    host_table.add_column("Status", style="yellow")
-    host_table.add_column("Hosts", justify="right")
+    host_table.add_column("Enabled", justify="right")
+    host_table.add_column("Disabled", justify="right")
+    host_table.add_column("Unknown", justify="right")
+    statuses = [
+        _anonymous_enumeration_status(result, enumerate_users=False)
+        for result in host_results
+    ]
+    guest = statuses.count("Guest")
+    if guest:
+        host_table.add_column("Guest", justify="right")
 
     for label, key in (("SMB Signing", "signing"), ("SMBv1", "smbv1")):
         enabled_status = "[green]✓ Enabled[/green]" if key == "signing" else "[red]✗ Enabled[/red]"
@@ -505,19 +534,20 @@ def run_smb_checks(
         )
         enabled = sum(result[key] == enabled_status for result in host_results)
         disabled = sum(result[key] == disabled_status for result in host_results)
-        host_table.add_row(label, "Enabled", str(enabled))
-        host_table.add_row(label, "Disabled", str(disabled))
-        host_table.add_row(label, "Unknown", str(len(host_targets) - enabled - disabled))
+        row = [label, str(enabled), str(disabled), str(len(host_targets) - enabled - disabled)]
+        if guest:
+            row.append("-")
+        host_table.add_row(*row)
 
-    statuses = [_verified_enumeration_status(result) for result in host_results]
-    permitted = statuses.count("Permitted")
-    guest = statuses.count("Guest")
-    host_table.add_row("Empty-Credential Enumeration", "Permitted", str(permitted))
-    host_table.add_row("Empty-Credential Enumeration", "Guest", str(guest))
-    host_table.add_row(
-        "Empty-Credential Enumeration", "Denied / unverified",
-        str(len(host_targets) - permitted - guest),
-    )
+    enabled = statuses.count("Enabled")
+    disabled = statuses.count("Disabled")
+    row = [
+        "Anonymous Enumeration", str(enabled), str(disabled),
+        str(len(host_targets) - enabled - disabled - guest),
+    ]
+    if guest:
+        row.append(str(guest))
+    host_table.add_row(*row)
 
     console.print(host_table)
     if unknown_hosts:
@@ -690,7 +720,7 @@ def run_smb_checks(
         finding.commentary = finding.commentary.format(
             enumerated_information=enumerated_information,
             session_description=session_description,
-            count=count,
+            count=count_text(count),
             subject=subject,
             share_access_caveat=(
                 " Enumerating share names does not by itself demonstrate access to "
@@ -698,6 +728,7 @@ def run_smb_checks(
             ),
         )
         finding.show_affected_assets = False
+        finding.show_evidence = False
 
         for result in anonymous_enumeration:
 
@@ -713,7 +744,7 @@ def run_smb_checks(
             if share_count:
                 finding.evidence.append(
                     f"{access} on '{host}' enumerated "
-                    f"{share_count} {count_form(share_count, 'share', 'shares')}."
+                    f"{count_text(share_count)} {count_form(share_count, 'share', 'shares')}."
                 )
 
             if user_count:
@@ -723,7 +754,7 @@ def run_smb_checks(
                 )
                 finding.evidence.append(
                     f"{account_access} on '{host}' returned "
-                    f"{user_count} {count_form(user_count, 'account', 'accounts')}, "
+                    f"{count_text(user_count)} {count_form(user_count, 'account', 'accounts')}, "
                     "as reported by NetExec."
                 )
 
@@ -749,15 +780,22 @@ def run_smb_checks(
             )
         )
         finding.show_affected_assets = False
+        grouped_shares: dict[tuple[str, frozenset[str]], list[ShareAccess]] = {}
+        for host, share in writable_shares:
+            grouped_shares.setdefault((host, frozenset(share["permissions"])), []).append(share)
         finding.evidence_table = EvidenceTable(
             introduction=(
                 "The following shares had write-related permissions reported "
                 f"for Standard User '{standard_user}':"
             ),
-            columns=("Hostname or IP address", "Share", "Permissions"),
+            columns=("Hostname or IP address", "Share(s)", "Permissions"),
             rows=[
-                (host, share["name"], ", ".join(share["permissions"]))
-                for host, share in writable_shares
+                (
+                    host,
+                    ", ".join(share["name"] for share in shares),
+                    ", ".join(shares[0]["permissions"]),
+                )
+                for (host, _permissions), shares in grouped_shares.items()
             ],
         )
 

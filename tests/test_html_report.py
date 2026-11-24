@@ -7,7 +7,8 @@ from typer.testing import CliRunner
 from ad_kit.cli import app
 from ad_kit.commands import check
 from ad_kit.core.finding import EvidenceTable, Finding
-from ad_kit.reporting import html, markdown, results
+from ad_kit.core.findings import load_finding
+from ad_kit.reporting import html, introductions, markdown, results
 
 
 class ReportParser(HTMLParser):
@@ -149,6 +150,78 @@ def test_html_sections_handle_missing_text_and_multiple_findings():
         "Other commentary",
         "Other fix",
     ]
+
+
+def test_group_introductions_are_copyable_and_describe_only_present_findings():
+    findings = [
+        load_finding("smb", "SMB-001"),
+        load_finding("ldap", "LDAP-003"),
+        load_finding("smb", "SMB-004"),
+        load_finding("ldap", "LDAP-001"),
+    ]
+    report = html.render_html(findings)
+    parser = ReportParser()
+    parser.feed(report)
+    smb_intro = parser.copy_texts[0]
+    ldap_intro = next(text for text in parser.copy_texts if text.startswith(
+        "The assessment identified multiple LDAP security observations"
+    ))
+
+    assert "systems not requiring SMB signing" in smb_intro
+    assert "write-related permissions reported for a standard user" in smb_intro
+    assert "effective file-write access" in smb_intro
+    assert "SMBv1" not in smb_intro and "enumeration" not in smb_intro
+    assert "anonymous LDAP binds" in ldap_intro
+    assert "directory enumeration where separately permitted" in ldap_intro
+    assert "channel binding" not in ldap_intro
+    assert report.index("SMB overview") < report.index("SMB-001") < report.index("SMB-004")
+    assert report.index("SMB-004") < report.index("LDAP overview")
+    assert report.index("LDAP overview") < report.index("LDAP-003") < report.index("LDAP-001")
+    assert 'introduction.hidden = Boolean(query)' in report
+
+
+def test_group_introduction_omitted_for_single_findings_and_escapes_unknown_titles():
+    first = Finding("CUSTOM-001", "<untrusted>", "", "")
+    second = Finding("CUSTOM-002", "Another", "", "")
+    assert 'class="group-introduction"' not in html.render_html([first])
+    report = html.render_html([first, second])
+    parser = ReportParser()
+    parser.feed(report)
+    assert "the finding '<untrusted>'" in parser.copy_texts[0]
+    assert "&lt;untrusted&gt;" in report
+    assert "<untrusted>" not in report
+
+
+def test_smb_introduction_covers_all_observed_findings_without_assuming_dc_scope():
+    findings = [load_finding("smb", f"SMB-00{index}") for index in range(1, 5)]
+    intro = introductions.group_introduction("SMB", findings)
+    assert "systems not requiring SMB signing" in intro
+    assert "systems supporting SMBv1" in intro
+    assert "empty-credential SMB enumeration" in intro
+    assert "write-related permissions reported for a standard user" in intro
+    assert "authentication capture and relay where effective file-write access exists" in intro
+    assert "domain controllers" not in intro.lower()
+    assert "widespread" not in intro
+
+
+@pytest.mark.parametrize(("category", "ids"), [
+    ("smb", ["SMB-001", "SMB-002", "SMB-003", "SMB-004"]),
+    ("ldap", ["LDAP-001", "LDAP-002", "LDAP-003"]),
+    ("password_policy", ["PASS-001", "PASS-002", "PASS-003"]),
+    ("asreproast", ["ASREP-001", "ASREP-002"]),
+    ("kerberoast", ["KERB-001", "KERB-002"]),
+    ("delegations", ["DELEG-001", "DELEG-002", "DELEG-003"]),
+    ("adcs", ["ADCS-ESC1", "ADCS-ESC8", "ADCS-ESC15"]),
+    ("privileged_excessive", ["PRIV-001", "PRIV-002", "PRIV-003", "PRIV-004", "PRIV-005"]),
+    ("local_admin", ["LA-001", "LA-002"]),
+])
+def test_supported_multi_finding_topics_have_specific_introductions(category, ids):
+    findings = [load_finding(category, finding_id) for finding_id in ids]
+    groups = introductions.group_findings(findings)
+    assert len(groups) == 1
+    introduction = introductions.group_introduction(*groups[0])
+    assert "the finding '" not in introduction
+    assert "Depending on the circumstances" in introduction
 
 
 def test_incomplete_checks_are_collapsed_after_findings_and_escaped():

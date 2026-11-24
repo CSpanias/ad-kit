@@ -24,7 +24,13 @@ from ad_kit.core.findings import (
     load_finding,
     load_finding_definition,
 )
-from ad_kit.core.util import count_form, progress, require_collected_data, require_session
+from ad_kit.core.util import (
+    count_form,
+    count_text,
+    progress,
+    require_collected_data,
+    require_session,
+)
 from ad_kit.reporting.results import record_findings, record_incomplete
 
 from .credentials import authenticate_domain_admin, authenticate_standard_user
@@ -100,7 +106,7 @@ def run_local_admin_checks(
             )
 
         finding.evidence.append(
-            f"A total of {len(local_admin_results['hosts'])} "
+            f"A total of {count_text(len(local_admin_results['hosts']))} "
             f"{count_form(len(local_admin_results['hosts']), 'host', 'hosts')} permitted "
             "local administrator access."
         )
@@ -124,7 +130,7 @@ def run_local_admin_checks(
             )
 
         finding.evidence.append(
-            f"A total of {controller_count} "
+            f"A total of {count_text(controller_count)} "
             f"{count_form(controller_count, 'DC', 'DCs')} "
             "permitted administrative access."
         )
@@ -250,7 +256,13 @@ def run_password_policy_checks(
         )
         content = definitions[definition_key]
         value = password_policy[setting]
-        format_values = {"value": value}
+        format_values = {
+            "value": " ".join(
+                count_text(int(token))
+                if token.isdecimal() and 1 <= int(token) <= 9 else token
+                for token in value.split()
+            )
+        }
         if setting == "minimum_length":
             format_values["character_word"] = count_form(int(value), "character", "characters")
         elif setting == "password_history":

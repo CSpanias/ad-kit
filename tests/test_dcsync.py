@@ -253,8 +253,8 @@ def test_generic_all_is_not_suppressed_by_expected_dcsync_exclusions(monkeypatch
 
 
 @pytest.mark.parametrize(("count", "phrase"), [
-    (1, "1 non-default principal was granted permissions"),
-    (2, "2 non-default principals were granted permissions"),
+    (1, "one non-default principal was granted permissions"),
+    (2, "two non-default principals were granted permissions"),
 ])
 def test_dcsync_finding_only_reports_complete_rights(count, phrase):
     complete = [

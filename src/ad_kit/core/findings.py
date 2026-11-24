@@ -18,7 +18,7 @@ from pathlib import Path
 import yaml
 
 from ad_kit.core.finding import Finding
-from ad_kit.core.util import count_form
+from ad_kit.core.util import count_form, count_text
 
 
 def load_finding_definition(
@@ -82,7 +82,7 @@ def format_counted_commentary(
     finding: Finding, count: int, singular: str, plural: str
 ) -> None:
     finding.commentary = finding.commentary.format(
-        count=count,
+        count=count_text(count),
         subject=count_form(count, singular, plural),
         was=count_form(count, "was", "were"),
     )
