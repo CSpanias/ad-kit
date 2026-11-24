@@ -6,6 +6,7 @@ from rich.console import Console
 
 from ad_kit.commands import check
 from ad_kit.commands.checks import credentials
+from ad_kit.core import console as console_helpers
 
 
 @pytest.fixture(autouse=True)
@@ -35,6 +36,28 @@ def test_authentication_success_is_followed_by_blank_line(monkeypatch, admin):
         credentials.authenticate_standard_user()
         assert prompts == ["Enter the Standard User password"]
     assert output.getvalue().endswith("Authentication succeeded.\n\n")
+
+
+def test_password_policy_heading_has_one_blank_line_after_authentication(monkeypatch):
+    output = io.StringIO()
+    console = Console(file=output)
+    monkeypatch.setattr(credentials, "console", console)
+    monkeypatch.setattr(console_helpers, "console", console)
+    monkeypatch.setattr(credentials, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user",
+    })
+    monkeypatch.setattr(credentials, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(credentials, "validate_credentials", lambda *_args: "valid")
+    monkeypatch.setattr(credentials.typer, "prompt", lambda *_args, **_kwargs: "test")
+    monkeypatch.setattr(
+        check, "run_password_policy_checks",
+        lambda _password: console_helpers.print_section("Password Policy"),
+    )
+
+    check.run_selected_checks(["pass-pol"])
+
+    assert "Authentication succeeded.\n\n[Password Policy]\n" in output.getvalue()
+    assert "Authentication succeeded.\n\n\n[Password Policy]" not in output.getvalue()
 
 
 def test_check_all_reuses_smb_password_for_asreproast(monkeypatch):

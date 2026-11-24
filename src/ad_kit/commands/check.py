@@ -184,7 +184,11 @@ def run_selected_checks(
         for module in modules
     )
 
-    std_pass = authenticate_standard_user() if requires_authentication else None
+    std_pass = (
+        authenticate_standard_user(trailing_blank=False)
+        if requires_authentication and modules and modules[0] == "pass-pol"
+        else authenticate_standard_user() if requires_authentication else None
+    )
 
     for module in modules:
         check = AVAILABLE_CHECKS.get(module)
@@ -248,7 +252,10 @@ def run_checks(
     for module, runner in authenticated_checks:
         if module not in excluded:
             if std_pass is None:
-                std_pass = authenticate_standard_user()
+                std_pass = (
+                    authenticate_standard_user(trailing_blank=False)
+                    if module == "pass-pol" else authenticate_standard_user()
+                )
             std_pass = _run_authed(module, runner, std_pass)
 
     results.write_reports(get_artefacts_dir(), domain=domain, dc=dc.strip() if dc else None)

@@ -20,6 +20,13 @@ def no_progress(_message):
     yield
 
 
+@pytest.fixture(autouse=True)
+def stub_optional_fgpp_by_default(monkeypatch):
+    monkeypatch.setattr(policy.typer, "confirm", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(policy, "authenticate_domain_admin", lambda: ("admin", "test-secret"))
+    monkeypatch.setattr(policy, "fine_grained_password_policies", lambda *_args: ([], None))
+
+
 @pytest.mark.parametrize("kind", ["maq", "dns"])
 def test_current_command_evidence_includes_cleanup_without_replaying(
     monkeypatch, tmp_path, kind
@@ -305,9 +312,191 @@ def _run_policy(monkeypatch, values):
     monkeypatch.setattr(policy, "progress", no_progress)
     monkeypatch.setattr(policy, "password_policy_check", lambda *_args: values)
     monkeypatch.setattr(policy, "record_findings", findings.extend)
-    monkeypatch.setattr(policy, "record_incomplete", lambda *args: incomplete.append(args))
+    monkeypatch.setattr(policy, "record_incomplete", lambda *args, **_kwargs: incomplete.append(args))
     policy.run_password_policy_checks("password")
     return findings, incomplete
+
+
+def _pso_output(*, count=1, applies_to=None, minimum_age="1 days", minimum_length="25"):
+    lines = [
+        f"{count} PSO Objects found!",
+        "Policy Name: Strong policy",
+        f"Minimum Password Length: {minimum_length}",
+        "Minimum Password History Length: 3",
+        "Lockout Threshold: 0",
+        "Observation Window: 30 minutes",
+        "Lockout Duration: 30 minutes",
+        "Complexity Enabled: TRUE",
+        "Reversible Encryption: FALSE",
+        f"Minimum Password Age: {minimum_age}",
+        "Precedence: 1 (Lower is Higher Priority)",
+        "Policy Applies to:",
+    ]
+    lines.extend(applies_to or [])
+    return "\n".join(f"LDAP dc 389 DC {line}" for line in lines)
+
+
+def test_fine_grained_policy_parser_reads_assignments_and_redacts_credentials(monkeypatch):
+    calls = []
+
+    def run(name, command, **kwargs):
+        calls.append((name, command, kwargs))
+        return _pso_output(applies_to=["CN=Domain Users,CN=Users,DC=example,DC=test"])
+
+    monkeypatch.setattr(passwords, "run_check", run)
+    policies, incomplete = passwords.fine_grained_password_policies("dc", "admin", "secret")
+    assert incomplete is None
+    assert policies[0].name == "Strong policy"
+    assert policies[0].applies_to == ["CN=Domain Users,CN=Users,DC=example,DC=test"]
+    assert policies[0].precedence == "1"
+    assert policies[0].settings["minimum_age"] == "1 days"
+    assert policies[0].settings["complexity"] == "Enabled"
+    assert policies[0].settings["reversible_encryption"] == "Disabled"
+    assert calls == [(
+        "password-policy-fine-grained",
+        ["nxc", "ldap", "dc", "-u", "admin", "-p", "secret", "--pso"],
+        {"sensitive_values": ["secret"], "show_progress": False},
+    )]
+
+
+def test_multiple_fine_grained_policies_keep_their_own_assignments(monkeypatch):
+    first = _pso_output(count=2, applies_to=["CN=Domain Users,CN=Users,DC=example,DC=test"])
+    second = _pso_output(
+        applies_to=["CN=Administrators,CN=Users,DC=example,DC=test"], minimum_length="8"
+    ).replace("Policy Name: Strong policy", "Policy Name: Admin policy")
+    second = "\n".join(second.splitlines()[1:])
+    monkeypatch.setattr(passwords, "run_check", lambda *_args, **_kwargs: first + "\n" + second)
+
+    policies, incomplete = passwords.fine_grained_password_policies("dc", "admin", "secret")
+
+    assert incomplete is None
+    assert [p.name for p in policies] == ["Strong policy", "Admin policy"]
+    assert policies[0].applies_to == ["CN=Domain Users,CN=Users,DC=example,DC=test"]
+    assert policies[1].applies_to == ["CN=Administrators,CN=Users,DC=example,DC=test"]
+    assert policies[1].settings["minimum_length"] == "8"
+
+
+@pytest.mark.parametrize("output", [
+    "",
+    _pso_output(count=2),
+    _pso_output().replace("Policy Applies to:", "Unexpected assignment field:"),
+    _pso_output() + "\nLDAP dc 389 DC [-] search failed",
+])
+def test_unverified_fine_grained_policy_enumeration_is_incomplete(monkeypatch, output):
+    monkeypatch.setattr(passwords, "run_check", lambda *_args, **_kwargs: output)
+    _, incomplete = passwords.fine_grained_password_policies("dc", "admin", "secret")
+    assert incomplete is not None
+    assert "could not be verified" in incomplete
+
+
+def test_fine_grained_policy_context_and_weaknesses_are_reported(monkeypatch):
+    monkeypatch.setattr(
+        passwords, "run_check", lambda *_args, **_kwargs: _pso_output(
+            applies_to=["CN=Domain Users,CN=Users,DC=example,DC=test"]
+        )
+    )
+    policies, _ = passwords.fine_grained_password_policies("dc", "admin", "secret")
+    monkeypatch.setattr(policy, "fine_grained_password_policies", lambda *_args: (policies, None))
+    values, _ = _assess_policy(minimum_age="None")
+
+    findings, incomplete = _run_policy(monkeypatch, values)
+
+    assert not incomplete
+    finding = findings[0]
+    assert "Minimum password age was zero days" in finding.commentary
+    assert "CN=Domain Users,CN=Users,DC=example,DC=test" in finding.commentary
+    assert "minimum age: at least one day" in finding.commentary
+    assert "may supersede the default policy" in finding.commentary
+    assert "lockout threshold was 0, disabling account lockout" in finding.commentary
+    assert "effective policy for every account" in finding.commentary_note
+    assert "**Note:**" in format_finding_sections(finding)["Commentary"]
+    assert "<strong>Note:</strong>" in render_html([finding])
+    assert "minimum password age" in finding.remediation
+    assert "enabling account lockout" in finding.remediation
+    assert "verify the resultant policy for affected accounts" in finding.remediation
+    assert len(finding.references) == len(set(finding.references))
+
+
+def test_weak_unassigned_fine_grained_policy_is_reported_without_default_weakness(monkeypatch):
+    monkeypatch.setattr(
+        passwords, "run_check", lambda *_args, **_kwargs: _pso_output(
+            minimum_length="8"
+        ).replace("Reversible Encryption: FALSE", "Reversible Encryption: TRUE")
+    )
+    policies, _ = passwords.fine_grained_password_policies("dc", "admin", "secret")
+    monkeypatch.setattr(policy, "fine_grained_password_policies", lambda *_args: (policies, None))
+    values, _ = _assess_policy()
+    findings, incomplete = _run_policy(monkeypatch, values)
+    assert not incomplete
+    assert "No assigned users or groups were reported" in findings[0].commentary
+    assert "Minimum password length was eight characters" in findings[0].commentary
+    assert "Reversible password encryption was enabled" in findings[0].commentary
+    assert "Disable reversible password encryption" in findings[0].remediation
+    assert "default domain policy contained" not in findings[0].commentary
+
+
+def test_skipped_fine_grained_check_is_reported_as_incomplete(monkeypatch):
+    monkeypatch.setattr(policy.typer, "confirm", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        policy, "authenticate_domain_admin", lambda: pytest.fail("unexpected administrator prompt")
+    )
+    values, _ = _assess_policy(minimum_age="None")
+    findings, incomplete = _run_policy(monkeypatch, values)
+    assert "not fully assessed" in findings[0].commentary_note
+    assert "not assessed" in incomplete[0][2]
+
+
+def test_failed_fine_grained_query_preserves_default_finding(monkeypatch):
+    def fail(*_args):
+        raise CheckExecutionError("password-policy-fine-grained", [], returncode=1)
+
+    monkeypatch.setattr(policy, "fine_grained_password_policies", fail)
+    values, _ = _assess_policy(minimum_age="None")
+    findings, incomplete = _run_policy(monkeypatch, values)
+
+    assert "Minimum password age was zero days" in findings[0].commentary
+    assert "not fully assessed" in findings[0].commentary_note
+    assert "password-policy-fine-grained" in incomplete[0][2]
+
+
+def test_partial_fine_grained_output_reports_known_weaknesses(monkeypatch):
+    monkeypatch.setattr(
+        passwords, "run_check",
+        lambda *_args, **_kwargs: _pso_output(count=2, minimum_length="8"),
+    )
+    policies, error = passwords.fine_grained_password_policies("dc", "admin", "secret")
+    monkeypatch.setattr(
+        policy, "fine_grained_password_policies", lambda *_args: (policies, error)
+    )
+    values, _ = _assess_policy()
+    findings, incomplete = _run_policy(monkeypatch, values)
+
+    assert "Minimum password length was eight characters" in findings[0].commentary
+    assert "not fully assessed" in findings[0].commentary_note
+    assert "could not be verified" in incomplete[0][2]
+
+
+def test_fine_grained_rounded_intervals_do_not_imply_precise_values(monkeypatch):
+    output = (
+        _pso_output(minimum_age="0 days")
+        .replace("Lockout Threshold: 0", "Lockout Threshold: 5")
+        .replace("Lockout Duration: 30 minutes", "Lockout Duration: 0 minutes")
+        .replace("Observation Window: 30 minutes", "Observation Window: 0 minutes")
+    )
+    monkeypatch.setattr(passwords, "run_check", lambda *_args, **_kwargs: output)
+    policies, error = passwords.fine_grained_password_policies("dc", "admin", "secret")
+    assert error is None
+    assert policies[0].settings["lockout_duration"] == passwords.UNKNOWN
+    monkeypatch.setattr(
+        policy, "fine_grained_password_policies", lambda *_args: (policies, error)
+    )
+    values, _ = _assess_policy()
+    findings, incomplete = _run_policy(monkeypatch, values)
+
+    assert "minimum password age of less than one day" in findings[0].commentary
+    assert "lockout observation window of less than one minute" in findings[0].commentary
+    assert any("lockout duration" in entry[2] for entry in incomplete)
+    assert "manual unlock" not in findings[0].commentary
 
 
 @pytest.mark.parametrize(("value", "word"), [("0", "passwords"), ("1", "password")])

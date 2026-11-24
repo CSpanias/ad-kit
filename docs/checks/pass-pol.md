@@ -8,7 +8,8 @@ ad-kit check pass-pol
 ```
 
 !!! info "Prerequisite"
-    Requires a valid Standard User account (authenticated).
+    Requires a valid Standard User account. Fine-grained policy assessment is
+    optional and prompts for Domain Administrator credentials.
 
 ## Commands run
 
@@ -17,6 +18,19 @@ ad-kit reads the default domain policy with NetExec:
 ```bash
 nxc ldap <dc_ip> -u <username> -p <password> --pass-pol
 ```
+
+If the optional fine-grained policy assessment is selected, ad-kit also runs:
+
+```bash
+nxc ldap <dc_ip> -u <admin> -p <password> --pso
+```
+
+Its output is saved in `ad-kit/evidence/password-policy-fine-grained.txt`.
+If NetExec does not provide a verifiable policy count, or the query fails,
+the assessment is recorded as incomplete rather than assuming no policies exist.
+NetExec rounds down fine-grained policy ages to days and lockout intervals to
+minutes. A reported zero-minute lockout duration is therefore unknown when
+lockout is enabled; it is not assumed to require manual unlocking.
 
 When NetExec reports the lockout duration as `Not Set`, ad-kit also queries:
 
@@ -82,7 +96,12 @@ window means those attempts are forgotten quickly.
 Fine-Grained Password Policies (Password Settings Objects) can override the
 default policy for specific users and groups, so the effective policy for an
 individual account may differ from the default domain policy that this check
-reads.
+reads. When requested, ad-kit assesses the reported policies against the same
+baseline and includes their reported assignments and relevant settings in the
+finding. The fine-grained assessment also flags reversible password encryption.
+An assignment to a broad group does not prove that the policy applies
+to every user: direct assignments, group membership and precedence affect the
+resultant policy. Verify the effective policy for individual accounts.
 
 ## Why it matters
 

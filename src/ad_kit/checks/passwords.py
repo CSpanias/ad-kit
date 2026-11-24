@@ -3,13 +3,104 @@ Password-related assessment checks.
 """
 
 import re
+from dataclasses import dataclass, field
 
-from ad_kit.core.checks import PASSWORD_POLICY_BASELINE, duration_to_minutes, run_check
+from ad_kit.core.checks import (
+    ANSI_ESCAPE_PATTERN,
+    PASSWORD_POLICY_BASELINE,
+    duration_to_minutes,
+    run_check,
+)
 from ad_kit.core.exceptions import CheckExecutionError
 
 UNKNOWN = "[yellow]⚠ Unknown[/yellow]"
 MANUAL_UNLOCK = "Until manually unlocked"
 MANUAL_UNLOCK_LDAP = "-9223372036854775808"
+
+
+@dataclass
+class FineGrainedPolicy:
+    name: str
+    settings: dict[str, str] = field(default_factory=dict)
+    applies_to: list[str] = field(default_factory=list)
+    precedence: str = ""
+    assignments_seen: bool = False
+
+
+def fine_grained_password_policies(
+    dc_ip: str, username: str, password: str
+) -> tuple[list[FineGrainedPolicy], str | None]:
+    """Read NetExec's PSO output; an absent count cannot establish an empty result."""
+    output = run_check(
+        "password-policy-fine-grained",
+        ["nxc", "ldap", dc_ip, "-u", username, "-p", password, "--pso"],
+        sensitive_values=[password],
+        show_progress=False,
+    )
+    labels = {
+        "minimum password length": "minimum_length",
+        "minimum password history length": "password_history",
+        "minimum password age": "minimum_age",
+        "complexity enabled": "complexity",
+        "reversible encryption": "reversible_encryption",
+        "observation window": "observation_window",
+        "lockout threshold": "lockout_threshold",
+        "lockout duration": "lockout_duration",
+    }
+    policies: list[FineGrainedPolicy] = []
+    current: FineGrainedPolicy | None = None
+    in_assignments = False
+    reported_count: int | None = None
+    has_error = False
+    for line in ANSI_ESCAPE_PATTERN.sub("", output).splitlines():
+        match = re.match(r"^\s*LDAPS?\s+\S+\s+\d+\s+\S+\s*(.*)$", line, re.I)
+        if not match:
+            continue
+        text = match.group(1).strip()
+        count = re.fullmatch(r"(\d+)\s+PSO Objects? found!", text, re.I)
+        if count:
+            reported_count = int(count.group(1))
+        if text.startswith("[-]"):
+            has_error = True
+        key, separator, value = text.partition(":")
+        key, value = key.strip().lower(), value.strip()
+        if key == "policy name" and separator:
+            current = FineGrainedPolicy(name=value)
+            policies.append(current)
+            in_assignments = False
+        elif current is not None and key == "policy applies to" and separator:
+            in_assignments = True
+            current.assignments_seen = True
+            if value:
+                current.applies_to.append(value)
+        elif current is not None and in_assignments and re.match(r"^CN=", text, re.I):
+            current.applies_to.append(text)
+        elif current is not None and key in labels and separator:
+            in_assignments = False
+            if key in {"complexity enabled", "reversible encryption"}:
+                value = {"true": "Enabled", "false": "Disabled"}.get(value.lower(), UNKNOWN)
+            current.settings[labels[key]] = value
+        elif current is not None and key == "precedence" and separator:
+            in_assignments = False
+            current.precedence = value.partition(" ")[0]
+
+    for policy in policies:
+        for setting in labels.values():
+            policy.settings.setdefault(setting, UNKNOWN)
+        if re.fullmatch(r"0\s+minutes?", policy.settings["lockout_duration"], re.I):
+            policy.settings["lockout_duration"] = UNKNOWN
+    if (
+        reported_count is None or reported_count != len(policies) or has_error
+        or any(
+            not policy.name or not policy.assignments_seen or not policy.precedence.isdecimal()
+            for policy in policies
+        )
+    ):
+        return [policy for policy in policies if policy.name], (
+            "Fine-grained policy enumeration was incomplete or could not be verified; "
+            "see password-policy-fine-grained.txt evidence"
+        )
+    return policies, None
 
 
 def password_policy_check(
@@ -179,6 +270,14 @@ def password_policy_assessment(
         assessment["complexity"] = "[green]✓ OK[/green]"
     else:
         assessment["complexity"] = UNKNOWN
+
+    if "reversible_encryption" in policy:
+        if policy["reversible_encryption"] == "Enabled":
+            assessment["reversible_encryption"] = "[red]✗ Enabled[/red]"
+        elif policy["reversible_encryption"] == "Disabled":
+            assessment["reversible_encryption"] = "[green]✓ Disabled[/green]"
+        else:
+            assessment["reversible_encryption"] = UNKNOWN
 
     #---------------------------------------------------------------------------
     # OBSERVATION WINDOW

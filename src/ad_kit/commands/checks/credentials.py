@@ -5,7 +5,7 @@ from ad_kit.core.console import console, print_error, print_success
 from ad_kit.core.util import progress, require_session
 
 
-def authenticate_standard_user() -> str:
+def authenticate_standard_user(*, trailing_blank: bool = True) -> str:
     """
     Prompt for and validate Standard User credentials.
 
@@ -42,7 +42,8 @@ def authenticate_standard_user() -> str:
 
         if status == "valid":
             print_success("Authentication succeeded.")
-            console.print()
+            if trailing_blank:
+                console.print()
             return std_pass
 
         if status == "locked":

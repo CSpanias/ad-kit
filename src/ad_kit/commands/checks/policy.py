@@ -1,3 +1,4 @@
+import typer
 from rich.table import Table
 
 from ad_kit.checks.dns import dns_confirmation_excerpt, dns_record_creation_check
@@ -7,6 +8,8 @@ from ad_kit.checks.password_never_expires import password_never_expires_check
 from ad_kit.checks.password_not_required import password_not_required_check
 from ad_kit.checks.passwords import (
     UNKNOWN,
+    FineGrainedPolicy,
+    fine_grained_password_policies,
     password_policy_assessment,
     password_policy_check,
 )
@@ -18,7 +21,7 @@ from ad_kit.core.checks import (
     warn_test_artifact_remaining,
 )
 from ad_kit.core.console import console, object_text, print_section
-from ad_kit.core.exceptions import ADKitError
+from ad_kit.core.exceptions import ADKitError, CheckExecutionError
 from ad_kit.core.findings import (
     format_counted_commentary,
     load_finding,
@@ -221,6 +224,61 @@ def run_password_policy_checks(
 
     console.print(table)
 
+    fine_grained: list[FineGrainedPolicy] = []
+    fgpp_incomplete = None
+    fgpp_skipped = False
+    if typer.confirm(
+        "Assess fine-grained password policies using Domain Administrator credentials?",
+        default=False,
+    ):
+        da_user, da_pass = authenticate_domain_admin()
+        try:
+            with progress("Retrieving fine-grained password policies..."):
+                fine_grained, fgpp_incomplete = fine_grained_password_policies(
+                    session_data["dc_ip"], da_user, da_pass
+                )
+        except CheckExecutionError as exc:
+            fgpp_incomplete = str(exc)
+    else:
+        fgpp_skipped = True
+        record_incomplete(
+            "pass-pol", session_data["dc_ip"],
+            "Fine-grained password policies were not assessed.",
+            notify=False,
+        )
+
+    if fgpp_incomplete:
+        record_incomplete("pass-pol", session_data["dc_ip"], fgpp_incomplete)
+
+    if fine_grained:
+        pso_table = Table(title="Fine-Grained Password Policies")
+        pso_table.add_column("Policy", style="cyan")
+        pso_table.add_column("Applies To")
+        pso_table.add_column("Assessment")
+        for pso in fine_grained:
+            pso_assessment = password_policy_assessment(pso.settings)
+            weak = [
+                setting.replace("_", " ") for setting, status in pso_assessment.items()
+                if status.startswith("[red]")
+            ]
+            unknown_pso = [
+                setting.replace("_", " ") for setting, status in pso_assessment.items()
+                if status == UNKNOWN
+            ]
+            if unknown_pso:
+                record_incomplete(
+                    "pass-pol", session_data["dc_ip"],
+                    f"Could not assess settings in fine-grained policy {pso.name}: "
+                    + ", ".join(unknown_pso) + ". See password-policy-fine-grained.txt evidence.",
+                )
+            status = ", ".join(weak) if weak else (
+                "Unknown" if unknown_pso else "No assessed weaknesses"
+            )
+            pso_table.add_row(
+                object_text([pso.name]), object_text(pso.applies_to), status
+            )
+        console.print(pso_table)
+
     unknown = [
         setting.replace("_", " ")
         for setting, status in assessment.items()
@@ -240,41 +298,146 @@ def run_password_policy_checks(
         setting for setting, status in assessment.items()
         if status.startswith("[red]")
     ]
-    if not weak_settings:
+    if not weak_settings and not any(
+        status.startswith("[red]")
+        for pso in fine_grained
+        for status in password_policy_assessment(pso.settings).values()
+    ):
         return
 
     finding = load_finding("password_policy", "PASS-001")
     definitions = load_finding_definition("password_policy", "PASS-001")["settings"]
-    commentary = []
-    remediation = []
-    references = []
-    for setting in weak_settings:
+    remediation: list[str] = []
+    references: list[str] = []
+
+    def prose_value(value: str) -> str:
+        tokens = value.split()
+        formatted = []
+        for index, token in enumerate(tokens):
+            if token.isdecimal() and 1 <= int(token) <= 9:
+                token = count_text(int(token))
+            elif (
+                index and tokens[index - 1].isdecimal()
+                and token.lower() in {"days", "hours", "minutes"}
+            ):
+                token = count_form(int(tokens[index - 1]), token[:-1], token)
+            formatted.append(token)
+        return " ".join(formatted)
+
+    def describe_setting(
+        setting: str, values: dict[str, str], *, fine_grained: bool = False
+    ) -> str:
         definition_key = (
             "lockout_disabled"
-            if setting == "lockout_threshold" and int(password_policy[setting]) == 0
+            if setting == "lockout_threshold" and int(values[setting]) == 0
             else setting
         )
         content = definitions[definition_key]
-        value = password_policy[setting]
+        value = values[setting]
         format_values = {
-            "value": " ".join(
-                count_text(int(token))
-                if token.isdecimal() and 1 <= int(token) <= 9 else token
-                for token in value.split()
-            )
+            "value": "zero days" if setting == "minimum_age" and value.lower() == "none"
+            else prose_value(value)
         }
         if setting == "minimum_length":
             format_values["character_word"] = count_form(int(value), "character", "characters")
         elif setting == "password_history":
             format_values["password_word"] = count_form(int(value), "password", "passwords")
-        commentary.append("- " + content["commentary"].format(**format_values))
         remediation.append("- " + content["remediation"])
         references.extend(content["references"])
+        if fine_grained and setting == "minimum_age" and value.lower() == "0 days":
+            return (
+                "- NetExec reported a minimum password age of less than one day, "
+                "which may allow rapid password cycling to bypass password history."
+            )
+        if fine_grained and setting == "observation_window" and value.lower() == "0 minutes":
+            return (
+                "- NetExec reported a lockout observation window of less than one minute, "
+                "which may allow failed attempts to be reset quickly."
+            )
+        return "- " + content["commentary"].format(**format_values)
 
-    finding.commentary = finding.commentary.strip() + "\n\n" + "\n".join(commentary)
+    commentary = [finding.commentary.strip()]
+    if weak_settings:
+        commentary.append(
+            "The default domain policy contained the following "
+            + count_form(len(weak_settings), "setting", "settings")
+            + " that may not align with common security practices:\n\n"
+            + "\n".join(describe_setting(setting, password_policy) for setting in weak_settings)
+        )
+
+    for pso in fine_grained:
+        pso_assessment = password_policy_assessment(pso.settings)
+        pso_weak = [
+            setting for setting, status in pso_assessment.items()
+            if status.startswith("[red]")
+        ]
+        name = pso.name.replace("`", "\\`")
+        if pso.applies_to:
+            assignment = ", ".join(
+                f"`{entry.replace('`', chr(92) + '`')}`" for entry in pso.applies_to
+            )
+            details = (
+                f"Fine-grained password policy `{name}` was reported as applying to {assignment}."
+            )
+        else:
+            details = f"No assigned users or groups were reported for fine-grained policy `{name}`."
+        if pso.precedence.isdecimal():
+            details += f" Its reported precedence was {prose_value(pso.precedence)}."
+        improvements = [
+            setting for setting in weak_settings
+            if pso_assessment[setting].startswith("[green]")
+        ]
+        if improvements:
+            values = ", ".join(
+                f"{setting.replace('_', ' ')}: "
+                + ("at least " if setting == "minimum_age" else "")
+                + prose_value(pso.settings[setting])
+                for setting in improvements
+            )
+            details += (
+                f" The following settings met the assessment baseline: {values}. "
+                "These settings may supersede the default policy for accounts to which "
+                "the fine-grained policy applies."
+            )
+        if pso_weak:
+            details += "\n\n" + "\n".join(
+                describe_setting(setting, pso.settings, fine_grained=True) for setting in pso_weak
+            )
+        commentary.append(details)
+
+    notes = []
+    if fine_grained:
+        notes.append(
+            "Policy assignments do not establish the effective policy for every "
+            "account. Direct assignments, group membership, and policy precedence can affect "
+            "which policy applies; verify the resultant policy for affected accounts."
+        )
+        references.append(
+            "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/"
+            "get-started/adac/fine-grained-password-policies"
+        )
+    if fgpp_incomplete or fgpp_skipped:
+        notes.append(
+            "Fine-grained password policies were not fully assessed, so effective "
+            "settings for individual accounts may differ from the default domain policy."
+        )
+
+    finding.commentary = "\n\n".join(commentary)
+    finding.commentary_note = " ".join(notes)
+    remediation_intro = (
+        "Review the affected default or fine-grained password policies against "
+        "organisational requirements and the controls in place:"
+        if fine_grained else finding.remediation.strip()
+    )
+    validation = (
+        "Test proposed changes, verify the resultant policy for affected accounts, "
+        "and communicate changes to users and service owners."
+        if fine_grained else
+        "Test proposed changes and communicate them to affected users and service owners."
+    )
     finding.remediation = (
-        finding.remediation.strip() + "\n\n" + "\n".join(remediation)
-        + "\n\nTest proposed changes and communicate them to affected users and service owners."
+        remediation_intro + "\n\n" + "\n".join(dict.fromkeys(remediation))
+        + "\n\n" + validation
     )
     finding.references = list(dict.fromkeys(references))
     record_findings([finding])
