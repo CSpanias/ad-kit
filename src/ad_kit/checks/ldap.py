@@ -13,7 +13,7 @@ from ad_kit.core.checks import (
 from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import format_counted_commentary, load_finding
-from ad_kit.core.util import parallel_items, unique_hosts
+from ad_kit.core.util import count_form, count_text, parallel_items, unique_hosts
 from ad_kit.reporting.results import record_incomplete
 
 _UNKNOWN = "[yellow]⚠ Unknown[/yellow]"
@@ -24,6 +24,38 @@ class LDAPResult(TypedDict):
     signing: str
     channel_binding: str
     anonymous_bind: str
+    anonymous_users: int | None
+
+
+def _anonymous_user_summary(results: list[LDAPResult]) -> str:
+    confirmed = sum(
+        1 for result in results
+        if (users := result["anonymous_users"]) is not None and users > 0
+    )
+    empty = sum(result["anonymous_users"] == 0 for result in results)
+    unknown = sum(result["anonymous_users"] is None for result in results)
+
+    def controllers(count: int) -> str:
+        return f"{count_text(count)} {count_form(count, 'domain controller', 'domain controllers')}"
+
+    if confirmed and confirmed == len(results):
+        scope = count_form(
+            confirmed, "the affected domain controller", "all affected domain controllers"
+        )
+        return f"Anonymous user account enumeration was confirmed on {scope}."
+
+    sentences = []
+    if confirmed:
+        sentences.append(
+            f"Anonymous user account enumeration was confirmed on {controllers(confirmed)}."
+        )
+    if empty:
+        sentences.append(f"No user accounts were returned on {controllers(empty)}.")
+    if unknown:
+        sentences.append(
+            f"Anonymous user enumeration could not be confirmed on {controllers(unknown)}."
+        )
+    return " ".join(sentences)
 
 
 def _check_controller(
@@ -34,6 +66,7 @@ def _check_controller(
         "signing": _UNKNOWN,
         "channel_binding": _UNKNOWN,
         "anonymous_bind": _UNKNOWN,
+        "anonymous_users": None,
     }
     incomplete: list[tuple[str, str]] = []
 
@@ -93,7 +126,10 @@ def _check_controller(
             except CheckExecutionError as exc:
                 incomplete.append(("LDAP anonymous user enumeration", str(exc)))
             else:
-                if not re.search(r"Enumerated\s+\d+\s+domain users:", users_output, re.I):
+                users_match = re.search(r"Enumerated\s+(\d+)\s+domain users:", users_output, re.I)
+                if users_match:
+                    result["anonymous_users"] = int(users_match.group(1))
+                if result["anonymous_users"] is None or result["anonymous_users"] == 0:
                     incomplete.append((
                         "LDAP anonymous user enumeration",
                         f"No confirmed user enumeration; see {evidence_name}.txt",
@@ -136,6 +172,14 @@ def ldap_check() -> tuple[list[dict], list[Finding]]:
             format_counted_commentary(
                 finding, len(affected), "Domain Controller (DC)", "Domain Controllers (DCs)"
             )
+            if finding_id == "LDAP-003":
+                affected_results = [
+                    result for result in results
+                    if result["anonymous_bind"] == "[red]✗ Permitted[/red]"
+                ]
+                finding.commentary = (
+                    finding.commentary.rstrip() + " " + _anonymous_user_summary(affected_results)
+                )
             finding.affected_assets.extend(affected)
             findings.append(finding)
 

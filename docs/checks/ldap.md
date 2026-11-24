@@ -22,7 +22,9 @@ nxc ldap <controller> -u '' -p '' --users
 
 The user enumeration command runs when NetExec reports a successful anonymous
 bind. A search failure does not prove that the bind was rejected, and an empty
-result does not confirm that enumeration was denied.
+result does not confirm that enumeration was denied. The finding distinguishes
+controllers where user enumeration was confirmed from those where no accounts
+were returned or the result was inconclusive. It does not report SMB shares.
 If NetExec reports `No TLS cert`, channel binding is recorded as unknown rather
 than not enforced, because the TLS connection did not establish its setting.
 Controllers are checked concurrently, with four workers by default; use

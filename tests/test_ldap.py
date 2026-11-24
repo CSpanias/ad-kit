@@ -5,7 +5,9 @@ import pytest
 from ad_kit.checks import ldap
 from ad_kit.core import util
 from ad_kit.core.checks import CheckEvidence, append_captured_evidence, capture_check_evidence
+from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.findings import load_finding
+from ad_kit.reporting.html import render_html
 from ad_kit.reporting.markdown import format_finding_sections, format_paragraphs
 
 
@@ -105,6 +107,91 @@ def test_ldap_user_search_without_results_is_not_treated_as_denied(monkeypatch):
     assert results[0]["anonymous_bind"] == "[red]✗ Permitted[/red]"
     assert findings[0].id == "LDAP-003"
     assert any("No confirmed user enumeration" in entry[2] for entry in incomplete)
+
+
+@pytest.mark.parametrize(("outputs", "expected"), [
+    (
+        [2],
+        "Anonymous user account enumeration was confirmed on the affected domain controller.",
+    ),
+    (
+        [2] * 7,
+        "Anonymous user account enumeration was confirmed on all affected domain controllers.",
+    ),
+    (
+        [5, 0, None],
+        "Anonymous user account enumeration was confirmed on one domain controller. "
+        "No user accounts were returned on one domain controller. "
+        "Anonymous user enumeration could not be confirmed on one domain controller.",
+    ),
+    (
+        [None, "inconclusive"],
+        "Anonymous user enumeration could not be confirmed on two domain controllers.",
+    ),
+    (
+        [0],
+        "No user accounts were returned on one domain controller.",
+    ),
+    (
+        [3] * 10 + [None],
+        "Anonymous user account enumeration was confirmed on 10 domain controllers. "
+        "Anonymous user enumeration could not be confirmed on one domain controller.",
+    ),
+])
+def test_ldap_anonymous_finding_reports_user_enumeration(monkeypatch, outputs, expected):
+    hosts = [f"DC{i}" for i in range(len(outputs))]
+    output_by_host = dict(zip(hosts, outputs, strict=True))
+    incomplete = []
+    monkeypatch.setattr(ldap, "load_dc_hostnames", lambda: hosts)
+    monkeypatch.setattr(ldap, "record_incomplete", lambda *args: incomplete.append(args))
+
+    def fake_run(name, command, **_kwargs):
+        if name.startswith("ldap-anonymous-users-"):
+            host = name.removeprefix("ldap-anonymous-users-")
+            count = output_by_host[host]
+            if count is None:
+                raise CheckExecutionError(name, command, returncode=1)
+            if count == "inconclusive":
+                return "LDAP dc 389 DC [-] searchRequest operationsError"
+            return f"LDAP dc 389 DC Enumerated {count} domain users: EXAMPLE"
+        return "LDAP dc 389 DC [+] example\\:********"
+
+    monkeypatch.setattr(ldap, "run_check", fake_run)
+    results, findings = ldap.ldap_check()
+    finding = next(finding for finding in findings if finding.id == "LDAP-003")
+
+    for result in results:
+        output = output_by_host[result["dc_hostname"]]
+        assert result["anonymous_users"] == (output if isinstance(output, int) else None)
+    assert format_paragraphs(finding.commentary).endswith(expected)
+    assert expected in render_html([finding])
+    assert "shares" not in expected
+    incomplete_enumerations = [
+        entry for entry in incomplete if entry[0] == "LDAP anonymous user enumeration"
+    ]
+    assert len(incomplete_enumerations) == (
+        outputs.count(0) + outputs.count(None) + outputs.count("inconclusive")
+    )
+
+
+def test_ldap_anonymous_summary_excludes_controllers_without_confirmed_bind(monkeypatch):
+    monkeypatch.setattr(ldap, "load_dc_hostnames", lambda: ["DC1", "DC2"])
+    monkeypatch.setattr(ldap, "record_incomplete", lambda *_args: None)
+    monkeypatch.setattr(
+        ldap, "run_check",
+        lambda name, *_args, **_kwargs: (
+            "LDAP dc 389 DC Enumerated 3 domain users: EXAMPLE"
+            if name == "ldap-anonymous-users-DC1"
+            else "LDAP dc 389 DC [+] example\\:********"
+            if name == "ldap-DC1"
+            else "LDAP dc 389 DC [-] STATUS_LOGON_FAILURE"
+        ),
+    )
+    _, findings = ldap.ldap_check()
+    finding = next(finding for finding in findings if finding.id == "LDAP-003")
+
+    assert finding.affected_assets == ["DC1"]
+    assert "enumeration was confirmed on the affected domain controller" in finding.commentary
 
 
 @pytest.mark.parametrize(("count", "noun", "count_word"), [
