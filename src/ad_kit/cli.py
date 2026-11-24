@@ -330,7 +330,7 @@ for _module_name in AVAILABLE_CHECKS:
 #-------------------------------------------------------------------------------
 @check_app.command(
     name="run",
-    help="Execute selected assessment modules.",
+    help="Execute comma- or space-separated assessment modules.",
 )
 def selected(
     ctx: typer.Context,
@@ -350,7 +350,7 @@ def selected(
     """
     Execute one or more specified assessment modules.
 
-    Modules are executed in the order provided on the command line, allowing 
+    Modules are executed in the order provided on the command line, allowing
     targeted assessment of specific Active Directory security controls without 
     running the full assessment workflow.
 
@@ -359,7 +359,11 @@ def selected(
             Assessment modules to execute.
     """
 
-    _run_check_command(modules, *_check_options(ctx, csacyber, dc, workers, exclude))
+    groups = " ".join(modules).split(",")
+    if any(not group.strip() for group in groups):
+        raise typer.BadParameter("Check names cannot be empty.", param_hint="MODULES")
+    names = [name for group in groups for name in group.split()]
+    _run_check_command(names, *_check_options(ctx, csacyber, dc, workers, exclude))
 
 
 if __name__ == "__main__":

@@ -439,7 +439,10 @@ def test_resultant_policy_is_reported_even_when_assignments_were_not_returned(mo
     findings, incomplete = _run_policy(monkeypatch, values)
 
     assert not incomplete
-    assert "Standard User effective password policy: Strong policy" in output.getvalue()
+    assert "Fine-grained password policy 'Strong policy' is the effective" in output.getvalue()
+    assert output.getvalue().index("Fine-Grained Password Policy: Strong policy") < (
+        output.getvalue().index("Fine-grained password policy 'Strong policy' is the effective")
+    )
     assert "resultant policy for testing account `user`" in findings[0].commentary
     assert "minimum age: at least one day" in findings[0].commentary
     assert "lockout threshold was 0" in findings[0].commentary
@@ -453,13 +456,22 @@ def test_resultant_policy_is_reported_even_when_assignments_were_not_returned(mo
 
 
 def test_default_policy_presumption_is_reported_for_testing_account(monkeypatch):
+    output = io.StringIO()
+    monkeypatch.setattr(policy, "console", Console(file=output, width=160))
     values, _ = _assess_policy(minimum_age="None")
     findings, incomplete = _run_policy(monkeypatch, values)
     assert not incomplete
-    assert "No fine-grained password policy was returned for testing account `user`" in (
+    assert "No `msDS-ResultantPSO` attribute was returned for testing account `user`" in (
         findings[0].commentary
     )
-    assert "default domain policy is presumed to apply" in findings[0].commentary
+    assert "default domain policy applies if no fine-grained policy is in effect" in (
+        findings[0].commentary
+    )
+    assert "No msDS-ResultantPSO attribute was returned for Standard User 'user';" in (
+        output.getvalue()
+    )
+    assert "the default domain password policy is used for this assessment." in output.getvalue()
+    assert "presumed" not in output.getvalue()
 
 
 def test_missing_resultant_policy_qualifies_expected_assignment(monkeypatch):
@@ -474,7 +486,9 @@ def test_missing_resultant_policy_qualifies_expected_assignment(monkeypatch):
 
     findings, _ = _run_policy(monkeypatch, values)
 
-    assert "default domain policy is presumed to apply" in findings[0].commentary
+    assert "default domain policy applies if no fine-grained policy is in effect" in (
+        findings[0].commentary
+    )
     assert "If a fine-grained policy is expected for this account" in findings[0].commentary
 
 
@@ -487,7 +501,7 @@ def test_failed_resultant_query_is_unknown_not_default(monkeypatch):
     findings, incomplete = _run_policy(monkeypatch, values)
     assert any("LDAP query failed" in entry[2] for entry in incomplete)
     assert "could not be determined" in findings[0].commentary_note
-    assert "default domain policy is presumed" not in findings[0].commentary
+    assert "default domain policy applies if" not in findings[0].commentary
 
 
 def test_unmatched_resultant_pso_is_not_assumed_to_be_default(monkeypatch):
@@ -501,7 +515,7 @@ def test_unmatched_resultant_pso_is_not_assumed_to_be_default(monkeypatch):
     assert any("No matching policy" in entry[2] for entry in incomplete)
     assert "CN=Missing,DC=example" in findings[0].commentary
     assert "settings could not be matched" in findings[0].commentary
-    assert "default domain policy is presumed" not in findings[0].commentary
+    assert "default domain policy applies if" not in findings[0].commentary
 
 
 def test_fine_grained_policy_parser_reads_assignments_and_redacts_credentials(monkeypatch):
@@ -556,6 +570,9 @@ def test_fine_grained_policy_table_shows_values_and_assessments(monkeypatch):
     values, _ = _assess_policy()
     _run_policy(monkeypatch, values)
 
+    assert output.getvalue().rfind("└") < output.getvalue().index(
+        "No msDS-ResultantPSO attribute was returned"
+    )
     pso_table = output.getvalue().split("Fine-Grained Password Policy: 25 Charater Password")[1]
     rows = {line.split("│")[1].strip(): line for line in pso_table.splitlines() if "│" in line}
     for label, value, assessment in (

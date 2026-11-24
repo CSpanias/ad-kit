@@ -171,6 +171,8 @@ def test_selected_checks_xml_uses_all_selected_names(monkeypatch, tmp_path):
         (["check", "all", "--csacyber"], None),
         (["check", "--csacyber", "ldap", "--dc", "dc.example.com"], ["ldap"]),
         (["check", "run", "ldap", "smb", "--csacyber"], ["ldap", "smb"]),
+        (["check", "run", "pass-pol,dns", "--csacyber", "--workers", "16"],
+         ["pass-pol", "dns"]),
         (["check", "--csacyber", "--dc", "dc.example.com", "run", "ldap"], ["ldap"]),
     ],
 )
@@ -199,6 +201,7 @@ def test_cli_dispatches_sureformat_options(monkeypatch, args, expected):
         (["check", "--workers", "3", "ldap"], 3),
         (["check", "smb", "--workers", "1"], 1),
         (["check", "run", "ldap", "smb", "--workers", "2"], 2),
+        (["check", "run", "pass-pol,dns", "--workers", "16"], 16),
     ],
 )
 def test_cli_applies_worker_limit_to_each_check_entrypoint(monkeypatch, args, expected_workers):
@@ -238,6 +241,7 @@ def test_cli_rejects_invalid_or_duplicate_worker_limits(monkeypatch, args):
         (["check", "all", "--exclude", "ldap,smb"], None, {"ldap", "smb"}),
         (["check", "--exclude", "ldap, smb", "all"], None, {"ldap", "smb"}),
         (["check", "run", "ldap", "smb", "--exclude", "ldap"], ["smb"], set()),
+        (["check", "run", "ldap,smb", "--exclude", "ldap"], ["smb"], set()),
         (["check", "--exclude", "dns", "smb"], ["smb"], set()),
     ],
 )

@@ -9,7 +9,7 @@ ad-kit check
 ad-kit check all
 
 # Execute one or more selected assessment modules
-ad-kit check run ldap smb pass-pol
+ad-kit check run ldap,smb,pass-pol
 
 # Skip checks using a comma-separated list
 ad-kit check all --exclude ldap,smb
@@ -20,7 +20,8 @@ ad-kit check --workers 2 run ldap smb
 ad-kit check smb --workers 8
 ```
 
-Modules are executed in the order provided. Checks requiring a Standard User 
+Selected modules may be separated by commas or spaces and are executed in the
+order provided. Checks requiring a Standard User
 account will prompt for credentials once and reuse them across subsequent 
 checks. Some checks (e.g., MAQ) may prompt for DA credentials.
 

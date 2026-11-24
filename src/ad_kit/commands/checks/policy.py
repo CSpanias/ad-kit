@@ -246,17 +246,6 @@ def run_password_policy_checks(
     if fgpp_incomplete:
         record_incomplete("pass-pol", session_data["dc_ip"], fgpp_incomplete)
 
-    if not fgpp_skipped:
-        if not resultant_checked:
-            message = "Standard User effective password policy: Unknown"
-        elif not resultant_dn:
-            message = "Standard User effective password policy: Default domain policy presumed"
-        elif resultant_pso:
-            message = f"Standard User effective password policy: {resultant_pso.name}"
-        else:
-            message = f"Standard User resultant policy: {resultant_dn} (settings not matched)"
-        console.print(Text(message))
-
     if fine_grained:
         for pso in fine_grained:
             pso_assessment = password_policy_assessment(pso.settings)
@@ -286,6 +275,31 @@ def run_password_policy_checks(
             )
             pso_table.add_row("Precedence", pso.precedence or "Unknown", "")
             console.print(pso_table)
+
+    if not fgpp_skipped:
+        user = session_data["standard_user"]
+        if not resultant_checked:
+            message = (
+                f"Could not determine the effective password policy for Standard User '{user}'."
+            )
+        elif not resultant_dn:
+            message = (
+                f"No msDS-ResultantPSO attribute was returned for Standard User '{user}'; "
+                "the default domain password policy is used for this assessment."
+            )
+        elif resultant_pso:
+            message = (
+                f"Fine-grained password policy '{resultant_pso.name}' is the effective "
+                f"password policy for Standard User '{user}'."
+            )
+        else:
+            message = (
+                f"Standard User '{user}' has resultant fine-grained policy '{resultant_dn}', "
+                "but its settings could not be matched."
+            )
+        if fine_grained:
+            console.print()
+        console.print(Text(message))
 
     unknown = [
         setting.replace("_", " ")
@@ -378,8 +392,8 @@ def run_password_policy_checks(
         user = session_data["standard_user"].replace("`", "\\`")
         if not resultant_dn:
             detail = (
-                f"No fine-grained password policy was returned for testing account `{user}`; "
-                "the default domain policy is presumed to apply."
+                f"No `msDS-ResultantPSO` attribute was returned for testing account `{user}`; "
+                "the default domain policy applies if no fine-grained policy is in effect."
             )
             if any(pso.applies_to for pso in fine_grained):
                 detail += (
