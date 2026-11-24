@@ -47,6 +47,27 @@ def _references_section(references: list[str]) -> str:
     return f"<h3>References</h3><ul>{''.join(entries)}</ul>"
 
 
+def _evidence_body(finding: Finding) -> str:
+    body = (
+        f"<p>{escape(finding.evidence_introduction)}</p>"
+        if finding.evidence_introduction else ""
+    )
+    if finding.evidence_table:
+        table = finding.evidence_table
+        headers = "".join(f"<th>{escape(value)}</th>" for value in table.columns)
+        rows = "".join(
+            "<tr>" + "".join(f"<td>{escape(value)}</td>" for value in row) + "</tr>"
+            for row in table.rows
+        )
+        body += (
+            f"<p>{escape(table.introduction)}</p>"
+            '<div class="table-container"><table>'
+            f"<thead><tr>{headers}</tr></thead><tbody>{rows}</tbody>"
+            "</table></div>"
+        )
+    return body + _list_section("", finding.evidence, ordered=True)
+
+
 def _render_finding(finding: Finding) -> str:
     sections = format_finding_sections(finding)
     details = []
@@ -63,26 +84,14 @@ def _render_finding(finding: Finding) -> str:
                     _list_section("Affected Assets", finding.affected_assets)
                     if finding.show_affected_assets else ""
                 )
+                + (
+                    "<h3>Evidence</h3>" + _evidence_body(finding)
+                    if finding.evidence_in_commentary and finding.show_evidence
+                    and (finding.evidence or finding.evidence_table) else ""
+                )
             )
         elif label == "Evidence":
-            body = (
-                f"<p>{escape(finding.evidence_introduction)}</p>"
-                if finding.evidence_introduction else ""
-            )
-            if finding.evidence_table:
-                table = finding.evidence_table
-                headers = "".join(f"<th>{escape(value)}</th>" for value in table.columns)
-                rows = "".join(
-                    "<tr>" + "".join(f"<td>{escape(value)}</td>" for value in row) + "</tr>"
-                    for row in table.rows
-                )
-                body += (
-                    f"<p>{escape(table.introduction)}</p>"
-                    '<div class="table-container"><table>'
-                    f"<thead><tr>{headers}</tr></thead><tbody>{rows}</tbody>"
-                    "</table></div>"
-                )
-            body += _list_section("", finding.evidence, ordered=True)
+            body = _evidence_body(finding)
         else:
             body = (
                 f'<div class="text">{escape(format_paragraphs(finding.remediation))}</div>'

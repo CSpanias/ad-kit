@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 from ad_kit.core.finding import Finding
-from ad_kit.reporting.markdown import format_paragraphs
+from ad_kit.reporting.markdown import format_evidence, format_paragraphs
 
 _findings: list[dict[str, str]] = []
 
@@ -23,6 +23,9 @@ def collect(findings: list[Finding]) -> None:
         if finding.commentary_note:
             note = "Note: " + format_paragraphs(finding.commentary_note).strip()
             description = "\n\n".join(part for part in (description, note) if part)
+        if finding.evidence_in_commentary:
+            evidence = format_evidence(finding, "###")
+            description = "\n\n".join(part for part in (description, evidence) if part)
         _findings.append({"id": finding.id, "description": description})
 
 

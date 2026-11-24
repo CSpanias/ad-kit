@@ -27,6 +27,96 @@ class FineGrainedPolicy:
     assignments_seen: bool = False
 
 
+def _query_entries(output: str, evidence: str) -> list[tuple[str, dict[str, list[str]]]]:
+    entries: list[tuple[str, dict[str, list[str]]]] = []
+    current: dict[str, list[str]] | None = None
+    for line in ANSI_ESCAPE_PATTERN.sub("", output).splitlines():
+        match = re.match(r"^\s*LDAPS?\s+\S+\s+\d+\s+\S+\s*(.*)$", line, re.I)
+        if not match:
+            continue
+        text = match.group(1).strip()
+        if text.startswith(("[-]", "[!]")):
+            raise CheckExecutionError(
+                evidence, [], stderr=f"LDAP query failed; see {evidence}.txt."
+            )
+        header = re.match(r"^\[\+\]\s+Response for object:\s*(.+)$", text, re.I)
+        if header:
+            current = {}
+            entries.append((header.group(1).strip(), current))
+        elif current is not None:
+            attribute = re.match(r"^([a-z][a-z0-9-]*)\s+(.+)$", text, re.I)
+            if attribute:
+                current.setdefault(attribute.group(1).casefold(), []).append(
+                    attribute.group(2).strip()
+                )
+            elif re.match(
+                r"^(sAMAccountName|userPrincipalName|msDS-ResultantPSO|name)\b", text, re.I
+            ):
+                raise CheckExecutionError(
+                    evidence, [], stderr=f"LDAP returned an empty attribute; see {evidence}.txt."
+                )
+    return entries
+
+
+def _escape_ldap_filter(value: str) -> str:
+    replacements = {"\\": r"\5c", "*": r"\2a", "(": r"\28", ")": r"\29", "\x00": r"\00"}
+    return "".join(replacements.get(char, char) for char in value)
+
+
+def resultant_password_policy(
+    dc_ip: str, admin: str, password: str, standard_user: str,
+) -> str | None:
+    """Return the resultant PSO DN, or None when a verified user has no reported PSO."""
+    evidence = "password-policy-resultant"
+    account = standard_user.rsplit("\\", 1)[-1]
+    attribute = "userPrincipalName" if "@" in account else "sAMAccountName"
+    query = f"(&(objectClass=user)({attribute}={_escape_ldap_filter(account)}))"
+    output = run_check(
+        evidence,
+        ["nxc", "ldap", dc_ip, "-u", admin, "-p", password, "--query", query,
+         "sAMAccountName userPrincipalName msDS-ResultantPSO"],
+        sensitive_values=[password], show_progress=False,
+    )
+    entries = _query_entries(output, evidence)
+    if len(entries) != 1 or [
+        value.casefold() for value in entries[0][1].get(attribute.casefold(), [])
+    ] != [account.casefold()]:
+        raise CheckExecutionError(
+            evidence, [], stderr=f"Could not identify the testing account; see {evidence}.txt."
+        )
+    values = entries[0][1].get("msds-resultantpso", [])
+    if len(values) > 1:
+        raise CheckExecutionError(
+            evidence, [], stderr=f"Multiple resultant policies were returned; see {evidence}.txt."
+        )
+    return values[0] if values else None
+
+
+def resultant_policy_name(
+    dc_ip: str, admin: str, password: str, policy_dn: str,
+) -> str:
+    """Identify a resultant PSO by its full DN and require its name to be unique."""
+    evidence = "password-policy-resultant-pso"
+    output = run_check(
+        evidence,
+        ["nxc", "ldap", dc_ip, "-u", admin, "-p", password, "--query",
+         "(objectClass=msDS-PasswordSettings)", "name"],
+        sensitive_values=[password], show_progress=False,
+    )
+    entries = _query_entries(output, evidence)
+    matches = [attrs["name"][0] for dn, attrs in entries
+               if dn.casefold() == policy_dn.casefold() and len(attrs.get("name", [])) == 1]
+    if len(matches) != 1 or sum(
+        1 for _, attrs in entries
+        for name in attrs.get("name", []) if name.casefold() == matches[0].casefold()
+    ) != 1:
+        raise CheckExecutionError(
+            evidence, [],
+            stderr=f"Could not uniquely identify the resultant policy; see {evidence}.txt.",
+        )
+    return matches[0]
+
+
 def fine_grained_password_policies(
     dc_ip: str, username: str, password: str
 ) -> tuple[list[FineGrainedPolicy], str | None]:

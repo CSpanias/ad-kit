@@ -13,6 +13,8 @@ from ad_kit.checks.passwords import (
     fine_grained_password_policies,
     password_policy_assessment,
     password_policy_check,
+    resultant_password_policy,
+    resultant_policy_name,
 )
 from ad_kit.checks.pre2k import pre2k_check
 from ad_kit.core.checks import (
@@ -198,6 +200,9 @@ def run_password_policy_checks(
     fine_grained: list[FineGrainedPolicy] = []
     fgpp_incomplete = None
     fgpp_skipped = False
+    resultant_checked = False
+    resultant_dn = None
+    resultant_pso: FineGrainedPolicy | None = None
     if typer.confirm(
         "Assess fine-grained password policies using Domain Administrator credentials?",
         default=False,
@@ -210,6 +215,26 @@ def run_password_policy_checks(
                 )
         except CheckExecutionError as exc:
             fgpp_incomplete = str(exc)
+        try:
+            with progress("Checking the Standard User's effective password policy..."):
+                resultant_dn = resultant_password_policy(
+                    session_data["dc_ip"], da_user, da_pass, session_data["standard_user"]
+                )
+            resultant_checked = True
+            if resultant_dn:
+                name = resultant_policy_name(
+                    session_data["dc_ip"], da_user, da_pass, resultant_dn
+                )
+                matches = [pso for pso in fine_grained if pso.name.casefold() == name.casefold()]
+                if len(matches) != 1:
+                    raise CheckExecutionError(
+                        "password-policy-resultant", [],
+                        stderr="The resultant policy settings could not be uniquely matched "
+                        "to the enumerated fine-grained policies.",
+                    )
+                resultant_pso = matches[0]
+        except CheckExecutionError as exc:
+            record_incomplete("pass-pol", session_data["dc_ip"], str(exc))
     else:
         fgpp_skipped = True
         record_incomplete(
@@ -220,6 +245,17 @@ def run_password_policy_checks(
 
     if fgpp_incomplete:
         record_incomplete("pass-pol", session_data["dc_ip"], fgpp_incomplete)
+
+    if not fgpp_skipped:
+        if not resultant_checked:
+            message = "Standard User effective password policy: Unknown"
+        elif not resultant_dn:
+            message = "Standard User effective password policy: Default domain policy presumed"
+        elif resultant_pso:
+            message = f"Standard User effective password policy: {resultant_pso.name}"
+        else:
+            message = f"Standard User resultant policy: {resultant_dn} (settings not matched)"
+        console.print(Text(message))
 
     if fine_grained:
         for pso in fine_grained:
@@ -273,7 +309,7 @@ def run_password_policy_checks(
     if not weak_settings and not any(
         status.startswith("[red]")
         for pso in fine_grained
-        if pso.applies_to
+        if pso.applies_to or pso is resultant_pso
         for status in password_policy_assessment(pso.settings).values()
     ):
         return
@@ -338,6 +374,32 @@ def run_password_policy_checks(
             + "\n".join(describe_setting(setting, password_policy) for setting in weak_settings)
         )
 
+    if resultant_checked:
+        user = session_data["standard_user"].replace("`", "\\`")
+        if not resultant_dn:
+            detail = (
+                f"No fine-grained password policy was returned for testing account `{user}`; "
+                "the default domain policy is presumed to apply."
+            )
+            if any(pso.applies_to for pso in fine_grained):
+                detail += (
+                    " If a fine-grained policy is expected for this account, the absence of "
+                    "a resultant policy warrants investigation."
+                )
+            commentary.append(detail)
+        elif resultant_pso:
+            name = resultant_pso.name.replace("`", "\\`")
+            commentary.append(
+                f"Fine-grained password policy `{name}` was the resultant policy for "
+                f"testing account `{user}`."
+            )
+        else:
+            dn = resultant_dn.replace("`", "\\`")
+            commentary.append(
+                f"Testing account `{user}` had resultant fine-grained policy `{dn}`, "
+                "but its settings could not be matched to the assessed policies."
+            )
+
     for pso in fine_grained:
         pso_assessment = password_policy_assessment(pso.settings)
         pso_weak = [
@@ -358,7 +420,7 @@ def run_password_policy_checks(
             setting for setting in weak_settings
             if pso_assessment[setting].startswith("[green]")
         ]
-        if not pso.applies_to:
+        if not pso.applies_to and pso is not resultant_pso:
             details += " The policy was therefore not identified as applying to standard users"
             if weak_settings:
                 details += (
@@ -383,7 +445,7 @@ def run_password_policy_checks(
                 " The assessed settings did not confirm that this policy addresses any of "
                 "the identified default-policy weaknesses."
             )
-        if pso.applies_to and pso_weak:
+        if (pso.applies_to or pso is resultant_pso) and pso_weak:
             details += (
                 " The policy contained the following "
                 + count_form(len(pso_weak), "setting", "settings")
@@ -410,6 +472,10 @@ def run_password_policy_checks(
         notes.append(
             "Fine-grained password policies were not fully assessed, so effective "
             "settings for individual accounts may differ from the default domain policy."
+        )
+    if not fgpp_skipped and not resultant_checked:
+        notes.append(
+            "The resultant password policy for the testing account could not be determined."
         )
 
     finding.commentary = "\n\n".join(commentary)
@@ -614,6 +680,7 @@ def run_maq_checks(
     if maq > 0:
 
         finding = load_finding("maq", "MAQ-001")
+        finding.evidence_in_commentary = True
 
         finding.evidence.append(
             f"MAQ was configured as `{maq}`."

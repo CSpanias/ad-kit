@@ -205,13 +205,12 @@ def run_tombstone_checks(
         return
 
     if std_pass is None:
-        std_pass = authenticate_standard_user()
+        std_pass = authenticate_standard_user(trailing_blank=False)
 
     dc_ips = sorted(set(session_data.get("dc_ips") or [session_data["dc_ip"]]))
     results = []
     findings = []
 
-    console.print()
     with progress("Checking Standard User access to deleted objects..."):
 
         for dc_ip in track_items(dc_ips, "Deleted-object domain controllers"):
@@ -594,7 +593,7 @@ def run_smb_checks(
         if standard_user:
             if std_pass is None:
                 try:
-                    std_pass = authenticate_standard_user()
+                    std_pass = authenticate_standard_user(trailing_blank=False)
                 except CheckExecutionError as exc:
                     record_incomplete("SMB share access", "all hosts", str(exc))
             if std_pass is not None:

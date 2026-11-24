@@ -66,6 +66,7 @@ section at the end of the HTML report for coverage gaps.
 The HTML report is self-contained and has **Copy Markdown** buttons for each 
 finding and for its individual commentary, evidence, and remediation sections. 
 Affected assets are included in commentary, and references in remediation. 
+MAQ and DNS finding evidence is also included in the commentary copy.
 
 Individual section copies omit their section titles; the full finding copy
 includes them.

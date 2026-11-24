@@ -27,7 +27,7 @@ def run_nopac_checks(
         return
 
     if std_pass is None:
-        std_pass = authenticate_standard_user()
+        std_pass = authenticate_standard_user(trailing_blank=False)
 
     dc_ips = sorted(set(session_data.get("dc_ips") or [session_data["dc_ip"]]))
 
@@ -87,7 +87,7 @@ def run_scriptpath_checks(
         return
 
     if std_pass is None:
-        std_pass = authenticate_standard_user()
+        std_pass = authenticate_standard_user(trailing_blank=False)
 
     dc_ips = sorted(set(session_data.get("dc_ips") or [session_data["dc_ip"]]))
     dc_hostnames = session_data.get("dc_hostnames", [])

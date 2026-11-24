@@ -38,7 +38,27 @@ def test_authentication_success_is_followed_by_blank_line(monkeypatch, admin):
     assert output.getvalue().endswith("Authentication succeeded.\n\n")
 
 
-def test_password_policy_heading_has_one_blank_line_after_authentication(monkeypatch):
+@pytest.mark.parametrize(("module", "runner", "heading"), [
+    ("pass-pol", "run_password_policy_checks", "Password Policy"),
+    ("dns", "run_dns_checks", "DNS Record Creation"),
+    ("maq", "run_maq_checks", "Machine Account Quota"),
+    ("tombstone", "run_tombstone_checks", "Deleted AD Object Access"),
+    ("password-not-required", "run_password_not_required_checks", "Password Not Required Accounts"),
+    ("password-never-expires", "run_password_never_expires_checks", "Password Never Expires Accounts"),
+    ("pre2k", "run_pre2k_checks", "Pre-Windows 2000 Computer Accounts"),
+    ("nopac", "run_nopac_checks", "NoPAC Check"),
+    ("scriptPath", "run_scriptpath_checks", "User Logon Script Paths"),
+    ("privileged", "run_privileged_group_checks", "Privileged Group Membership"),
+    ("delegation", "run_delegation_checks", "Delegation"),
+    ("kerberoast", "run_kerberoast_checks", "Kerberoasting"),
+    ("adcs", "run_adcs_checks", "Active Directory Certificate Services"),
+    ("local-admin", "run_local_admin_checks", "Local Administrator Access"),
+    ("ldap-info", "run_ldap_info_checks", "LDAP Information Exposure"),
+    ("coercion", "run_coercion_checks", "Authentication Coercion"),
+])
+def test_check_heading_has_one_blank_line_after_authentication(
+    monkeypatch, module, runner, heading
+):
     output = io.StringIO()
     console = Console(file=output)
     monkeypatch.setattr(credentials, "console", console)
@@ -50,14 +70,34 @@ def test_password_policy_heading_has_one_blank_line_after_authentication(monkeyp
     monkeypatch.setattr(credentials, "validate_credentials", lambda *_args: "valid")
     monkeypatch.setattr(credentials.typer, "prompt", lambda *_args, **_kwargs: "test")
     monkeypatch.setattr(
-        check, "run_password_policy_checks",
-        lambda _password: console_helpers.print_section("Password Policy"),
+        check, runner, lambda _password: console_helpers.print_section(heading),
     )
 
-    check.run_selected_checks(["pass-pol"])
+    check.run_selected_checks([module])
 
-    assert "Authentication succeeded.\n\n[Password Policy]\n" in output.getvalue()
-    assert "Authentication succeeded.\n\n\n[Password Policy]" not in output.getvalue()
+    assert f"Authentication succeeded.\n\n[{heading}]\n" in output.getvalue()
+    assert f"Authentication succeeded.\n\n\n[{heading}]" not in output.getvalue()
+
+
+def test_full_workflow_heading_has_one_blank_line_after_authentication(monkeypatch):
+    output = io.StringIO()
+    console = Console(file=output)
+    monkeypatch.setattr(credentials, "console", console)
+    monkeypatch.setattr(console_helpers, "console", console)
+    monkeypatch.setattr(credentials, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user",
+    })
+    monkeypatch.setattr(credentials, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(credentials, "validate_credentials", lambda *_args: "valid")
+    monkeypatch.setattr(credentials.typer, "prompt", lambda *_args, **_kwargs: "test")
+    monkeypatch.setattr(
+        check, "run_dns_checks", lambda _password: console_helpers.print_section("DNS Record Creation")
+    )
+
+    check.run_checks(exclude=set(check.AVAILABLE_CHECKS) - {"dns"})
+
+    assert "Authentication succeeded.\n\n[DNS Record Creation]\n" in output.getvalue()
+    assert "Authentication succeeded.\n\n\n[DNS Record Creation]" not in output.getvalue()
 
 
 def test_check_all_reuses_smb_password_for_asreproast(monkeypatch):
@@ -203,7 +243,8 @@ def test_check_all_exclusions_preserve_order_and_authentication(monkeypatch):
         check, "run_dns_checks", lambda _password: pytest.fail("excluded DNS check ran")
     )
     monkeypatch.setattr(
-        check, "authenticate_standard_user", lambda: calls.append(("auth", None)) or "secret"
+        check, "authenticate_standard_user",
+        lambda **_kwargs: calls.append(("auth", None)) or "secret"
     )
     monkeypatch.setattr(check.results, "write_reports", lambda *_args, **_kwargs: None)
 

@@ -45,6 +45,9 @@ class Finding:
         show_evidence:
             Whether the evidence section is displayed in reports.
 
+        evidence_in_commentary:
+            Whether evidence is displayed within commentary instead of separately.
+
         commentary_note:
             Optional note displayed after the commentary.
 
@@ -73,3 +76,4 @@ class Finding:
     show_affected_assets: bool = True
     commentary_note: str = ""
     show_evidence: bool = True
+    evidence_in_commentary: bool = False

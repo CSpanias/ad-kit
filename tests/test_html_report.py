@@ -9,6 +9,7 @@ from ad_kit.commands import check
 from ad_kit.core.finding import EvidenceTable, Finding
 from ad_kit.core.findings import load_finding
 from ad_kit.reporting import html, introductions, markdown, results
+from ad_kit.reporting import json as json_report
 
 
 class ReportParser(HTMLParser):
@@ -112,6 +113,25 @@ def test_html_evidence_copy_retains_table_and_list_without_heading():
         "Detected methods:\n\n| Host | Methods |\n| --- | --- |\n"
         "| DC\\|1 | PetitPotam |\n\n1. Additional evidence."
     )
+
+
+def test_evidence_inside_commentary_is_copyable_and_exported():
+    finding = Finding(
+        "TEST-003", "Evidence", "Description.", "Fix.", evidence=["Created and removed."],
+        evidence_in_commentary=True,
+    )
+    parser = ReportParser()
+    parser.feed(html.render_html([finding]))
+
+    assert [(s["title"], s["headings"]) for s in parser.sections] == [
+        ("Commentary", ["Evidence"]), ("Remediation", []),
+    ]
+    assert parser.copy_texts[1] == "Description.\n\n### Evidence\n\n1. Created and removed."
+    assert markdown.format_findings([finding]).count("Evidence\n\n1. Created and removed.") == 1
+    json_report.reset()
+    json_report.collect([finding])
+    assert json_report.get_findings()[0]["description"] == parser.copy_texts[1]
+    json_report.reset()
 
 
 def test_html_references_only_link_http_urls_and_escape_attributes():

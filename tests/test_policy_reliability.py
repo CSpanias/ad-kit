@@ -25,6 +25,7 @@ def stub_optional_fgpp_by_default(monkeypatch):
     monkeypatch.setattr(policy.typer, "confirm", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(policy, "authenticate_domain_admin", lambda: ("admin", "test-secret"))
     monkeypatch.setattr(policy, "fine_grained_password_policies", lambda *_args: ([], None))
+    monkeypatch.setattr(policy, "resultant_password_policy", lambda *_args: None)
 
 
 @pytest.mark.parametrize("kind", ["maq", "dns"])
@@ -33,13 +34,14 @@ def test_current_command_evidence_includes_cleanup_without_replaying(
 ):
     output = io.StringIO()
     commands = []
+    recorded = []
     monkeypatch.setattr(policy, "console", Console(file=output, width=200))
     monkeypatch.setattr(policy, "print_section", lambda title: print(title, file=output))
     monkeypatch.setattr(policy, "require_session", lambda: {
         "dc_ip": "dc", "domain": "example.test", "standard_user": "user",
     })
     monkeypatch.setattr(policy, "authenticate_domain_admin", lambda: ("admin", "admin-secret"))
-    monkeypatch.setattr(policy, "record_findings", lambda _findings: None)
+    monkeypatch.setattr(policy, "record_findings", recorded.extend)
     monkeypatch.setattr(policy, "progress", no_progress)
     monkeypatch.setattr(checks, "progress", no_progress)
     monkeypatch.setattr(checks, "get_artefacts_dir", lambda: tmp_path)
@@ -91,6 +93,11 @@ def test_current_command_evidence_includes_cleanup_without_replaying(
         ]
     assert text.count("\n\n$ ") == len(commands) - 1
     assert text.endswith("\n\n")
+    assert len(recorded) == 1
+    sections = format_finding_sections(recorded[0])
+    assert "### Evidence\n\n" in sections["Commentary"]
+    assert "Evidence" not in sections
+    assert "<h3>Evidence</h3>" in render_html(recorded)
 
 
 def test_maq_without_finding_does_not_display_evidence(monkeypatch, tmp_path):
@@ -334,6 +341,167 @@ def _pso_output(*, count=1, applies_to=None, minimum_age="1 days", minimum_lengt
     ]
     lines.extend(applies_to or [])
     return "\n".join(f"LDAP dc 389 DC {line}" for line in lines)
+
+
+def _query_output(*lines):
+    return "\n".join(f"LDAP dc 389 DC {line}" for line in lines)
+
+
+@pytest.mark.parametrize(("account", "attribute", "escaped"), [
+    ("EXAMPLE\\us*er", "sAMAccountName", r"us\2aer"),
+    ("user@example.test", "userPrincipalName", "user@example.test"),
+])
+def test_resultant_policy_query_identifies_user_and_escapes_filter(
+    monkeypatch, account, attribute, escaped
+):
+    calls = []
+    expected_account = account.rsplit("\\", 1)[-1]
+    dn = "CN=Policy,CN=Password Settings Container,CN=System,DC=example,DC=test"
+
+    def run(name, command, **kwargs):
+        calls.append((name, command, kwargs))
+        return _query_output(
+            "[+] Response for object: CN=User,DC=example,DC=test",
+            f"{attribute} {expected_account}",
+            f"msDS-ResultantPSO {dn}",
+        )
+
+    monkeypatch.setattr(passwords, "run_check", run)
+    assert passwords.resultant_password_policy("dc", "admin", "secret", account) == dn
+    assert f"({attribute}={escaped})" in calls[0][1][-2]
+    assert calls[0][2]["sensitive_values"] == ["secret"]
+
+
+@pytest.mark.parametrize("output", [
+    "",
+    _query_output("[-] LDAP search failed"),
+    _query_output("[+] Response for object: CN=User,DC=example", "sAMAccountName other"),
+    _query_output("[+] Response for object: CN=User,DC=example", "sAMAccountName user",
+                  "msDS-ResultantPSO"),
+    _query_output("[+] Response for object: CN=User,DC=example", "sAMAccountName user",
+                  "msDS-ResultantPSO CN=one,DC=example",
+                  "msDS-ResultantPSO CN=two,DC=example"),
+    _query_output("[+] Response for object: CN=one,DC=example", "sAMAccountName user",
+                  "[+] Response for object: CN=two,DC=example", "sAMAccountName user"),
+])
+def test_resultant_policy_query_rejects_unverified_results(monkeypatch, output):
+    monkeypatch.setattr(passwords, "run_check", lambda *_args, **_kwargs: output)
+    with pytest.raises(CheckExecutionError):
+        passwords.resultant_password_policy("dc", "admin", "secret", "user")
+
+
+def test_resultant_policy_query_presumes_default_only_for_identified_user(monkeypatch):
+    monkeypatch.setattr(
+        passwords, "run_check",
+        lambda *_args, **_kwargs: _query_output(
+            "[+] Response for object: CN=User,DC=example", "sAMAccountName USER",
+        ),
+    )
+    assert passwords.resultant_password_policy("dc", "admin", "secret", "user") is None
+
+
+def test_resultant_policy_matches_full_dn_and_rejects_duplicate_names(monkeypatch):
+    first = "CN=Policy,CN=Password Settings Container,CN=System,DC=example"
+    other = "CN=Policy,OU=Other,DC=example"
+    output = _query_output(f"[+] Response for object: {first}", "name Policy")
+    monkeypatch.setattr(passwords, "run_check", lambda *_args, **_kwargs: output)
+    assert passwords.resultant_policy_name("dc", "admin", "secret", first.lower()) == "Policy"
+    output += "\n" + _query_output(f"[+] Response for object: {other}", "name Policy")
+    with pytest.raises(CheckExecutionError):
+        passwords.resultant_policy_name("dc", "admin", "secret", first)
+
+
+def test_resultant_policy_is_reported_even_when_assignments_were_not_returned(monkeypatch):
+    output = io.StringIO()
+    calls = []
+    dn = "CN=Strong policy,CN=Password Settings Container,CN=System,DC=example,DC=test"
+
+    def run(name, _command, **kwargs):
+        calls.append((name, kwargs))
+        if name == "password-policy-fine-grained":
+            return _pso_output()
+        if name == "password-policy-resultant":
+            return _query_output(
+                "[+] Response for object: CN=User,DC=example,DC=test",
+                "sAMAccountName user", f"msDS-ResultantPSO {dn}",
+            )
+        if name == "password-policy-resultant-pso":
+            return _query_output(f"[+] Response for object: {dn}", "name Strong policy")
+        pytest.fail(f"Unexpected check: {name}")
+
+    monkeypatch.setattr(policy, "console", Console(file=output, width=160))
+    monkeypatch.setattr(passwords, "run_check", run)
+    monkeypatch.setattr(policy, "fine_grained_password_policies", passwords.fine_grained_password_policies)
+    monkeypatch.setattr(policy, "resultant_password_policy", passwords.resultant_password_policy)
+    monkeypatch.setattr(policy, "resultant_policy_name", passwords.resultant_policy_name)
+    values, _ = _assess_policy(minimum_age="None")
+
+    findings, incomplete = _run_policy(monkeypatch, values)
+
+    assert not incomplete
+    assert "Standard User effective password policy: Strong policy" in output.getvalue()
+    assert "resultant policy for testing account `user`" in findings[0].commentary
+    assert "minimum age: at least one day" in findings[0].commentary
+    assert "lockout threshold was 0" in findings[0].commentary
+    assert "not identified as applying to standard users" not in findings[0].commentary
+    assert "resultant policy for testing account" in render_html(findings)
+    assert [name for name, _ in calls] == [
+        "password-policy-fine-grained", "password-policy-resultant",
+        "password-policy-resultant-pso",
+    ]
+    assert all(kwargs["sensitive_values"] == ["test-secret"] for _, kwargs in calls)
+
+
+def test_default_policy_presumption_is_reported_for_testing_account(monkeypatch):
+    values, _ = _assess_policy(minimum_age="None")
+    findings, incomplete = _run_policy(monkeypatch, values)
+    assert not incomplete
+    assert "No fine-grained password policy was returned for testing account `user`" in (
+        findings[0].commentary
+    )
+    assert "default domain policy is presumed to apply" in findings[0].commentary
+
+
+def test_missing_resultant_policy_qualifies_expected_assignment(monkeypatch):
+    monkeypatch.setattr(
+        passwords, "run_check", lambda *_args, **_kwargs: _pso_output(
+            applies_to=["CN=Domain Users,CN=Users,DC=example,DC=test"]
+        ),
+    )
+    policies, _ = passwords.fine_grained_password_policies("dc", "admin", "secret")
+    monkeypatch.setattr(policy, "fine_grained_password_policies", lambda *_args: (policies, None))
+    values, _ = _assess_policy(minimum_age="None")
+
+    findings, _ = _run_policy(monkeypatch, values)
+
+    assert "default domain policy is presumed to apply" in findings[0].commentary
+    assert "If a fine-grained policy is expected for this account" in findings[0].commentary
+
+
+def test_failed_resultant_query_is_unknown_not_default(monkeypatch):
+    def fail(*_args):
+        raise CheckExecutionError("password-policy-resultant", [], stderr="LDAP query failed")
+
+    monkeypatch.setattr(policy, "resultant_password_policy", fail)
+    values, _ = _assess_policy(minimum_age="None")
+    findings, incomplete = _run_policy(monkeypatch, values)
+    assert any("LDAP query failed" in entry[2] for entry in incomplete)
+    assert "could not be determined" in findings[0].commentary_note
+    assert "default domain policy is presumed" not in findings[0].commentary
+
+
+def test_unmatched_resultant_pso_is_not_assumed_to_be_default(monkeypatch):
+    def fail(*_args):
+        raise CheckExecutionError("password-policy-resultant-pso", [], stderr="No matching policy")
+
+    monkeypatch.setattr(policy, "resultant_password_policy", lambda *_args: "CN=Missing,DC=example")
+    monkeypatch.setattr(policy, "resultant_policy_name", fail)
+    values, _ = _assess_policy(minimum_age="None")
+    findings, incomplete = _run_policy(monkeypatch, values)
+    assert any("No matching policy" in entry[2] for entry in incomplete)
+    assert "CN=Missing,DC=example" in findings[0].commentary
+    assert "settings could not be matched" in findings[0].commentary
+    assert "default domain policy is presumed" not in findings[0].commentary
 
 
 def test_fine_grained_policy_parser_reads_assignments_and_redacts_credentials(monkeypatch):

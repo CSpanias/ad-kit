@@ -26,6 +26,20 @@ nxc ldap <dc_ip> -u <admin> -p <password> --pso
 ```
 
 Its output is saved in `ad-kit/evidence/password-policy-fine-grained.txt`.
+The check also queries the testing account's `msDS-ResultantPSO` attribute.
+When a policy is returned, a second query identifies its full distinguished
+name and matches its settings to the enumerated policies. These outputs are
+saved as `password-policy-resultant.txt` and `password-policy-resultant-pso.txt`
+in the evidence directory.
+
+If the testing account is identified but no resultant policy is returned, the
+default domain policy is presumed to apply. An unsuccessful or ambiguous
+account query is reported as unknown. If a resultant policy is returned but
+its settings cannot be matched, the check reports the policy and records the
+assessment as incomplete. This result applies only to the testing account;
+other accounts may have different effective policies. An omitted attribute may
+also reflect directory read permissions.
+
 If NetExec does not provide a verifiable policy count, or the query fails,
 the assessment is recorded as incomplete rather than assuming no policies exist.
 NetExec rounds down fine-grained policy ages to days and lockout intervals to
@@ -105,7 +119,8 @@ to every user: direct assignments, group membership and precedence affect the
 resultant policy. The finding identifies default-policy settings that meet the
 baseline in an assigned fine-grained policy, without assuming coverage.
 Where no assignments are reported, it does not treat the policy as mitigating
-the default-policy findings or include its settings as findings. Weak settings
+the default-policy findings or include its settings as findings, unless the
+policy is confirmed as resultant for the testing account. Weak settings
 for reported assignments to other users or groups are included, without
 assuming their membership or effective policy. Verify assignments and the
 effective policy for individual accounts.

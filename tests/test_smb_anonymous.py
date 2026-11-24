@@ -503,7 +503,7 @@ def test_smb_password_prompt_is_separated_from_host_summary(
     })
     monkeypatch.setattr(
         unauthenticated, "authenticate_standard_user",
-        lambda: console.print("Enter the Standard User password:") or "secret",
+        lambda **_kwargs: console.print("Enter the Standard User password:") or "secret",
     )
     monkeypatch.setattr(unauthenticated, "smb_share_access_check", lambda *_args: ([], []))
     unauthenticated.run_smb_checks()

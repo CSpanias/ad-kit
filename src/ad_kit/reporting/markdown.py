@@ -55,25 +55,7 @@ def format_paragraphs(
     return "\n\n".join(paragraphs)
 
 
-def format_finding_sections(finding: Finding, *, heading_level: int = 1) -> dict[str, str]:
-    """Format independently copyable sections, including their related lists."""
-    heading = "#" * heading_level
-    subheading = "#" * (heading_level + 2)
-    sections = {}
-
-    if finding.commentary or finding.commentary_note or (
-        finding.show_affected_assets and finding.affected_assets
-    ):
-        parts = [f"{heading} Commentary", format_paragraphs(finding.commentary)]
-        if finding.commentary_note:
-            parts.append(f"**Note:** {format_paragraphs(finding.commentary_note)}")
-        if finding.show_affected_assets and finding.affected_assets:
-            parts.extend([
-                f"{subheading} Affected Assets",
-                "\n".join(f"- {asset}" for asset in finding.affected_assets),
-            ])
-        sections["Commentary"] = "\n\n".join(part for part in parts if part)
-
+def format_evidence(finding: Finding, heading: str) -> str:
     if finding.show_evidence and (finding.evidence or finding.evidence_table):
         parts = [f"{heading} Evidence"]
         if finding.evidence_introduction:
@@ -96,7 +78,34 @@ def format_finding_sections(finding: Finding, *, heading_level: int = 1) -> dict
             parts.append("\n".join(
                 f"{index}. {item}" for index, item in enumerate(finding.evidence, start=1)
             ))
-        sections["Evidence"] = "\n\n".join(parts)
+        return "\n\n".join(parts)
+    return ""
+
+
+def format_finding_sections(finding: Finding, *, heading_level: int = 1) -> dict[str, str]:
+    """Format independently copyable sections, including their related lists."""
+    heading = "#" * heading_level
+    subheading = "#" * (heading_level + 2)
+    sections = {}
+
+    evidence = format_evidence(finding, subheading if finding.evidence_in_commentary else heading)
+    if finding.commentary or finding.commentary_note or (
+        finding.show_affected_assets and finding.affected_assets
+    ) or (finding.evidence_in_commentary and evidence):
+        parts = [f"{heading} Commentary", format_paragraphs(finding.commentary)]
+        if finding.commentary_note:
+            parts.append(f"**Note:** {format_paragraphs(finding.commentary_note)}")
+        if finding.show_affected_assets and finding.affected_assets:
+            parts.extend([
+                f"{subheading} Affected Assets",
+                "\n".join(f"- {asset}" for asset in finding.affected_assets),
+            ])
+        if finding.evidence_in_commentary and evidence:
+            parts.append(evidence)
+        sections["Commentary"] = "\n\n".join(part for part in parts if part)
+
+    if evidence and not finding.evidence_in_commentary:
+        sections["Evidence"] = evidence
 
     if finding.remediation or finding.references:
         parts = [f"{heading} Remediation", format_paragraphs(finding.remediation)]
