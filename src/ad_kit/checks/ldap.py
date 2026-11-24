@@ -64,11 +64,17 @@ def _check_controller(
                 end = lower.find(")", start)
                 if end != -1:
                     binding = lower[start + 16:end].strip()
-                    result["channel_binding"] = (
-                        "[red]✗ Not Enforced[/red]"
-                        if binding in {"never", "no tls cert"}
-                        else binding
-                    )
+                    if binding == "no tls cert":
+                        result["channel_binding"] = _UNKNOWN
+                        incomplete.append((
+                            "LDAP channel binding",
+                            "TLS connection failed (NetExec reported No TLS cert); "
+                            "channel binding could not be verified",
+                        ))
+                    else:
+                        result["channel_binding"] = (
+                            "[red]✗ Not Enforced[/red]" if binding == "never" else binding
+                        )
 
             if "[+]" in line:
                 success_message = line.split("[+]", 1)[1].strip()

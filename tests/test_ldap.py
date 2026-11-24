@@ -6,6 +6,7 @@ from ad_kit.checks import ldap
 from ad_kit.core import util
 from ad_kit.core.checks import CheckEvidence, append_captured_evidence, capture_check_evidence
 from ad_kit.core.findings import load_finding
+from ad_kit.reporting.markdown import format_finding_sections, format_paragraphs
 
 
 @pytest.mark.parametrize(
@@ -107,7 +108,9 @@ def test_ldap_user_search_without_results_is_not_treated_as_denied(monkeypatch):
 
 
 @pytest.mark.parametrize(("count", "noun", "count_word"), [
-    (1, "Domain Controller (DC)", "one"), (2, "Domain Controllers (DCs)", "two")
+    (1, "Domain Controller (DC)", "one"),
+    (2, "Domain Controllers (DCs)", "two"),
+    (10, "Domain Controllers (DCs)", "10"),
 ])
 def test_ldap_commentary_counts_affected_controllers(monkeypatch, count, noun, count_word):
     monkeypatch.setattr(ldap, "load_dc_hostnames", lambda: [f"DC{i}" for i in range(count)])
@@ -116,16 +119,48 @@ def test_ldap_commentary_counts_affected_controllers(monkeypatch, count, noun, c
     monkeypatch.setattr(
         ldap, "run_check",
         lambda *_args, **_kwargs: (
-            "LDAP dc 389 DC (signing:None) (channel binding:Always)\n"
-            "LDAP dc 389 DC [-] STATUS_LOGON_FAILURE"
+            "LDAP dc 389 DC (signing:None) (channel binding:Never)\n"
+            "LDAP dc 389 DC [+] example\\:********\n"
+            "LDAP dc 389 DC Enumerated 1 domain users: EXAMPLE"
         ),
     )
     _, findings = ldap.ldap_check()
-    signing = next(finding for finding in findings if finding.id == "LDAP-001")
-    assert f"{count_word} {noun} did not" in signing.commentary
-    assert "Lightweight Directory Access Protocol (LDAP)" in signing.commentary
-    assert "Lightweight Directory Access Protocol (LDAP)" in signing.remediation
-    assert "Domain Controllers (DCs)" in signing.remediation
+    by_id = {finding.id: finding for finding in findings}
+    assert f"{count_word} {noun} did not require LDAP signing" in by_id["LDAP-001"].commentary
+    assert f"{count_word}\n{noun}." in by_id["LDAP-002"].commentary
+    assert f"{count_word} {noun} permitted anonymous LDAP binds" in by_id["LDAP-003"].commentary
+    for finding in findings:
+        assert "Lightweight Directory Access Protocol (LDAP)" in finding.commentary
+        assert "Lightweight Directory Access Protocol (LDAP)" in finding.remediation
+        remediation = format_finding_sections(finding)["Remediation"]
+        assert "\n- " in remediation and "### References" in remediation
+        assert len(finding.affected_assets) == count
+    assert "does not establish that all LDAP traffic is unsigned" in format_paragraphs(
+        by_id["LDAP-001"].commentary
+    )
+    assert "does not establish that directory searches or user enumeration are permitted" in (
+        format_paragraphs(by_id["LDAP-003"].commentary)
+    )
+    assert "`When Supported` only as an interim measure" in by_id["LDAP-002"].remediation
+
+
+def test_missing_tls_certificate_does_not_confirm_channel_binding_is_disabled(monkeypatch):
+    incomplete = []
+    monkeypatch.setattr(ldap, "load_dc_hostnames", lambda: ["DC"])
+    monkeypatch.setattr(ldap, "record_incomplete", lambda *args: incomplete.append(args))
+    monkeypatch.setattr(
+        ldap, "run_check",
+        lambda *_args, **_kwargs: (
+            "LDAP dc 389 DC (signing:Enforced) (channel binding:No TLS cert)\n"
+            "LDAP dc 389 DC [-] STATUS_LOGON_FAILURE"
+        ),
+    )
+
+    results, findings = ldap.ldap_check()
+
+    assert results[0]["channel_binding"] == "[yellow]⚠ Unknown[/yellow]"
+    assert not any(finding.id == "LDAP-002" for finding in findings)
+    assert any("channel binding could not be verified" in reason for _, _, reason in incomplete)
 
 
 def test_ldap_parallel_controllers_keep_per_host_evidence_and_order(monkeypatch):
