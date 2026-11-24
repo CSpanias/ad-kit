@@ -2,10 +2,11 @@
 
 Findings are generated during assessment checks and written to a self-contained HTML report in the `ad-kit/` directory. Each finding has a unique ID, title, commentary, remediation guidance, and evidence.
 
-The HTML report groups related findings and provides a copyable, evidence-specific
-introduction when a topic has more than one finding. The introductions describe
-potential impacts rather than confirmed exploitation and are not included in
-JSON or XML integration exports.
+The HTML report groups related findings and provides separate copyable finding
+and remediation introductions when a topic has more than one finding. The
+finding introduction describes potential impacts rather than confirmed
+exploitation; the remediation introduction summarises relevant actions.
+Neither introduction is included in JSON or XML integration exports.
 
 ## Finding Categories
 

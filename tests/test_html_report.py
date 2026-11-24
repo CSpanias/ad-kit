@@ -164,9 +164,11 @@ def test_group_introductions_are_copyable_and_describe_only_present_findings():
     parser.feed(report)
     smb_intro = parser.copy_texts[0]
     ldap_intro = next(text for text in parser.copy_texts if text.startswith(
-        "The assessment identified multiple LDAP security observations"
+        "The assessment identified multiple Lightweight Directory Access Protocol (LDAP) "
+        "security observations"
     ))
 
+    assert "Server Message Block (SMB) security" in smb_intro
     assert "systems not requiring SMB signing" in smb_intro
     assert "write-related permissions reported for a standard user" in smb_intro
     assert "effective file-write access" in smb_intro
@@ -174,9 +176,27 @@ def test_group_introductions_are_copyable_and_describe_only_present_findings():
     assert "anonymous LDAP binds" in ldap_intro
     assert "directory enumeration where separately permitted" in ldap_intro
     assert "channel binding" not in ldap_intro
-    assert report.index("SMB overview") < report.index("SMB-001") < report.index("SMB-004")
-    assert report.index("SMB-004") < report.index("LDAP overview")
-    assert report.index("LDAP overview") < report.index("LDAP-003") < report.index("LDAP-001")
+    smb_remediation = parser.copy_texts[1]
+    assert "Server Message Block (SMB)" in smb_remediation
+    assert "require SMB signing" in smb_remediation
+    assert "review and restrict share permissions" in smb_remediation
+    assert "SMBv1" not in smb_remediation and "Guest" not in smb_remediation
+    ldap_remediation = next(text for text in parser.copy_texts if text.startswith(
+        "To address the identified Lightweight Directory Access Protocol (LDAP)"
+    ))
+    assert "review anonymous LDAP binds and directory access" in ldap_remediation
+    assert "enforce LDAP signing" in ldap_remediation
+    assert "channel binding" not in ldap_remediation
+    for finding in findings:
+        assert markdown.format_findings([finding]) in parser.copy_texts
+        remediation = markdown.format_finding_sections(finding)["Remediation"]
+        assert remediation.partition("\n\n")[2] in parser.copy_texts
+    assert "<h3>Remediation introduction</h3>" in report
+    smb_heading = "Server Message Block (SMB) overview"
+    ldap_heading = "Lightweight Directory Access Protocol (LDAP) overview"
+    assert report.index(smb_heading) < report.index("SMB-001") < report.index("SMB-004")
+    assert report.index("SMB-004") < report.index(ldap_heading)
+    assert report.index(ldap_heading) < report.index("LDAP-003") < report.index("LDAP-001")
     assert 'introduction.hidden = Boolean(query)' in report
 
 
@@ -196,12 +216,28 @@ def test_smb_introduction_covers_all_observed_findings_without_assuming_dc_scope
     findings = [load_finding("smb", f"SMB-00{index}") for index in range(1, 5)]
     intro = introductions.group_introduction("SMB", findings)
     assert "systems not requiring SMB signing" in intro
-    assert "systems supporting SMBv1" in intro
+    assert "systems supporting SMB version one (SMBv1)" in intro
     assert "empty-credential SMB enumeration" in intro
     assert "write-related permissions reported for a standard user" in intro
     assert "authentication capture and relay where effective file-write access exists" in intro
     assert "domain controllers" not in intro.lower()
     assert "widespread" not in intro
+
+
+@pytest.mark.parametrize(("category", "ids", "expanded"), [
+    ("smb", ["SMB-002", "SMB-003"], "Server Message Block (SMB)"),
+    ("ldap", ["LDAP-002", "LDAP-003"], "Lightweight Directory Access Protocol (LDAP)"),
+    ("asreproast", ["ASREP-001", "ASREP-002"], "Authentication Service Response (AS-REP)"),
+    ("adcs", ["ADCS-ESC1", "ADCS-ESC8"], "Active Directory Certificate Services (AD CS)"),
+])
+def test_group_headings_and_copyable_introductions_expand_abbreviations(category, ids, expanded):
+    findings = [load_finding(category, finding_id) for finding_id in ids]
+    report = html.render_html(findings)
+    parser = ReportParser()
+    parser.feed(report)
+    assert f"<h2>{expanded} " in report
+    assert expanded in parser.copy_texts[0]
+    assert expanded in parser.copy_texts[1]
 
 
 @pytest.mark.parametrize(("category", "ids"), [
@@ -222,6 +258,35 @@ def test_supported_multi_finding_topics_have_specific_introductions(category, id
     introduction = introductions.group_introduction(*groups[0])
     assert "the finding '" not in introduction
     assert "Depending on the circumstances" in introduction
+    remediation = introductions.group_remediation_introduction(*groups[0])
+    assert "address the identified findings" not in remediation
+    assert "verify their effectiveness" in remediation
+
+
+def test_smb_remediation_introduction_covers_only_observed_findings():
+    findings = [load_finding("smb", f"SMB-00{index}") for index in range(1, 5)]
+    intro = introductions.group_remediation_introduction("SMB", findings)
+    assert "Server Message Block (SMB)" in intro
+    assert "require SMB signing" in intro
+    assert "disable SMB version one (SMBv1)" in intro
+    assert "restrict unnecessary anonymous and Guest access" in intro
+    assert "review and restrict share permissions" in intro
+    assert "test compatibility" in intro
+
+
+def test_remediation_introduction_deduplicates_actions_and_handles_unknown_findings():
+    findings = [
+        load_finding("adcs", "ADCS-ESC1"),
+        load_finding("adcs", "ADCS-ESC15"),
+        Finding("ADCS-UNKNOWN", "<untrusted>", "", ""),
+    ]
+    report = html.render_html(findings)
+    parser = ReportParser()
+    parser.feed(report)
+    intro = parser.copy_texts[1]
+    assert intro.count("secure vulnerable certificate templates") == 1
+    assert "address the identified findings" in intro
+    assert "<untrusted>" not in report
 
 
 def test_incomplete_checks_are_collapsed_after_findings_and_escaped():

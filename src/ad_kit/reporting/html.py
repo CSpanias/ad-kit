@@ -6,7 +6,12 @@ from pathlib import Path
 
 from ad_kit.core.finding import Finding
 from ad_kit.core.util import count_form
-from ad_kit.reporting.introductions import group_findings, group_introduction, group_title
+from ad_kit.reporting.introductions import (
+    group_findings,
+    group_introduction,
+    group_remediation_introduction,
+    group_title,
+)
 from ad_kit.reporting.markdown import format_finding_sections, format_findings, format_paragraphs
 
 
@@ -105,12 +110,16 @@ def render_html(findings: list[Finding], incomplete: list[str] | None = None) ->
     for topic, group in group_findings(findings):
         if len(group) > 1:
             introduction = group_introduction(topic, group)
+            remediation_introduction = group_remediation_introduction(topic, group)
             title = escape(group_title(topic))
             content_parts.append(
                 '<section class="group-introduction">'
                 f"<h2>{title} overview</h2>"
                 + _copy_controls(introduction, f"{title} overview")
-                + f'<div class="text">{escape(introduction)}</div></section>'
+                + f'<div class="text">{escape(introduction)}</div>'
+                + "<h3>Remediation introduction</h3>"
+                + _copy_controls(remediation_introduction, f"{title} remediation introduction")
+                + f'<div class="text">{escape(remediation_introduction)}</div></section>'
             )
         content_parts.extend(_render_finding(finding) for finding in group)
     content = "\n".join(content_parts) or '<p class="empty">No findings were generated.</p>'

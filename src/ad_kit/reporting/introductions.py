@@ -3,13 +3,22 @@
 from ad_kit.core.finding import Finding
 
 _TOPICS = {
-    "SMB": ("SMB", "SMB security"),
-    "LDAP": ("LDAP", "LDAP security"),
+    "SMB": ("Server Message Block (SMB)", "Server Message Block (SMB) security"),
+    "LDAP": (
+        "Lightweight Directory Access Protocol (LDAP)",
+        "Lightweight Directory Access Protocol (LDAP) security",
+    ),
     "PASS": ("Password and account configuration", "password and account configuration"),
-    "ASREP": ("AS-REP roasting", "Kerberos pre-authentication"),
+    "ASREP": (
+        "Authentication Service Response (AS-REP) roasting",
+        "Authentication Service Response (AS-REP) roasting",
+    ),
     "KERB": ("Kerberoasting", "Kerberos service account"),
     "DELEG": ("Kerberos delegation", "Kerberos delegation"),
-    "ADCS": ("Certificate services", "certificate services"),
+    "ADCS": (
+        "Active Directory Certificate Services (AD CS)",
+        "Active Directory Certificate Services (AD CS)",
+    ),
     "PRIV": ("Privileged accounts", "privileged access and account"),
     "LA": ("Administrative access", "administrative access"),
 }
@@ -17,7 +26,10 @@ _TOPICS = {
 # Each entry describes an observed finding and a possible, not established, impact.
 _DETAILS = {
     "SMB-001": ("systems not requiring SMB signing", "authentication relay"),
-    "SMB-002": ("systems supporting SMBv1", "exploitation of vulnerable legacy services"),
+    "SMB-002": (
+        "systems supporting SMB version one (SMBv1)",
+        "exploitation of vulnerable legacy services",
+    ),
     "SMB-003": ("empty-credential SMB enumeration", "unauthorised reconnaissance"),
     "SMB-004": (
         "shares with write-related permissions reported for a standard user",
@@ -79,6 +91,36 @@ _DETAILS = {
     ),
 }
 
+_ACTIONS = {
+    "SMB-001": "require SMB signing",
+    "SMB-002": "disable SMB version one (SMBv1)",
+    "SMB-003": "restrict unnecessary anonymous and Guest access",
+    "SMB-004": "review and restrict share permissions",
+    "LDAP-001": "enforce LDAP signing",
+    "LDAP-002": "enforce LDAP channel binding",
+    "LDAP-003": "review anonymous LDAP binds and directory access",
+    "PASS-001": "strengthen password and account lockout settings",
+    "PASS-002": "review accounts configured without a required password",
+    "PASS-003": "review accounts with non-expiring passwords",
+    "ASREP-001": "enable Kerberos pre-authentication where feasible",
+    "ASREP-002": "review affected accounts' privileged group memberships",
+    "KERB-001": "strengthen service account credentials",
+    "KERB-002": "review the privileges of affected service accounts",
+    "DELEG-001": "remove unnecessary unconstrained delegation",
+    "DELEG-002": "review and restrict delegation with protocol transition",
+    "DELEG-003": "review delegation assigned to privileged accounts",
+    "ADCS-ESC1": "secure vulnerable certificate templates",
+    "ADCS-ESC8": "protect certificate enrolment against authentication relay",
+    "ADCS-ESC15": "secure vulnerable certificate templates",
+    "PRIV-001": "review privileged group membership",
+    "PRIV-002": "review protected account attributes and current privileges",
+    "PRIV-003": "restrict unnecessary Guest access",
+    "PRIV-004": "protect the built-in Administrator account",
+    "PRIV-005": "review and restrict unnecessary directory replication rights",
+    "LA-001": "restrict unnecessary administrative access to affected systems",
+    "LA-002": "restrict unnecessary administrative access to domain controllers",
+}
+
 
 def _join(items: list[str]) -> str:
     if len(items) == 1:
@@ -121,4 +163,17 @@ def group_introduction(topic: str, findings: list[Finding]) -> str:
         f"{_join(observations)}.\n\n"
         f"Depending on the circumstances, these observations could contribute to "
         f"{_join(impacts)}."
+    )
+
+
+def group_remediation_introduction(topic: str, findings: list[Finding]) -> str:
+    """Introduce actions relevant to the findings in a topic."""
+    actions = list(dict.fromkeys(
+        _ACTIONS.get(finding.id, "address the identified findings") for finding in findings
+    ))
+    topic_name = _TOPICS.get(topic, (topic, "security"))[1]
+    return (
+        f"To address the identified {topic_name} observations, {_join(actions)}. "
+        "Prioritise changes according to risk and operational needs, test compatibility "
+        "where appropriate, and verify their effectiveness."
     )
