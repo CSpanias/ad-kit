@@ -97,11 +97,16 @@ Fine-Grained Password Policies (Password Settings Objects) can override the
 default policy for specific users and groups, so the effective policy for an
 individual account may differ from the default domain policy that this check
 reads. When requested, ad-kit assesses the reported policies against the same
-baseline and includes their reported assignments and relevant settings in the
-finding. The fine-grained assessment also flags reversible password encryption.
+baseline and displays each policy's settings, assessments, reported assignments,
+and precedence in a separate table. Relevant settings and assignments are also
+included in the finding. The fine-grained assessment flags reversible password encryption.
 An assignment to a broad group does not prove that the policy applies
 to every user: direct assignments, group membership and precedence affect the
-resultant policy. Verify the effective policy for individual accounts.
+resultant policy. The finding identifies default-policy settings that meet the
+baseline in an assigned fine-grained policy, without assuming coverage.
+Where no assignments are reported, it does not treat the policy as mitigating
+the default-policy findings. Verify assignments and the effective policy for
+individual accounts.
 
 ## Why it matters
 

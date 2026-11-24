@@ -376,6 +376,60 @@ def test_multiple_fine_grained_policies_keep_their_own_assignments(monkeypatch):
     assert policies[1].settings["minimum_length"] == "8"
 
 
+def test_fine_grained_policy_table_shows_values_and_assessments(monkeypatch):
+    output = io.StringIO()
+    monkeypatch.setattr(policy, "console", Console(file=output, width=160))
+    monkeypatch.setattr(
+        passwords, "run_check", lambda *_args, **_kwargs: _pso_output(minimum_age="0 days")
+    )
+    policies, _ = passwords.fine_grained_password_policies("dc", "admin", "secret")
+    policies[0].name = "25 Charater Password"
+    monkeypatch.setattr(policy, "fine_grained_password_policies", lambda *_args: (policies, None))
+    values, _ = _assess_policy()
+    _run_policy(monkeypatch, values)
+
+    pso_table = output.getvalue().split("Fine-Grained Password Policy: 25 Charater Password")[1]
+    rows = {line.split("│")[1].strip(): line for line in pso_table.splitlines() if "│" in line}
+    for label, value, assessment in (
+        ("Minimum Length", "25", "OK"),
+        ("Password History", "3", "OK"),
+        ("Minimum Age", "0 days", "Too Short"),
+        ("Complexity", "Enabled", "OK"),
+        ("Observation Window", "30 minutes", "Not applicable"),
+        ("Lockout Threshold", "0", "Too Permissive"),
+        ("Lockout Duration", "30 minutes", "Not applicable"),
+        ("Reversible Encryption", "Disabled", "Disabled"),
+        ("Applies To", "Not reported", ""),
+        ("Precedence", "1", ""),
+    ):
+        assert value in rows[label]
+        assert assessment in rows[label]
+    assert "Not Set" not in rows["Minimum Age"]
+
+
+def test_each_fine_grained_policy_has_a_separate_table(monkeypatch):
+    output = io.StringIO()
+    monkeypatch.setattr(policy, "console", Console(file=output, width=160))
+    first = _pso_output(count=2, applies_to=["CN=Domain Users,CN=Users,DC=example,DC=test"])
+    second = _pso_output(minimum_length="8").replace(
+        "Policy Name: Strong policy", "Policy Name: Admin policy"
+    )
+    second = "\n".join(second.splitlines()[1:])
+    monkeypatch.setattr(passwords, "run_check", lambda *_args, **_kwargs: first + "\n" + second)
+    policies, _ = passwords.fine_grained_password_policies("dc", "admin", "secret")
+    policies[1].settings["complexity"] = passwords.UNKNOWN
+    monkeypatch.setattr(policy, "fine_grained_password_policies", lambda *_args: (policies, None))
+    values, _ = _assess_policy()
+    _, incomplete = _run_policy(monkeypatch, values)
+
+    first_table = output.getvalue().split("Fine-Grained Password Policy: Strong policy")[1]
+    first_table, second_table = first_table.split("Fine-Grained Password Policy: Admin policy")
+    assert "CN=Domain Users,CN=Users,DC=example,DC=test" in first_table
+    assert "25" in first_table and "Too Short" not in first_table
+    assert "Too Short" in second_table and "Unknown" in second_table
+    assert any("complexity" in entry[2] for entry in incomplete)
+
+
 @pytest.mark.parametrize("output", [
     "",
     _pso_output(count=2),
@@ -406,7 +460,7 @@ def test_fine_grained_policy_context_and_weaknesses_are_reported(monkeypatch):
     assert "Minimum password age was zero days" in finding.commentary
     assert "CN=Domain Users,CN=Users,DC=example,DC=test" in finding.commentary
     assert "minimum age: at least one day" in finding.commentary
-    assert "may supersede the default policy" in finding.commentary
+    assert "these settings address the corresponding default-policy weaknesses" in finding.commentary
     assert "lockout threshold was 0, disabling account lockout" in finding.commentary
     assert "effective policy for every account" in finding.commentary_note
     assert "**Note:**" in format_finding_sections(finding)["Commentary"]
@@ -429,10 +483,93 @@ def test_weak_unassigned_fine_grained_policy_is_reported_without_default_weaknes
     findings, incomplete = _run_policy(monkeypatch, values)
     assert not incomplete
     assert "No assigned users or groups were reported" in findings[0].commentary
+    assert "If unassigned, this policy does not apply to any accounts" in findings[0].commentary
     assert "Minimum password length was eight characters" in findings[0].commentary
     assert "Reversible password encryption was enabled" in findings[0].commentary
     assert "Disable reversible password encryption" in findings[0].remediation
     assert "default domain policy contained" not in findings[0].commentary
+
+
+def test_unassigned_policy_is_not_reported_as_mitigating_default_weakness(monkeypatch):
+    monkeypatch.setattr(passwords, "run_check", lambda *_args, **_kwargs: _pso_output())
+    policies, _ = passwords.fine_grained_password_policies("dc", "admin", "secret")
+    monkeypatch.setattr(policy, "fine_grained_password_policies", lambda *_args: (policies, None))
+    values, _ = _assess_policy(minimum_age="None")
+
+    findings, incomplete = _run_policy(monkeypatch, values)
+
+    assert not incomplete
+    commentary = findings[0].commentary
+    assert "No assigned users or groups were reported" in commentary
+    assert "If unassigned, this policy does not apply to any accounts" in commentary
+    assert "does not address the identified default-policy weakness." in commentary
+    assert "Verify its assignments" in commentary
+    assert "minimum age: at least one day" not in commentary
+    assert "these settings address" not in commentary
+
+
+@pytest.mark.parametrize("subject", [
+    "CN=Domain Users,CN=Users,DC=example,DC=test",
+    "CN=Authenticated Users,CN=Users,DC=example,DC=test",
+])
+def test_assigned_policy_reports_only_mitigated_default_settings(monkeypatch, subject):
+    monkeypatch.setattr(
+        passwords, "run_check", lambda *_args, **_kwargs: _pso_output(applies_to=[subject])
+    )
+    policies, _ = passwords.fine_grained_password_policies("dc", "admin", "secret")
+    monkeypatch.setattr(policy, "fine_grained_password_policies", lambda *_args: (policies, None))
+    values, _ = _assess_policy(minimum_age="None", lockout_threshold="0")
+
+    findings, incomplete = _run_policy(monkeypatch, values)
+
+    assert not incomplete
+    commentary = findings[0].commentary
+    assert subject in commentary
+    assert "minimum age: at least one day" in commentary
+    assert "For accounts for which this is the effective policy" in commentary
+    assert "lockout threshold was 0, disabling account lockout" in commentary
+    assert "lockout threshold: " not in commentary
+    assert "policy precedence" in findings[0].commentary_note
+
+
+@pytest.mark.parametrize("minimum_age", ["0 days", "Unknown"])
+def test_assigned_policy_does_not_claim_unverified_or_weak_settings_are_fixed(
+    monkeypatch, minimum_age
+):
+    monkeypatch.setattr(
+        passwords, "run_check",
+        lambda *_args, **_kwargs: _pso_output(
+            applies_to=["CN=Domain Users,CN=Users,DC=example,DC=test"], minimum_age=minimum_age
+        ),
+    )
+    policies, _ = passwords.fine_grained_password_policies("dc", "admin", "secret")
+    monkeypatch.setattr(policy, "fine_grained_password_policies", lambda *_args: (policies, None))
+    values, _ = _assess_policy(minimum_age="None")
+    findings, incomplete = _run_policy(monkeypatch, values)
+
+    assert "did not confirm that this policy addresses" in findings[0].commentary
+    assert "these settings address" not in findings[0].commentary
+    if minimum_age == "0 days":
+        assert "minimum password age of less than one day" in findings[0].commentary
+    else:
+        assert any("minimum age" in entry[2] for entry in incomplete)
+
+
+def test_not_applicable_pso_setting_does_not_mitigate_default_weakness(monkeypatch):
+    monkeypatch.setattr(
+        passwords, "run_check",
+        lambda *_args, **_kwargs: _pso_output(
+            applies_to=["CN=Domain Users,CN=Users,DC=example,DC=test"]
+        ),
+    )
+    policies, _ = passwords.fine_grained_password_policies("dc", "admin", "secret")
+    monkeypatch.setattr(policy, "fine_grained_password_policies", lambda *_args: (policies, None))
+    values, _ = _assess_policy(observation_window="1 minute")
+
+    findings, _ = _run_policy(monkeypatch, values)
+
+    assert "did not confirm that this policy addresses" in findings[0].commentary
+    assert "these settings address" not in findings[0].commentary
 
 
 def test_skipped_fine_grained_check_is_reported_as_incomplete(monkeypatch):

@@ -1,5 +1,6 @@
 import typer
 from rich.table import Table
+from rich.text import Text
 
 from ad_kit.checks.dns import dns_confirmation_excerpt, dns_record_creation_check
 from ad_kit.checks.local_admin import local_admin_check
@@ -180,47 +181,17 @@ def run_password_policy_checks(
     table.add_column("Value", style="green")
     table.add_column("Assessment", style="yellow")
 
-    table.add_row(
-        "Minimum Length",
-        password_policy["minimum_length"],
-        assessment["minimum_length"],
+    settings = (
+        ("Minimum Length", "minimum_length"),
+        ("Password History", "password_history"),
+        ("Minimum Age", "minimum_age"),
+        ("Complexity", "complexity"),
+        ("Observation Window", "observation_window"),
+        ("Lockout Threshold", "lockout_threshold"),
+        ("Lockout Duration", "lockout_duration"),
     )
-
-    table.add_row(
-        "Password History",
-        password_policy["password_history"],
-        assessment["password_history"],
-    )
-
-    table.add_row(
-        "Minimum Age",
-        password_policy["minimum_age"],
-        assessment["minimum_age"],
-    )
-
-    table.add_row(
-        "Complexity",
-        password_policy["complexity"],
-        assessment["complexity"],
-    )
-
-    table.add_row(
-        "Observation Window",
-        password_policy["observation_window"],
-        assessment["observation_window"],
-    )
-
-    table.add_row(
-        "Lockout Threshold",
-        password_policy["lockout_threshold"],
-        assessment["lockout_threshold"],
-    )
-
-    table.add_row(
-        "Lockout Duration",
-        password_policy["lockout_duration"],
-        assessment["lockout_duration"],
-    )
+    for label, key in settings:
+        table.add_row(label, password_policy[key], assessment[key])
 
     console.print(table)
 
@@ -251,16 +222,8 @@ def run_password_policy_checks(
         record_incomplete("pass-pol", session_data["dc_ip"], fgpp_incomplete)
 
     if fine_grained:
-        pso_table = Table(title="Fine-Grained Password Policies")
-        pso_table.add_column("Policy", style="cyan")
-        pso_table.add_column("Applies To")
-        pso_table.add_column("Assessment")
         for pso in fine_grained:
             pso_assessment = password_policy_assessment(pso.settings)
-            weak = [
-                setting.replace("_", " ") for setting, status in pso_assessment.items()
-                if status.startswith("[red]")
-            ]
             unknown_pso = [
                 setting.replace("_", " ") for setting, status in pso_assessment.items()
                 if status == UNKNOWN
@@ -271,13 +234,22 @@ def run_password_policy_checks(
                     f"Could not assess settings in fine-grained policy {pso.name}: "
                     + ", ".join(unknown_pso) + ". See password-policy-fine-grained.txt evidence.",
                 )
-            status = ", ".join(weak) if weak else (
-                "Unknown" if unknown_pso else "No assessed weaknesses"
-            )
+            pso_table = Table(title=Text(f"Fine-Grained Password Policy: {pso.name}"))
+            pso_table.add_column("Setting", style="cyan")
+            pso_table.add_column("Value", style="green")
+            pso_table.add_column("Assessment", style="yellow")
+            for label, key in (*settings, ("Reversible Encryption", "reversible_encryption")):
+                status = pso_assessment[key]
+                if key == "minimum_age" and pso.settings[key].lower() == "0 days":
+                    status = "[red]✗ Too Short[/red]"
+                pso_table.add_row(label, pso.settings[key], status)
             pso_table.add_row(
-                object_text([pso.name]), object_text(pso.applies_to), status
+                "Applies To",
+                object_text(pso.applies_to) if pso.applies_to else "Not reported",
+                "",
             )
-        console.print(pso_table)
+            pso_table.add_row("Precedence", pso.precedence or "Unknown", "")
+            console.print(pso_table)
 
     unknown = [
         setting.replace("_", " ")
@@ -387,7 +359,14 @@ def run_password_policy_checks(
             setting for setting in weak_settings
             if pso_assessment[setting].startswith("[green]")
         ]
-        if improvements:
+        if not pso.applies_to:
+            details += " If unassigned, this policy does not apply to any accounts"
+            if weak_settings:
+                details += " and does not address the identified default-policy " + count_form(
+                    len(weak_settings), "weakness", "weaknesses"
+                )
+            details += ". Verify its assignments before relying on its settings."
+        elif improvements:
             values = ", ".join(
                 f"{setting.replace('_', ' ')}: "
                 + ("at least " if setting == "minimum_age" else "")
@@ -395,9 +374,14 @@ def run_password_policy_checks(
                 for setting in improvements
             )
             details += (
-                f" The following settings met the assessment baseline: {values}. "
-                "These settings may supersede the default policy for accounts to which "
-                "the fine-grained policy applies."
+                f" Unlike the default policy, the following settings met the assessment "
+                f"baseline: {values}. For accounts for which this is the effective policy, "
+                "these settings address the corresponding default-policy weaknesses."
+            )
+        elif weak_settings:
+            details += (
+                " The assessed settings did not confirm that this policy addresses any of "
+                "the identified default-policy weaknesses."
             )
         if pso_weak:
             details += "\n\n" + "\n".join(
