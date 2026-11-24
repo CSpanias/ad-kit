@@ -19,9 +19,11 @@ _findings: list[dict[str, str]] = []
 def collect(findings: list[Finding]) -> None:
     """Collect all findings using their YAML IDs and commentary."""
     for finding in findings:
-        _findings.append(
-            {"id": finding.id, "description": format_paragraphs(finding.commentary).strip()}
-        )
+        description = format_paragraphs(finding.commentary).strip()
+        if finding.commentary_note:
+            note = "Note: " + format_paragraphs(finding.commentary_note).strip()
+            description = "\n\n".join(part for part in (description, note) if part)
+        _findings.append({"id": finding.id, "description": description})
 
 
 def reset() -> None:

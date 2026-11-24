@@ -72,6 +72,7 @@ def load_finding(category: str, finding_id: str) -> Finding:
         id=finding["id"],
         title=finding["title"],
         commentary=finding["commentary"],
+        commentary_note=finding.get("commentary_note", ""),
         remediation=finding["remediation"],
         references=finding.get("references") or [],
     )

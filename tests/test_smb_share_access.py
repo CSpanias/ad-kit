@@ -9,7 +9,7 @@ from ad_kit.checks import smb
 from ad_kit.commands.checks import unauthenticated
 from ad_kit.core import util
 from ad_kit.core.exceptions import CheckExecutionError
-from ad_kit.reporting import results
+from ad_kit.reporting import html, json, markdown, results
 
 
 def _share_output(rows, permission_width=22):
@@ -215,12 +215,69 @@ def test_share_table_and_finding_only_include_write_related_permissions(monkeypa
     assert "Read-only IPC$ and print$ shares are omitted" in messages[0]
     assert "evidence directory" in messages[0]
     finding = next(finding for finding in results._findings if finding.id == "SMB-004")
-    assert len(finding.evidence) == 5
-    assert "identified 5 Server Message Block (SMB) shares" in finding.commentary
-    assert "access control list (ACL)" in finding.commentary
-    assert any("'IPC$'" in entry for entry in finding.evidence)
-    assert any("'print$'" in entry for entry in finding.evidence)
-    assert all("Read Only" not in entry for entry in finding.evidence)
+    assert "identified multiple Server Message Block (SMB) shares" in finding.commentary
+    assert "access control list (ACL)" in markdown.format_paragraphs(finding.commentary)
+    assert finding.evidence_table is not None
+    assert finding.evidence_table.columns == ("Hostname or IP address", "Share", "Permissions")
+    assert finding.evidence_table.rows == [
+        ("host-A", "Writable", "READ, WRITE"),
+        ("host-A", "Shared", "READ, WRITE"),
+        ("host-A", "ACL", "READ, WRITE (ACL)"),
+        ("host-B", "IPC$", "READ, WRITE"),
+        ("host-B", "print$", "WRITE (SUBDIR)"),
+    ]
+    assert finding.affected_assets == ["host-A", "host-B"]
+    rendered = markdown.format_findings([finding])
+    assert "Affected Assets" not in rendered
+    assert "**Note:** The check does not create or modify files." in rendered
+    assert "| Hostname or IP address | Share | Permissions |" in rendered
+    assert "| --- | --- | --- |" in rendered
+    assert "| host-B | print$ | WRITE (SUBDIR) |" in rendered
+    report = html.render_html([finding])
+    assert "<strong>Note:</strong>" in report
+    assert "<th>Hostname or IP address</th><th>Share</th><th>Permissions</th>" in report
+    assert "Affected Assets" not in report
+    json.reset()
+    json.collect([finding])
+    assert "Note: The check does not create or modify files." in (
+        json.get_findings()[0]["description"]
+    )
+    json.reset()
+    results.reset()
+
+
+@pytest.mark.parametrize(("permissions", "expected"), [
+    (("WRITE (ACL)",), True),
+    (("READ",), False),
+])
+def test_share_finding_single_share_or_none(monkeypatch, tmp_path, permissions, expected):
+    results.reset()
+    monkeypatch.setattr(unauthenticated, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(unauthenticated, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user", "domain_computers_exported": True,
+    })
+    monkeypatch.setattr(unauthenticated, "load_domain_computers", lambda: ["192.0.2.10"])
+    monkeypatch.setattr(unauthenticated, "load_dc_hostnames", lambda: [])
+    monkeypatch.setattr(unauthenticated, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(unauthenticated, "smb_configuration_check", lambda *_args, **_kwargs: {
+        "host": "192.0.2.10", "signing": "[green]✓ Enabled[/green]",
+        "smbv1": "[green]✓ Disabled[/green]", "null_auth": False,
+        "anonymous_shares": None, "anonymous_users": None, "anonymous_incomplete": [],
+    })
+    monkeypatch.setattr(unauthenticated, "smb_share_access_check", lambda *_args: (
+        [{"name": "share", "permissions": permissions}], []
+    ))
+    unauthenticated.run_smb_checks("secret")
+    finding = next((f for f in results._findings if f.id == "SMB-004"), None)
+    assert (finding is not None) is expected
+    if finding:
+        assert "identified one Server Message Block (SMB) share" in finding.commentary
+        assert "Where effective file-write access is available" in finding.commentary
+        assert "not necessarily grant direct file-write access" in (
+            markdown.format_paragraphs(finding.commentary_note)
+        )
+        assert finding.evidence_table is not None
+        assert finding.evidence_table.rows == [("192.0.2.10", "share", "WRITE (ACL)")]
     results.reset()
 
 

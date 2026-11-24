@@ -47,7 +47,9 @@ ad-kit records:
   on Domain Controllers, when enumeration succeeds.
 - **Share access** - readable and write-related share permissions reported for
   the Standard User without writing any files. Only write-related permissions
-  generate a finding.
+  generate a finding. Its evidence table lists each affected host, share and
+  reported permissions; write-related permissions alone do not prove direct
+  file-write access.
 
 The signing, SMBv1, and anonymous checks are unauthenticated. The
 share-access checks use the Standard User account and are prompted only when
@@ -57,6 +59,10 @@ The host configuration table shows counts for signing and SMBv1 instead of
 individual hosts. Unknown counts include hosts without usable results. Its
 empty-credential enumeration counts distinguish **Permitted** from **Guest**
 and **Denied / unverified**. The DC table uses the same enumeration status.
+The SMB signing and SMBv1 findings summarise the number of affected systems,
+including the number of Domain Controllers where applicable, rather than
+listing each host. Raw per-host command output remains in the evidence
+directory.
 Enumeration is verified when a share or user listing completes, even if it is
 empty, or when partial user results contain observed accounts. **Denied /
 unverified** includes explicit authentication denials as well as errors and
@@ -64,6 +70,12 @@ other inconclusive results; it does not prove that access was denied.
 Incomplete checks are also recorded in the HTML report. Enumeration counts
 reflect objects reported by NetExec, not whether shares are readable.
 Partially returned account counts are marked as incomplete.
+The anonymous-enumeration finding describes share names, user account
+information, or both according to the objects actually observed across hosts.
+It notes that enumeration does not prove access to share contents only when
+share names were observed. Its commentary summarises the number of affected
+systems and distinguishes null and Guest-mapped sessions; host details remain
+in the finding evidence rather than a separate affected-assets list.
 
 For confirmed anonymous-enumeration findings, the console displays one current-run sample:
 up to ten anonymous user rows from a Domain Controller where available,
@@ -105,8 +117,8 @@ should be disabled.
 - With SMBv1 enabled, hosts expose legacy functionality with known weaknesses.
 - With anonymous access, share names and account lists can be enumerated
   without credentials.
-- With writable shares, the Standard User can place or modify files on a share
-  where write access was not intended.
+- Where effective file-write access is available, unintended file placement or
+  modification may enable NTLM authentication capture and relay attacks.
 
 ## Findings
 

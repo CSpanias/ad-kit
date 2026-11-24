@@ -15,30 +15,42 @@ SMB-001:
   title: SMB Signing Not Enforced
 
   commentary: |
-    The assessment identified {count} {subject} that did not enforce
-    Server Message Block (SMB) signing.
+    Server Message Block (SMB) signing protects the integrity of SMB messages
+    by adding a cryptographic signature derived from the session key. The
+    receiving system can use it to detect message tampering and verify that
+    the sender holds the session key. SMB is widely used in Active Directory
+    environments for file sharing, Group Policy distribution, and
+    administration.
 
-    SMB signing provides integrity protection for SMB communications and helps
-    prevent tampering and relay attacks.
+    When a server does not require SMB signing, an attacker able to obtain
+    another user's NTLM authentication may be able to relay it to that server
+    without knowing the user's password. An attacker positioned on the network
+    may also be able to modify unsigned SMB traffic. Depending on the relayed
+    account's privileges and other security controls, successful exploitation
+    could lead to unauthorised access, lateral movement, or privilege escalation.
 
-    Without SMB signing, an attacker positioned on the network may be able to 
-    intercept and relay SMB authentication requests in order to authenticate as 
-    legitimate users and access network resources.
-
-    Successful exploitation may result in unauthorised access to systems, data, 
-    or services through SMB relay attacks.
+    During the assessment, {count} {subject}{dc_summary} did not require SMB
+    signing.
 
   remediation: |
-    Enforce Server Message Block (SMB) signing on affected systems to reduce the risk of
-    authentication relay and network-based tampering attacks.
+    Require Server Message Block (SMB) signing on affected systems and, where
+    appropriate, across the environment:
 
-    Prior to implementation, testing should be performed to identify and 
-    address any compatibility issues affecting legacy systems, applications, or 
-    devices.
+    - Configure SMB clients and servers to require signing rather than treating
+      it as optional.
+    - Where possible, enforce the Microsoft network client and server signing
+      settings centrally through Group Policy.
+    - Identify legacy systems, applications, and devices that may not support
+      signing; test compatibility and plan upgrades or compensating controls.
+    - Confirm the effective configuration through network scanning and
+      configuration reviews, and periodically review it against organisational
+      hardening standards.
 
   references:
     - https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-signing
     - https://techcommunity.microsoft.com/blog/filecab/configure-smb-signing-with-confidence/2418102
+    - https://support.microsoft.com/en-gb/help/887429/overview-of-server-message-block-signing
+    - https://techcommunity.microsoft.com/blog/coreinfrastructureandsecurityblog/active-directory-hardening-series---part-6-–-enforcing-smb-signing/4272168
 
 
 SMB-002:
@@ -46,43 +58,55 @@ SMB-002:
   title: SMBv1 Enabled
 
   commentary: |
-    The assessment identified {count} {subject} with Server Message Block
-    (SMB) version 1 (SMBv1) enabled.
+    Server Message Block (SMB) version 1 (SMBv1) is a legacy file-sharing
+    protocol that Microsoft has deprecated in favour of newer versions. It
+    lacks security protections available in SMB version 2 (SMBv2) and version 3
+    (SMBv3), and implementations have been affected by vulnerabilities that
+    can permit information disclosure, denial of service, or remote code
+    execution. SMBv1 vulnerabilities were exploited in the WannaCry and
+    NotPetya malware campaigns.
 
-    SMBv1 is a legacy protocol that lacks many of the security protections 
-    present in SMB version 2 (SMBv2) and version 3 (SMBv3) and has been associated with multiple
-    high-profile vulnerabilities and malware outbreaks.
+    Continued availability of SMBv1 increases the attack surface, particularly
+    on unpatched or unsupported systems. Its presence may also indicate a
+    dependency on legacy systems or applications that should be reviewed.
+    An enabled protocol does not by itself establish that a specific
+    vulnerability is exploitable.
 
-    Continued use of SMBv1 increases the attack surface of the environment and 
-    may expose systems to unnecessary risk.
-
-    Modern Windows operating systems support newer SMB protocol versions that 
-    provide improved security, performance, and resilience.
+    During the assessment, {count} {subject}{dc_summary} had SMBv1 enabled.
 
   remediation: |
     Disable Server Message Block (SMB) version 1 (SMBv1) on affected systems and
-    migrate any dependent services or applications to SMB version 2 (SMBv2)
-    or version 3 (SMBv3).
+    migrate dependent services to supported protocol versions:
 
-    Prior to implementation, identify any legacy systems, applications, or 
-    devices that require SMBv1 and develop an appropriate migration plan.
+    - Identify legacy applications, devices, and services that depend on SMBv1,
+      and plan and test their migration before disabling it.
+    - On Windows, disable SMBv1 using the appropriate Group Policy, PowerShell,
+      or Windows Features configuration.
+    - On Linux and Unix systems, review Samba settings and disable SMBv1 support.
+    - Use supported SMBv2 or SMBv3 configurations where SMB is required; use
+      SMBv3 where encryption is needed and supported.
+    - Validate the resulting configuration and use network scanning to
+      confirm that SMBv1 is no longer exposed.
 
   references:
     - https://learn.microsoft.com/en-us/windows-server/storage/file-server/troubleshoot/detect-enable-and-disable-smbv1-v2-v3
     - https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-security
+    - https://techcommunity.microsoft.com/blog/filecab/stop-using-smb1/425858
 
 SMB-003:
   id: SMB-003
   title: Anonymous SMB Enumeration Permitted
 
   commentary: |
-    The assessment established a Server Message Block (SMB) session using empty credentials and
-    successfully enumerated share names and/or user account information.
+    A Server Message Block (SMB) null session is a connection established without an
+    authenticated user identity. Depending on server configuration, a connection using
+    empty credentials may instead be mapped to the Guest account.
 
-    Anonymous SMB session setup alone does not demonstrate access to share
-    contents. However, the ability to enumerate share or account information
-    may disclose details about the environment and assist further
-    reconnaissance.
+    If enumeration is permitted, an unauthenticated user may obtain account or share
+    information that can help identify targets and plan further attacks.
+
+    During the assessment, {session_description} allowed enumeration of
+    {enumerated_information} on {count} {subject}.{share_access_caveat}
 
   remediation: |
     Restrict anonymous Server Message Block (SMB) access and enumeration to the minimum required by
@@ -104,18 +128,39 @@ SMB-004:
   title: SMB Shares Writable by Standard User
 
   commentary: |
-    The assessment identified {count} Server Message Block (SMB) {subject} for
-    which an access control list (ACL)-based permission check reported
+    The assessment identified {share_description} for which an access control
+    list (ACL)-based permission check reported
     write-related permissions for the Standard User.
-    NetExec's WRITE (SUBDIR) and WRITE (ACL) labels indicate specific
-    permissions and do not by themselves establish direct file-write access.
 
-    Writable shares may permit unintended modification or placement of files.
-    This check does not create or modify files; effective access can also be
-    affected by filesystem permissions and server-side controls.
+    Where effective file-write access is available, an attacker could place or
+    modify files to trigger NTLM authentication from other users. Depending on
+    client behaviour and security controls, authentication attempts could be
+    relayed, or captured challenge-response material could be used for offline
+    password cracking.
+
+  commentary_note: |
+    The check does not create or modify files. Write-related permissions do not
+    necessarily grant direct file-write access, and effective access may also
+    depend on filesystem permissions and server-side controls.
 
   remediation: |
-    Review both share and filesystem permissions on the affected shares.
-    Remove unnecessary write access and grant it only to accounts or groups
-    with a documented business need. Confirm the effective permissions after
-    policy changes.
+    Review access to the affected shares and apply the principle of least
+    privilege:
+
+    - Review both share and filesystem permissions. Remove unnecessary
+      write-related access and replace overly broad assignments with
+      well-defined groups that have a documented business need.
+    - Identify sensitive data, including personal information and
+      configuration files, and store it in appropriately restricted locations.
+    - Avoid storing plaintext credentials or secrets on network shares; use
+      dedicated secure storage instead.
+    - Review access regularly and remove obsolete permissions.
+    - Enable logging and monitoring on critical shares to help identify
+      unauthorised or unusual access.
+    - Confirm effective permissions after changes and test any required
+      application access.
+
+  references:
+    - https://www.netspi.com/blog/technical-blog/adversary-simulation/network-share-permissions-powerhuntshares/
+    - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/best-practices-for-securing-active-directory#avoid-granting-excessive-privileges
+    - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/implementing-least-privilege-administrative-models

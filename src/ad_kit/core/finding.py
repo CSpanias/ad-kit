@@ -12,8 +12,8 @@ from dataclasses import dataclass, field
 @dataclass
 class EvidenceTable:
     introduction: str
-    columns: tuple[str, str]
-    rows: list[tuple[str, str]]
+    columns: tuple[str, ...]
+    rows: list[tuple[str, ...]]
 
 
 @dataclass
@@ -39,6 +39,12 @@ class Finding:
         affected_assets:
             Assets affected by the finding.
 
+        show_affected_assets:
+            Whether the affected asset list is displayed in reports.
+
+        commentary_note:
+            Optional note displayed after the commentary.
+
         references:
             External references and supporting
             documentation.
@@ -61,3 +67,5 @@ class Finding:
     references: list[str] = field(default_factory=list)
     evidence_table: EvidenceTable | None = None
     evidence_introduction: str = ""
+    show_affected_assets: bool = True
+    commentary_note: str = ""

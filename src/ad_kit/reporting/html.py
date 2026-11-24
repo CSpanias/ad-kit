@@ -51,7 +51,15 @@ def render_html(findings: list[Finding], incomplete: list[str] | None = None) ->
             if label == "Commentary":
                 body = (
                     f'<div class="text">{escape(format_paragraphs(finding.commentary))}</div>'
-                    + _list_section("Affected Assets", finding.affected_assets)
+                    + (
+                        f'<p><strong>Note:</strong> '
+                        f'{escape(format_paragraphs(finding.commentary_note))}</p>'
+                        if finding.commentary_note else ""
+                    )
+                    + (
+                        _list_section("Affected Assets", finding.affected_assets)
+                        if finding.show_affected_assets else ""
+                    )
                 )
             elif label == "Evidence":
                 body = (

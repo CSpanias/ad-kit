@@ -23,6 +23,7 @@ from ad_kit.core.checks import (
 )
 from ad_kit.core.console import console, object_text, print_info, print_section, print_warning
 from ad_kit.core.exceptions import CheckExecutionError
+from ad_kit.core.finding import EvidenceTable, Finding
 from ad_kit.core.findings import format_counted_commentary, load_finding
 from ad_kit.core.util import (
     count_form,
@@ -299,6 +300,22 @@ def _verified_enumeration_status(result: dict) -> str:
         if result["null_auth"] is True:
             return "Permitted"
     return "Denied / unverified"
+
+
+def _summarise_smb_systems(finding: Finding, hosts: list[str], dcs: set[str]) -> None:
+    finding.affected_assets.extend(sorted(set(hosts)))
+    count = len(finding.affected_assets)
+    dc_count = sum(host.rstrip(".").casefold() in dcs for host in finding.affected_assets)
+    finding.commentary = finding.commentary.format(
+        count=count,
+        subject=count_form(count, "system", "systems"),
+        dc_summary=(
+            f", including {dc_count} "
+            f"{count_form(dc_count, 'domain controller', 'domain controllers')},"
+            if dc_count else ""
+        ),
+    )
+    finding.show_affected_assets = False
 
 
 def _anonymous_count(
@@ -631,20 +648,56 @@ def run_smb_checks(
     if smb_signing_disabled:
 
         finding = load_finding("smb", "SMB-001")
-        finding.affected_assets.extend(sorted(set(smb_signing_disabled)))
-        format_counted_commentary(finding, len(finding.affected_assets), "system", "systems")
+        _summarise_smb_systems(finding, smb_signing_disabled, dcs)
         findings.append(finding)
 
     if smbv1_enabled:
 
         finding = load_finding("smb", "SMB-002")
-        finding.affected_assets.extend(sorted(set(smbv1_enabled)))
-        format_counted_commentary(finding, len(finding.affected_assets), "system", "systems")
+        _summarise_smb_systems(finding, smbv1_enabled, dcs)
         findings.append(finding)
 
     if anonymous_enumeration:
 
         finding = load_finding("smb", "SMB-003")
+        observed_shares = any(result["anonymous_shares"] for result in anonymous_enumeration)
+        observed_users = any(result["anonymous_users"] for result in anonymous_enumeration)
+        if observed_shares and observed_users:
+            enumerated_information = "share names and user account information"
+        elif observed_shares:
+            enumerated_information = "share names"
+        else:
+            enumerated_information = "user account information"
+        count = len(anonymous_enumeration)
+        guest_sessions = any(result.get("guest_auth", False) for result in anonymous_enumeration)
+        null_sessions = any(not result.get("guest_auth", False) for result in anonymous_enumeration)
+        if guest_sessions and null_sessions:
+            session_description = "anonymous and Guest-mapped SMB sessions"
+        elif guest_sessions:
+            session_description = count_form(
+                count, "a Guest-mapped SMB session", "Guest-mapped SMB sessions"
+            ) + " established with empty credentials"
+        else:
+            session_description = count_form(count, "an SMB null session", "SMB null sessions")
+        all_dcs = all(
+            result["host"].rstrip(".").casefold() in dcs
+            for result in anonymous_enumeration
+        )
+        subject = (
+            count_form(count, "domain controller", "domain controllers")
+            if all_dcs else count_form(count, "system", "systems")
+        )
+        finding.commentary = finding.commentary.format(
+            enumerated_information=enumerated_information,
+            session_description=session_description,
+            count=count,
+            subject=subject,
+            share_access_caveat=(
+                " Enumerating share names does not by itself demonstrate access to "
+                "share contents." if observed_shares else ""
+            ),
+        )
+        finding.show_affected_assets = False
 
         for result in anonymous_enumeration:
 
@@ -688,15 +741,28 @@ def run_smb_checks(
     if writable_shares:
 
         finding = load_finding("smb", "SMB-004")
-        format_counted_commentary(finding, len(writable_shares), "share", "shares")
+        finding.commentary = finding.commentary.format(
+            share_description=count_form(
+                len(writable_shares),
+                "one Server Message Block (SMB) share",
+                "multiple Server Message Block (SMB) shares",
+            )
+        )
+        finding.show_affected_assets = False
+        finding.evidence_table = EvidenceTable(
+            introduction=(
+                "The following shares had write-related permissions reported "
+                f"for Standard User '{standard_user}':"
+            ),
+            columns=("Hostname or IP address", "Share", "Permissions"),
+            rows=[
+                (host, share["name"], ", ".join(share["permissions"]))
+                for host, share in writable_shares
+            ],
+        )
 
         for host, share in writable_shares:
             finding.affected_assets.append(host)
-            finding.evidence.append(
-                f"NetExec reported {', '.join(share['permissions'])} permissions "
-                f"for Standard User '{standard_user}' on share '{share['name']}' "
-                f"on '{host}'."
-            )
 
         finding.affected_assets = sorted(set(finding.affected_assets))
         findings.append(finding)

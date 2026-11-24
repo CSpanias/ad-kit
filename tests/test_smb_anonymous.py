@@ -10,7 +10,7 @@ from ad_kit.checks import smb
 from ad_kit.commands.checks import unauthenticated
 from ad_kit.core import util
 from ad_kit.core.checks import append_captured_evidence
-from ad_kit.reporting import results
+from ad_kit.reporting import html, markdown, results
 
 
 def test_smb_scopes_anonymous_users_and_displays_enumeration_status(monkeypatch, tmp_path):
@@ -253,6 +253,108 @@ def test_smb_host_summary_counts_verified_and_incomplete_results(monkeypatch, tm
     assert any("SMB anonymous enumeration - C" in entry for entry in results._incomplete)
     finding = next(finding for finding in results._findings if finding.id == "SMB-003")
     assert sorted(finding.affected_assets) == ["A", "D"]
+    results.reset()
+
+
+@pytest.mark.parametrize(("unsigned", "controllers", "expected"), [
+    ([], ["DC"], None),
+    (["HOST"], [], "1 system did not require SMB signing."),
+    (["HOST", "SERVER"], [], "2 systems did not require SMB signing."),
+    (
+        ["HOST", "DC."],
+        ["dc"],
+        "2 systems, including 1 domain controller, did not require SMB signing.",
+    ),
+    (
+        ["DC1", "DC2", "HOST"],
+        ["dc1.", "dc2"],
+        "3 systems, including 2 domain controllers, did not require SMB signing.",
+    ),
+])
+def test_smb_signing_finding_summarises_affected_systems(
+    monkeypatch, tmp_path, unsigned, controllers, expected
+):
+    results.reset()
+    hosts = unsigned + ["UNKNOWN"]
+    monkeypatch.setattr(unauthenticated, "console", Console(file=io.StringIO(), width=160))
+    monkeypatch.setattr(unauthenticated, "print_section", lambda *_args: None)
+    monkeypatch.setattr(unauthenticated, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(unauthenticated, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "", "domain_computers_exported": True,
+    })
+    monkeypatch.setattr(unauthenticated, "load_domain_computers", lambda: hosts)
+    monkeypatch.setattr(unauthenticated, "load_dc_hostnames", lambda: controllers)
+    monkeypatch.setattr(unauthenticated, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(unauthenticated, "smb_configuration_check", lambda host, *_args, **_kw: {
+        "host": host,
+        "signing": "[red]✗ Disabled[/red]" if host in unsigned else "[yellow]⚠ Unknown[/yellow]",
+        "smbv1": "[green]✓ Disabled[/green]",
+        "null_auth": False, "anonymous_shares": None, "anonymous_users": None,
+        "anonymous_incomplete": [],
+    })
+    unauthenticated.run_smb_checks()
+    finding = next((f for f in results._findings if f.id == "SMB-001"), None)
+    if expected is None:
+        assert finding is None
+    else:
+        assert finding is not None
+        commentary = markdown.format_paragraphs(finding.commentary)
+        assert expected in commentary
+        assert "NTLM authentication" in commentary
+        assert sorted(finding.affected_assets) == sorted(unsigned)
+        assert "Affected Assets" not in markdown.format_findings([finding])
+        assert "Affected Assets" not in html.render_html([finding])
+    results.reset()
+
+
+@pytest.mark.parametrize(("enabled", "controllers", "expected"), [
+    ([], ["DC"], None),
+    (["HOST"], [], "1 system had SMBv1 enabled."),
+    (["HOST", "SERVER"], [], "2 systems had SMBv1 enabled."),
+    (
+        ["HOST", "DC."],
+        ["dc"],
+        "2 systems, including 1 domain controller, had SMBv1 enabled.",
+    ),
+    (
+        ["DC1", "DC2", "HOST"],
+        ["dc1.", "dc2"],
+        "3 systems, including 2 domain controllers, had SMBv1 enabled.",
+    ),
+])
+def test_smbv1_finding_summarises_affected_systems(
+    monkeypatch, tmp_path, enabled, controllers, expected
+):
+    results.reset()
+    hosts = enabled + ["UNKNOWN"]
+    monkeypatch.setattr(unauthenticated, "console", Console(file=io.StringIO(), width=160))
+    monkeypatch.setattr(unauthenticated, "print_section", lambda *_args: None)
+    monkeypatch.setattr(unauthenticated, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(unauthenticated, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "", "domain_computers_exported": True,
+    })
+    monkeypatch.setattr(unauthenticated, "load_domain_computers", lambda: hosts)
+    monkeypatch.setattr(unauthenticated, "load_dc_hostnames", lambda: controllers)
+    monkeypatch.setattr(unauthenticated, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(unauthenticated, "smb_configuration_check", lambda host, *_args, **_kw: {
+        "host": host,
+        "signing": "[green]✓ Enabled[/green]",
+        "smbv1": "[red]✗ Enabled[/red]" if host in enabled else "[yellow]⚠ Unknown[/yellow]",
+        "null_auth": False, "anonymous_shares": None, "anonymous_users": None,
+        "anonymous_incomplete": [],
+    })
+    unauthenticated.run_smb_checks()
+    finding = next((f for f in results._findings if f.id == "SMB-002"), None)
+    if expected is None:
+        assert finding is None
+    else:
+        assert finding is not None
+        commentary = markdown.format_paragraphs(finding.commentary)
+        assert expected in commentary
+        assert "does not by itself establish" in commentary
+        assert sorted(finding.affected_assets) == sorted(enabled)
+        assert "Affected Assets" not in markdown.format_findings([finding])
+        assert "Affected Assets" not in html.render_html([finding])
     results.reset()
 
 
@@ -525,7 +627,69 @@ def test_guest_session_is_visible_and_included_in_enumeration_finding(monkeypatc
     assert "Anonymous evidence - HOST" in output.getvalue()
     finding = next(finding for finding in results._findings if finding.id == "SMB-003")
     assert any("mapped to Guest" in entry and "'HOST'" in entry for entry in finding.evidence)
+    assert "a Guest-mapped SMB session established with empty credentials" in finding.commentary
+    assert "allowed enumeration of\nshare names on 1 system" in finding.commentary
     assert not results._incomplete
+    results.reset()
+
+
+@pytest.mark.parametrize(("observations", "expected", "guest_hosts"), [
+    ([(2, None, False)], "share names", []),
+    ([(None, 3, True)], "user account information", []),
+    ([(2, 3, True)], "share names and user account information", []),
+    ([(2, None, False), (None, 3, False)], "share names and user account information", []),
+    ([(2, None, False), (None, 3, False)], "share names and user account information", ["DC1"]),
+    ([(0, 3, False)], "user account information", []),
+    ([(2, 0, True)], "share names", []),
+    ([(0, 0, True)], None, []),
+])
+def test_anonymous_finding_commentary_matches_observed_objects(
+    monkeypatch, tmp_path, observations, expected, guest_hosts
+):
+    results.reset()
+    monkeypatch.setattr(unauthenticated, "console", Console(file=io.StringIO(), width=160))
+    monkeypatch.setattr(unauthenticated, "print_section", lambda *_args: None)
+    monkeypatch.setattr(unauthenticated, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(unauthenticated, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "", "domain_computers_exported": True,
+    })
+    hosts = [f"DC{i}" for i in range(len(observations))]
+    monkeypatch.setattr(unauthenticated, "load_domain_computers", lambda: hosts)
+    monkeypatch.setattr(unauthenticated, "load_dc_hostnames", lambda: hosts)
+    monkeypatch.setattr(unauthenticated, "get_artefacts_dir", lambda: tmp_path)
+
+    def configuration(host, _dc, *, enumerate_users):
+        shares, users, complete = observations[int(host[2:])]
+        return {
+            "host": host, "signing": "[green]✓ Enabled[/green]",
+            "smbv1": "[green]✓ Disabled[/green]", "null_auth": host not in guest_hosts,
+            "guest_auth": host in guest_hosts,
+            "anonymous_shares": shares, "anonymous_users": users,
+            "anonymous_users_complete": complete, "anonymous_incomplete": [],
+        }
+
+    monkeypatch.setattr(unauthenticated, "smb_configuration_check", configuration)
+    unauthenticated.run_smb_checks()
+    finding = next((finding for finding in results._findings if finding.id == "SMB-003"), None)
+    if expected is None:
+        assert finding is None
+        results.reset()
+        return
+    assert finding is not None
+    assert (
+        f"allowed enumeration of\n{expected} on {len(hosts)} "
+        f"{'domain controller' if len(hosts) == 1 else 'domain controllers'}."
+    ) in finding.commentary
+    assert "help identify targets and plan further attacks" in finding.commentary
+    assert ("Enumerating share names does not by itself demonstrate access to share contents."
+            in finding.commentary) is any(shares for shares, _, _ in observations)
+    assert "session setup alone" not in finding.commentary
+    if guest_hosts:
+        assert "anonymous and Guest-mapped SMB sessions" in finding.commentary
+    assert sorted(finding.affected_assets) == hosts
+    assert all(any(f"'{host}'" in entry for entry in finding.evidence) for host in hosts)
+    assert "Affected Assets" not in markdown.format_findings([finding])
+    assert "Affected Assets" not in html.render_html([finding])
     results.reset()
 
 

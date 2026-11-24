@@ -61,9 +61,13 @@ def format_finding_sections(finding: Finding, *, heading_level: int = 1) -> dict
     subheading = "#" * (heading_level + 2)
     sections = {}
 
-    if finding.commentary or finding.affected_assets:
+    if finding.commentary or finding.commentary_note or (
+        finding.show_affected_assets and finding.affected_assets
+    ):
         parts = [f"{heading} Commentary", format_paragraphs(finding.commentary)]
-        if finding.affected_assets:
+        if finding.commentary_note:
+            parts.append(f"**Note:** {format_paragraphs(finding.commentary_note)}")
+        if finding.show_affected_assets and finding.affected_assets:
             parts.extend([
                 f"{subheading} Affected Assets",
                 "\n".join(f"- {asset}" for asset in finding.affected_assets),
@@ -82,7 +86,7 @@ def format_finding_sections(finding: Finding, *, heading_level: int = 1) -> dict
                         .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                         .replace("\r", " ").replace("\n", " "))
 
-            rows = [table.columns, ("---", "---"), *table.rows]
+            rows = [table.columns, tuple("---" for _ in table.columns), *table.rows]
             parts.extend([
                 table.introduction,
                 "\n".join("| " + " | ".join(cell(value) for value in row) + " |"

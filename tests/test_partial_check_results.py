@@ -52,7 +52,8 @@ def test_smb_keeps_successes_and_reports_each_incomplete_host(monkeypatch, tmp_p
 
     monkeypatch.setattr(unauthenticated, "smb_configuration_check", configuration)
     monkeypatch.setattr(unauthenticated, "smb_share_access_check", writable)
-    unauthenticated.run_smb_checks("secret")
+    password = "test-password-not-for-report"
+    unauthenticated.run_smb_checks(password)
     assert len(warnings) == 2
     assert "SMB configuration could not be fully assessed on 1 host" in warnings[0]
     assert "SMB share-access checks could not be completed on 1 host" in warnings[1]
@@ -63,7 +64,7 @@ def test_smb_keeps_successes_and_reports_each_incomplete_host(monkeypatch, tmp_p
     assert "Incomplete checks" in report
     assert "SMB configuration - B" in report
     assert "SMB share access - A" in report
-    assert "secret" not in report
+    assert password not in report
     results.reset()
 
 
