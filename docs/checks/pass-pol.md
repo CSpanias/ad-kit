@@ -105,8 +105,10 @@ to every user: direct assignments, group membership and precedence affect the
 resultant policy. The finding identifies default-policy settings that meet the
 baseline in an assigned fine-grained policy, without assuming coverage.
 Where no assignments are reported, it does not treat the policy as mitigating
-the default-policy findings. Verify assignments and the effective policy for
-individual accounts.
+the default-policy findings or include its settings as findings. Weak settings
+for reported assignments to other users or groups are included, without
+assuming their membership or effective policy. Verify assignments and the
+effective policy for individual accounts.
 
 ## Why it matters
 

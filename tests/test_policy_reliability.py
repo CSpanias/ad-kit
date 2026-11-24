@@ -471,7 +471,7 @@ def test_fine_grained_policy_context_and_weaknesses_are_reported(monkeypatch):
     assert len(finding.references) == len(set(finding.references))
 
 
-def test_weak_unassigned_fine_grained_policy_is_reported_without_default_weakness(monkeypatch):
+def test_weak_unassigned_fine_grained_policy_does_not_create_finding(monkeypatch):
     monkeypatch.setattr(
         passwords, "run_check", lambda *_args, **_kwargs: _pso_output(
             minimum_length="8"
@@ -482,16 +482,14 @@ def test_weak_unassigned_fine_grained_policy_is_reported_without_default_weaknes
     values, _ = _assess_policy()
     findings, incomplete = _run_policy(monkeypatch, values)
     assert not incomplete
-    assert "No assigned users or groups were reported" in findings[0].commentary
-    assert "If unassigned, this policy does not apply to any accounts" in findings[0].commentary
-    assert "Minimum password length was eight characters" in findings[0].commentary
-    assert "Reversible password encryption was enabled" in findings[0].commentary
-    assert "Disable reversible password encryption" in findings[0].remediation
-    assert "default domain policy contained" not in findings[0].commentary
+    assert not findings
 
 
 def test_unassigned_policy_is_not_reported_as_mitigating_default_weakness(monkeypatch):
-    monkeypatch.setattr(passwords, "run_check", lambda *_args, **_kwargs: _pso_output())
+    monkeypatch.setattr(
+        passwords, "run_check",
+        lambda *_args, **_kwargs: _pso_output(minimum_length="8", minimum_age="0 days"),
+    )
     policies, _ = passwords.fine_grained_password_policies("dc", "admin", "secret")
     monkeypatch.setattr(policy, "fine_grained_password_policies", lambda *_args: (policies, None))
     values, _ = _assess_policy(minimum_age="None")
@@ -501,11 +499,17 @@ def test_unassigned_policy_is_not_reported_as_mitigating_default_weakness(monkey
     assert not incomplete
     commentary = findings[0].commentary
     assert "No assigned users or groups were reported" in commentary
-    assert "If unassigned, this policy does not apply to any accounts" in commentary
-    assert "does not address the identified default-policy weakness." in commentary
-    assert "Verify its assignments" in commentary
+    assert "not identified as applying to standard users" in commentary
+    assert "cannot be considered to address the identified default-policy weakness." in commentary
+    assert "precedence" not in commentary
+    assert "Verify" not in commentary
     assert "minimum age: at least one day" not in commentary
     assert "these settings address" not in commentary
+    assert "The minimum password age was less than one day" not in commentary
+    assert "Minimum password length was eight" not in commentary
+    assert "The account lockout threshold was 0" not in commentary
+    assert "enabling account lockout" not in findings[0].remediation
+    assert "not identified as applying to standard users" in render_html(findings)
 
 
 @pytest.mark.parametrize("subject", [
@@ -527,6 +531,7 @@ def test_assigned_policy_reports_only_mitigated_default_settings(monkeypatch, su
     assert subject in commentary
     assert "minimum age: at least one day" in commentary
     assert "For accounts for which this is the effective policy" in commentary
+    assert "The policy contained the following setting" in commentary
     assert "lockout threshold was 0, disabling account lockout" in commentary
     assert "lockout threshold: " not in commentary
     assert "policy precedence" in findings[0].commentary_note
@@ -550,7 +555,7 @@ def test_assigned_policy_does_not_claim_unverified_or_weak_settings_are_fixed(
     assert "did not confirm that this policy addresses" in findings[0].commentary
     assert "these settings address" not in findings[0].commentary
     if minimum_age == "0 days":
-        assert "minimum password age of less than one day" in findings[0].commentary
+        assert "minimum password age was less than one day" in findings[0].commentary
     else:
         assert any("minimum age" in entry[2] for entry in incomplete)
 
@@ -599,7 +604,10 @@ def test_failed_fine_grained_query_preserves_default_finding(monkeypatch):
 def test_partial_fine_grained_output_reports_known_weaknesses(monkeypatch):
     monkeypatch.setattr(
         passwords, "run_check",
-        lambda *_args, **_kwargs: _pso_output(count=2, minimum_length="8"),
+        lambda *_args, **_kwargs: _pso_output(
+            count=2, minimum_length="8",
+            applies_to=["CN=Other Group,CN=Users,DC=example,DC=test"],
+        ),
     )
     policies, error = passwords.fine_grained_password_policies("dc", "admin", "secret")
     monkeypatch.setattr(
@@ -609,13 +617,17 @@ def test_partial_fine_grained_output_reports_known_weaknesses(monkeypatch):
     findings, incomplete = _run_policy(monkeypatch, values)
 
     assert "Minimum password length was eight characters" in findings[0].commentary
+    assert "CN=Other Group,CN=Users,DC=example,DC=test" in findings[0].commentary
     assert "not fully assessed" in findings[0].commentary_note
     assert "could not be verified" in incomplete[0][2]
 
 
 def test_fine_grained_rounded_intervals_do_not_imply_precise_values(monkeypatch):
     output = (
-        _pso_output(minimum_age="0 days")
+        _pso_output(
+            minimum_age="0 days",
+            applies_to=["CN=Domain Users,CN=Users,DC=example,DC=test"],
+        )
         .replace("Lockout Threshold: 0", "Lockout Threshold: 5")
         .replace("Lockout Duration: 30 minutes", "Lockout Duration: 0 minutes")
         .replace("Observation Window: 30 minutes", "Observation Window: 0 minutes")
@@ -630,8 +642,9 @@ def test_fine_grained_rounded_intervals_do_not_imply_precise_values(monkeypatch)
     values, _ = _assess_policy()
     findings, incomplete = _run_policy(monkeypatch, values)
 
-    assert "minimum password age of less than one day" in findings[0].commentary
-    assert "lockout observation window of less than one minute" in findings[0].commentary
+    assert "minimum password age was less than one day" in findings[0].commentary
+    assert "lockout observation window was less than one minute" in findings[0].commentary
+    assert "NetExec" not in findings[0].commentary
     assert any("lockout duration" in entry[2] for entry in incomplete)
     assert "manual unlock" not in findings[0].commentary
 

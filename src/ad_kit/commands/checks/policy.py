@@ -273,6 +273,7 @@ def run_password_policy_checks(
     if not weak_settings and not any(
         status.startswith("[red]")
         for pso in fine_grained
+        if pso.applies_to
         for status in password_policy_assessment(pso.settings).values()
     ):
         return
@@ -318,12 +319,12 @@ def run_password_policy_checks(
         references.extend(content["references"])
         if fine_grained and setting == "minimum_age" and value.lower() == "0 days":
             return (
-                "- NetExec reported a minimum password age of less than one day, "
+                "- The minimum password age was less than one day, "
                 "which may allow rapid password cycling to bypass password history."
             )
         if fine_grained and setting == "observation_window" and value.lower() == "0 minutes":
             return (
-                "- NetExec reported a lockout observation window of less than one minute, "
+                "- The lockout observation window was less than one minute, "
                 "which may allow failed attempts to be reset quickly."
             )
         return "- " + content["commentary"].format(**format_values)
@@ -353,19 +354,18 @@ def run_password_policy_checks(
             )
         else:
             details = f"No assigned users or groups were reported for fine-grained policy `{name}`."
-        if pso.precedence.isdecimal():
-            details += f" Its reported precedence was {prose_value(pso.precedence)}."
         improvements = [
             setting for setting in weak_settings
             if pso_assessment[setting].startswith("[green]")
         ]
         if not pso.applies_to:
-            details += " If unassigned, this policy does not apply to any accounts"
+            details += " The policy was therefore not identified as applying to standard users"
             if weak_settings:
-                details += " and does not address the identified default-policy " + count_form(
-                    len(weak_settings), "weakness", "weaknesses"
+                details += (
+                    " and cannot be considered to address the identified default-policy "
+                    + count_form(len(weak_settings), "weakness", "weaknesses")
                 )
-            details += ". Verify its assignments before relying on its settings."
+            details += "."
         elif improvements:
             values = ", ".join(
                 f"{setting.replace('_', ' ')}: "
@@ -383,9 +383,15 @@ def run_password_policy_checks(
                 " The assessed settings did not confirm that this policy addresses any of "
                 "the identified default-policy weaknesses."
             )
-        if pso_weak:
-            details += "\n\n" + "\n".join(
-                describe_setting(setting, pso.settings, fine_grained=True) for setting in pso_weak
+        if pso.applies_to and pso_weak:
+            details += (
+                " The policy contained the following "
+                + count_form(len(pso_weak), "setting", "settings")
+                + " that may not align with common security practices:\n\n"
+                + "\n".join(
+                    describe_setting(setting, pso.settings, fine_grained=True)
+                    for setting in pso_weak
+                )
             )
         commentary.append(details)
 
