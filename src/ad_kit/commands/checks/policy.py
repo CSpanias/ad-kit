@@ -388,31 +388,35 @@ def run_password_policy_checks(
             + "\n".join(describe_setting(setting, password_policy) for setting in weak_settings)
         )
 
+    resultant_detail = ""
+    resultant_context: FineGrainedPolicy | None = None
     if resultant_checked:
         user = session_data["standard_user"].replace("`", "\\`")
         if not resultant_dn:
-            detail = (
-                f"No `msDS-ResultantPSO` attribute was returned for testing account `{user}`; "
-                "the default domain policy applies if no fine-grained policy is in effect."
+            resultant_detail = (
+                f"No `msDS-ResultantPSO` attribute was returned for testing account `{user}`, "
+                "so the default domain password policy is used for this assessment."
             )
             if any(pso.applies_to for pso in fine_grained):
-                detail += (
+                resultant_detail += (
                     " If a fine-grained policy is expected for this account, the absence of "
                     "a resultant policy warrants investigation."
                 )
-            commentary.append(detail)
-        elif resultant_pso:
-            name = resultant_pso.name.replace("`", "\\`")
-            commentary.append(
-                f"Fine-grained password policy `{name}` was the resultant policy for "
-                f"testing account `{user}`."
+            resultant_context = next(
+                (pso for pso in fine_grained if not pso.applies_to),
+                fine_grained[0] if fine_grained else None,
             )
+        elif resultant_pso:
+            resultant_detail = f"It was the resultant policy for testing account `{user}`."
+            resultant_context = resultant_pso
         else:
             dn = resultant_dn.replace("`", "\\`")
-            commentary.append(
+            resultant_detail = (
                 f"Testing account `{user}` had resultant fine-grained policy `{dn}`, "
                 "but its settings could not be matched to the assessed policies."
             )
+    if resultant_detail and resultant_context is None:
+        commentary.append(resultant_detail)
 
     for pso in fine_grained:
         pso_assessment = password_policy_assessment(pso.settings)
@@ -459,6 +463,8 @@ def run_password_policy_checks(
                 " The assessed settings did not confirm that this policy addresses any of "
                 "the identified default-policy weaknesses."
             )
+        if pso is resultant_context:
+            details += " " + resultant_detail
         if (pso.applies_to or pso is resultant_pso) and pso_weak:
             details += (
                 " The policy contained the following "

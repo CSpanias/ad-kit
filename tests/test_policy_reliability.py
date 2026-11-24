@@ -464,7 +464,7 @@ def test_default_policy_presumption_is_reported_for_testing_account(monkeypatch)
     assert "No `msDS-ResultantPSO` attribute was returned for testing account `user`" in (
         findings[0].commentary
     )
-    assert "default domain policy applies if no fine-grained policy is in effect" in (
+    assert "default domain password policy is used for this assessment" in (
         findings[0].commentary
     )
     assert "No msDS-ResultantPSO attribute was returned for Standard User 'user';" in (
@@ -486,7 +486,7 @@ def test_missing_resultant_policy_qualifies_expected_assignment(monkeypatch):
 
     findings, _ = _run_policy(monkeypatch, values)
 
-    assert "default domain policy applies if no fine-grained policy is in effect" in (
+    assert "default domain password policy is used for this assessment" in (
         findings[0].commentary
     )
     assert "If a fine-grained policy is expected for this account" in findings[0].commentary
@@ -501,7 +501,7 @@ def test_failed_resultant_query_is_unknown_not_default(monkeypatch):
     findings, incomplete = _run_policy(monkeypatch, values)
     assert any("LDAP query failed" in entry[2] for entry in incomplete)
     assert "could not be determined" in findings[0].commentary_note
-    assert "default domain policy applies if" not in findings[0].commentary
+    assert "default domain password policy is used for this assessment" not in findings[0].commentary
 
 
 def test_unmatched_resultant_pso_is_not_assumed_to_be_default(monkeypatch):
@@ -515,7 +515,7 @@ def test_unmatched_resultant_pso_is_not_assumed_to_be_default(monkeypatch):
     assert any("No matching policy" in entry[2] for entry in incomplete)
     assert "CN=Missing,DC=example" in findings[0].commentary
     assert "settings could not be matched" in findings[0].commentary
-    assert "default domain policy applies if" not in findings[0].commentary
+    assert "default domain password policy is used for this assessment" not in findings[0].commentary
 
 
 def test_fine_grained_policy_parser_reads_assignments_and_redacts_credentials(monkeypatch):
@@ -686,6 +686,13 @@ def test_unassigned_policy_is_not_reported_as_mitigating_default_weakness(monkey
     assert "No assigned users or groups were reported" in commentary
     assert "not identified as applying to standard users" in commentary
     assert "cannot be considered to address the identified default-policy weakness." in commentary
+    paragraph = next(
+        paragraph for paragraph in commentary.split("\n\n")
+        if "No assigned users or groups were reported" in paragraph
+    )
+    assert "No `msDS-ResultantPSO` attribute was returned for testing account `user`" in paragraph
+    assert "default domain password policy is used for this assessment" in paragraph
+    assert "confirmed" not in paragraph
     assert "precedence" not in commentary
     assert "Verify" not in commentary
     assert "minimum age: at least one day" not in commentary
@@ -695,6 +702,27 @@ def test_unassigned_policy_is_not_reported_as_mitigating_default_weakness(monkey
     assert "The account lockout threshold was 0" not in commentary
     assert "enabling account lockout" not in findings[0].remediation
     assert "not identified as applying to standard users" in render_html(findings)
+
+
+def test_resultant_context_is_reported_once_for_multiple_fine_grained_policies(monkeypatch):
+    first = _pso_output(count=2)
+    second = _pso_output().replace("Policy Name: Strong policy", "Policy Name: Other policy")
+    second = "\n".join(second.splitlines()[1:])
+    monkeypatch.setattr(passwords, "run_check", lambda *_args, **_kwargs: first + "\n" + second)
+    policies, _ = passwords.fine_grained_password_policies("dc", "admin", "secret")
+    monkeypatch.setattr(policy, "fine_grained_password_policies", lambda *_args: (policies, None))
+    values, _ = _assess_policy(minimum_age="None")
+
+    findings, incomplete = _run_policy(monkeypatch, values)
+
+    assert not incomplete
+    commentary = findings[0].commentary
+    assert commentary.count("No `msDS-ResultantPSO` attribute") == 1
+    paragraphs = commentary.split("\n\n")
+    first_policy = next(part for part in paragraphs if "fine-grained policy `Strong policy`" in part)
+    second_policy = next(part for part in paragraphs if "fine-grained policy `Other policy`" in part)
+    assert "testing account `user`" in first_policy
+    assert "testing account `user`" not in second_policy
 
 
 @pytest.mark.parametrize("subject", [
