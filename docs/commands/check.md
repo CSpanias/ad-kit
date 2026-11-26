@@ -60,6 +60,11 @@ LDAP, NoPAC, coercion, SMB, and DC local-administrator findings. Only confirmed
 affected hosts receive each finding. Domain-wide findings remain on the domain
 item. Findings without a SureFormat mapping are omitted with a warning.
 
+Host items group SMB findings under TCP port 445, LDAP signing and anonymous
+bind findings under TCP port 389, and LDAP channel binding findings under TCP
+port 636. These are standard service ports, not independently verified open
+ports. Other findings, including domain-level findings, use an empty port.
+
 DC hostname/IP pairs come from enumeration. Other hosts are resolved using the
 session's DC as a DNS server. If a hostname cannot be resolved to one
 unambiguous IP, it is exported by hostname with an empty IP and a warning.

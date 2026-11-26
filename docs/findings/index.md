@@ -62,5 +62,8 @@ in execution order as the suffix. A run replaces files with the same suffix
 and format; older files in other formats are left untouched. The domain
 hostname in the XML is lowercase. Host-specific findings use separate items;
 hosts with missing or ambiguous IPs are exported by hostname with a warning.
+SMB, LDAP signing and anonymous bind, and LDAP channel binding host findings
+use their standard TCP ports (445, 389, and 636 respectively); these ports are
+not independently verified. Other findings have an empty port.
 
 Evidence is stored in `ad-kit/evidence/`.

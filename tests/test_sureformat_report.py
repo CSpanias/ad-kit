@@ -32,6 +32,10 @@ def test_sureformat_export_assigns_findings_to_affected_hosts(monkeypatch, tmp_p
                 affected_assets=["HOST01.EXAMPLE.COM"]),
         Finding("LDAP-001", "LDAP", "LDAP signing details.", "",
                 affected_assets=["DC01.EXAMPLE.COM", "dc02.example.com."]),
+        Finding("LDAP-002", "LDAP", "Channel binding details.", "",
+                affected_assets=["DC01.EXAMPLE.COM"]),
+        Finding("LDAP-003", "LDAP", "Anonymous bind details.", "",
+                affected_assets=["DC01.EXAMPLE.COM"]),
         Finding("NOPAC-001", "NoPAC", "NoPAC details.", "",
                 affected_assets=["192.0.2.2"]),
         Finding("OTHER-001", "Unmapped", "Other details.", ""),
@@ -66,15 +70,27 @@ def test_sureformat_export_assigns_findings_to_affected_hosts(monkeypatch, tmp_p
     assert dc1.attrib == {"hostname": "DC01.EXAMPLE.COM", "ipaddress": "192.0.2.1"}
     assert dc2.attrib == {"hostname": "DC02.EXAMPLE.COM", "ipaddress": "192.0.2.2"}
     assert host.attrib == {"hostname": "HOST01.EXAMPLE.COM", "ipaddress": "192.0.2.3"}
-    assert [v.attrib["id"] for v in dc1.findall(".//vulnerability")] == [
-        "SC-6642", "SC-6080", "SC-1909",
-    ]
-    assert [v.attrib["id"] for v in dc2.findall(".//vulnerability")] == [
-        "SC-6080", "SC-3704", "SC-7704",
-    ]
-    assert [v.attrib["id"] for v in host.findall(".//vulnerability")] == [
-        "SC-7704", "SC-3576", "SC-7367",
-    ]
+    def services(item):
+        return {
+            (service.attrib["name"], service.attrib["port"], service.attrib["protocol"]):
+            [v.attrib["id"] for v in service.findall("./vulnerabilities/vulnerability")]
+            for service in item.findall("./services/service")
+        }
+
+    assert services(dc1) == {
+        ("", "", "tcp"): ["SC-6642"],
+        ("ldap", "389", "tcp"): ["SC-6080", "SC-1000"],
+        ("ldaps", "636", "tcp"): ["SC-6643"],
+        ("smb", "445", "tcp"): ["SC-1909"],
+    }
+    assert services(dc2) == {
+        ("ldap", "389", "tcp"): ["SC-6080"],
+        ("", "", "tcp"): ["SC-3704"],
+        ("smb", "445", "tcp"): ["SC-7704"],
+    }
+    assert services(host) == {
+        ("smb", "445", "tcp"): ["SC-7704", "SC-3576", "SC-7367"],
+    }
     assert not (tmp_path / "ad-kit_findings_fake-dc.xml").exists()
 
 
@@ -105,6 +121,30 @@ def test_sureformat_combines_findings_with_the_same_platform_id(tmp_path):
         "Roastable accounts.\nPrivileged accounts."
     )
     assert vulnerabilities[1].findtext("information") == "Privileged membership."
+
+
+def test_sureformat_combines_matching_ids_only_within_the_same_service(monkeypatch, tmp_path):
+    monkeypatch.setitem(sureformat.FINDING_MAP, "SMB-002", "SC-7704")
+    monkeypatch.setitem(sureformat.FINDING_MAP, "LDAP-001", "SC-7704")
+    path = tmp_path / "test.xml"
+    sureformat.write_findings(
+        path, "example.com", [],
+        controllers=[("dc.example.com", "192.0.2.1")],
+        host_findings=[
+            Finding("SMB-001", "SMB signing", "Signing.", "", affected_assets=["dc"]),
+            Finding("SMB-002", "SMBv1", "SMBv1.", "", affected_assets=["dc"]),
+            Finding("LDAP-001", "LDAP signing", "LDAP.", "", affected_assets=["dc"]),
+        ],
+    )
+    item = ET.parse(path).getroot().findall("item")[1]
+    smb = item.find("./services/service[@port='445']/vulnerabilities")
+    ldap = item.find("./services/service[@port='389']/vulnerabilities")
+    assert len(smb) == 1
+    assert smb.find("vulnerability").attrib["id"] == "SC-7704"
+    assert smb.findtext("vulnerability/information") == "Signing.\nSMBv1."
+    assert len(ldap) == 1
+    assert ldap.find("vulnerability").attrib["id"] == "SC-7704"
+    assert ldap.findtext("vulnerability/information") == "LDAP."
 
 
 def test_sureformat_exports_builtin_administrator_finding(tmp_path):
@@ -145,6 +185,9 @@ def test_export_warns_and_uses_hostname_for_unresolved_or_ambiguous_assets(
     item = ET.parse(path).getroot().findall("item")[1]
     assert item.attrib == {"hostname": asset, "ipaddress": ""}
     assert [v.attrib["id"] for v in item.findall(".//vulnerability")] == ["SC-6080"]
+    assert item.find("./services/service").attrib == {
+        "name": "ldap", "port": "389", "protocol": "tcp",
+    }
     assert len(warnings) == 1
 
 

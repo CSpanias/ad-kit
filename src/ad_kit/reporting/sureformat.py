@@ -58,6 +58,16 @@ HOST_FINDING_IDS = {
     "LA-002",
 }
 
+HOST_FINDING_SERVICES = {
+    "SMB-001": ("smb", "445"),
+    "SMB-002": ("smb", "445"),
+    "SMB-003": ("smb", "445"),
+    "SMB-004": ("smb", "445"),
+    "LDAP-001": ("ldap", "389"),
+    "LDAP-002": ("ldaps", "636"),
+    "LDAP-003": ("ldap", "389"),
+}
+
 
 class DCExportError(ValueError):
     """A DC finding cannot be reliably assigned to an IP address."""
@@ -106,27 +116,38 @@ def dc_inventory(session: dict[str, object]) -> list[tuple[str, str]]:
 
 
 def _append_item(
-    root: ET.Element, hostname: str, ip: str, findings: list[dict[str, str]]
+    root: ET.Element, hostname: str, ip: str, findings: list[dict[str, str]],
+    *, host_item: bool = False,
 ) -> None:
     item = ET.SubElement(root, "item", ipaddress=ip, hostname=hostname)
     services = ET.SubElement(item, "services")
-    service = ET.SubElement(services, "service", name="", port="", protocol="tcp")
-    vulnerabilities = ET.SubElement(service, "vulnerabilities")
 
-    mapped_vulnerabilities: dict[str, ET.Element] = {}
+    grouped: dict[tuple[str, str], list[tuple[str, str]]] = {}
     for finding in findings:
         vulnerability_id = FINDING_MAP.get(finding["id"])
         if not vulnerability_id:
             print_warning(f"No SureFormat mapping found for finding: {finding['id']}")
             continue
-        if vulnerability_id in mapped_vulnerabilities:
-            information = mapped_vulnerabilities[vulnerability_id]
-            information.text = (information.text or "") + "\n" + finding["description"]
-        else:
-            vulnerability = ET.SubElement(vulnerabilities, "vulnerability", id=vulnerability_id)
-            information = ET.SubElement(vulnerability, "information")
-            information.text = finding["description"]
-            mapped_vulnerabilities[vulnerability_id] = information
+        service_key = HOST_FINDING_SERVICES.get(finding["id"], ("", "")) if host_item else ("", "")
+        grouped.setdefault(service_key, []).append((vulnerability_id, finding["description"]))
+
+    if not grouped:
+        grouped[("", "")] = []
+    for (name, port), service_findings in grouped.items():
+        service = ET.SubElement(services, "service", name=name, port=port, protocol="tcp")
+        vulnerabilities = ET.SubElement(service, "vulnerabilities")
+        mapped_vulnerabilities: dict[str, ET.Element] = {}
+        for vulnerability_id, description in service_findings:
+            if vulnerability_id in mapped_vulnerabilities:
+                information = mapped_vulnerabilities[vulnerability_id]
+                information.text = (information.text or "") + "\n" + description
+            else:
+                vulnerability = ET.SubElement(
+                    vulnerabilities, "vulnerability", id=vulnerability_id
+                )
+                information = ET.SubElement(vulnerability, "information")
+                information.text = description
+                mapped_vulnerabilities[vulnerability_id] = information
 
 
 def _resolve_host(hostname: str, domain: str, dns_server: str | None) -> str:
@@ -239,7 +260,7 @@ def write_findings(
             host_items.sort(
                 key=lambda item: (item["id"].casefold(), item["description"].casefold())
             )
-            _append_item(root, host, ip, host_items)
+            _append_item(root, host, ip, host_items, host_item=True)
 
     tree = ET.ElementTree(root)
     ET.indent(tree, space="    ")
