@@ -615,12 +615,13 @@ def run_coercion_checks(
         if matches:
             sample_host = matches[0][1][0][0]
             print_section("Authentication Coercion - Command Evidence")
-            for record, lines in matches:
+            for index, (record, lines) in enumerate(matches):
                 sample = "\n".join(line for host, line in lines if host == sample_host)
                 if sample:
+                    if index:
+                        console.print()
                     console.print(
                         format_check_evidence(record, sample), markup=False, highlight=False
                     )
-                    console.print()
 
     record_findings(findings)

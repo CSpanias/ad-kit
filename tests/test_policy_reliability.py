@@ -7,7 +7,7 @@ import pytest
 from rich.console import Console
 
 from ad_kit.checks import dns, maq, passwords
-from ad_kit.commands.checks import policy
+from ad_kit.commands.checks import policy, unauthenticated
 from ad_kit.core import checks
 from ad_kit.core.checks import duration_to_minutes
 from ad_kit.core.exceptions import CheckExecutionError
@@ -92,7 +92,7 @@ def test_current_command_evidence_includes_cleanup_without_replaying(
             ["ad-kit-ffff", "192.0.2.1"],
         ]
     assert text.count("\n\n$ ") == len(commands) - 1
-    assert text.endswith("\n\n")
+    assert text.endswith("\n") and not text.endswith("\n\n")
     assert len(recorded) == 1
     sections = format_finding_sections(recorded[0])
     assert "### Evidence\n\n" in sections["Commentary"]
@@ -799,6 +799,63 @@ def test_skipped_fine_grained_check_is_reported_as_incomplete(monkeypatch):
     findings, incomplete = _run_policy(monkeypatch, values)
     assert "not fully assessed" in findings[0].commentary_note
     assert "not assessed" in incomplete[0][2]
+
+
+def test_declined_policy_prompt_is_separated_from_following_smb_progress(monkeypatch, tmp_path):
+    output = io.StringIO()
+    console = Console(file=output, width=200)
+    monkeypatch.setattr(policy, "console", console)
+    monkeypatch.setattr(
+        policy.typer, "confirm",
+        lambda message, **_kwargs: (console.print(f"{message} [y/N]:", markup=False) or False),
+    )
+    values, _ = _assess_policy()
+    _run_policy(monkeypatch, values)
+
+    monkeypatch.setattr(unauthenticated, "console", console)
+    monkeypatch.setattr(unauthenticated, "print_section", lambda *_args: None)
+    monkeypatch.setattr(
+        unauthenticated, "progress",
+        lambda message: (console.print(f"PROGRESS: {message}") or no_progress(message)),
+    )
+    monkeypatch.setattr(unauthenticated, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user", "domain_computers_exported": True,
+    })
+    monkeypatch.setattr(unauthenticated, "load_domain_computers", lambda: ["DC"])
+    monkeypatch.setattr(unauthenticated, "load_dc_hostnames", lambda: ["DC"])
+    monkeypatch.setattr(unauthenticated, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(unauthenticated, "record_findings", lambda *_args: None)
+    monkeypatch.setattr(unauthenticated, "_check_share_access", lambda *_args: [])
+    monkeypatch.setattr(unauthenticated, "smb_configuration_check", lambda *_args, **_kwargs: {
+        "host": "DC", "signing": "[green]✓ Enabled[/green]",
+        "smbv1": "[green]✓ Disabled[/green]", "null_auth": False, "guest_auth": False,
+        "anonymous_shares": 0, "anonymous_users": 0, "anonymous_incomplete": [],
+    })
+    unauthenticated.run_smb_checks("secret")
+    assert (
+        "Assess fine-grained password policies using Domain Administrator credentials? [y/N]:\n"
+        "\nPROGRESS: Checking SMB configuration for Domain Controllers..."
+    ) in output.getvalue()
+
+
+def test_accepted_policy_prompt_is_separated_from_administrator_prompt(monkeypatch):
+    output = io.StringIO()
+    console = Console(file=output, width=200)
+    monkeypatch.setattr(policy, "console", console)
+    monkeypatch.setattr(
+        policy.typer, "confirm",
+        lambda message, **_kwargs: (console.print(f"{message} [y/N]: y", markup=False) or True),
+    )
+    monkeypatch.setattr(
+        policy, "authenticate_domain_admin",
+        lambda: (console.print("Administrator credentials:") or ("admin", "secret")),
+    )
+    values, _ = _assess_policy()
+    _run_policy(monkeypatch, values)
+    assert (
+        "Assess fine-grained password policies using Domain Administrator credentials? [y/N]: y\n"
+        "\nAdministrator credentials:"
+    ) in output.getvalue()
 
 
 def test_failed_fine_grained_query_preserves_default_finding(monkeypatch):

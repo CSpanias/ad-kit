@@ -209,6 +209,7 @@ def run_password_policy_checks(
         "Assess fine-grained password policies using Domain Administrator credentials?",
         default=False,
     ):
+        console.print()
         da_user, da_pass = authenticate_domain_admin()
         try:
             with progress("Retrieving fine-grained password policies..."):
@@ -750,9 +751,10 @@ def run_maq_checks(
 
     if generated_findings and evidence:
         print_section("Machine Account Quota - Command Evidence")
-        for record in evidence:
+        for index, record in enumerate(evidence):
+            if index:
+                console.print()
             console.print(format_check_evidence(record), markup=False, highlight=False)
-            console.print()
 
     record_findings(generated_findings)
 
@@ -860,7 +862,9 @@ def run_dns_checks(
     console.print(table)
     if findings and evidence:
         print_section("DNS Record Creation - Command Evidence")
-        for record in evidence:
+        for index, record in enumerate(evidence):
+            if index:
+                console.print()
             excerpt = None
             if record.name == "dns-record-confirm":
                 excerpt, _ = dns_confirmation_excerpt(
@@ -871,7 +875,6 @@ def run_dns_checks(
                     + (excerpt or "No matching record returned.")
                 )
             console.print(format_check_evidence(record, excerpt), markup=False, highlight=False)
-            console.print()
 
     record_findings(findings)
 

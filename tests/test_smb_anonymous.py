@@ -8,6 +8,7 @@ from rich.console import Console
 
 from ad_kit.checks import smb
 from ad_kit.commands.checks import unauthenticated
+from ad_kit.core import console as console_helpers
 from ad_kit.core import util
 from ad_kit.core.checks import append_captured_evidence
 from ad_kit.reporting import html, markdown, results
@@ -850,7 +851,10 @@ def test_ldap_anonymous_evidence_limits_results_and_marks_missing_rows(monkeypat
     assert "Anonymous evidence - DC\n\n$ nxc ldap" in text
     assert "Enumerated 12 domain users" in text
     assert "user09" in text and "user10" not in text
-    assert text.endswith("... 2 additional row(s) omitted.\n\n")
+    monkeypatch.setattr(console_helpers, "console", unauthenticated.console)
+    console_helpers.print_section("Password Policy")
+    assert "... 2 additional row(s) omitted.\n\n[Password Policy]\n" in output.getvalue()
+    assert "... 2 additional row(s) omitted.\n\n\n[Password Policy]" not in output.getvalue()
 
     output.seek(0)
     output.truncate()
@@ -863,11 +867,137 @@ def test_ldap_anonymous_evidence_limits_results_and_marks_missing_rows(monkeypat
     assert "No user or share rows confirmed" in output.getvalue()
 
 
-def test_missing_anonymous_evidence_leaves_space_after_table(monkeypatch):
+def test_missing_anonymous_evidence_leaves_section_spacing_to_heading(monkeypatch):
     output = io.StringIO()
-    monkeypatch.setattr(unauthenticated, "console", Console(file=output))
+    console = Console(file=output)
+    monkeypatch.setattr(unauthenticated, "console", console)
+    monkeypatch.setattr(console_helpers, "console", console)
+    console.print("Table")
     unauthenticated._show_anonymous_evidence([], [], "ldap")
-    assert output.getvalue() == "\n"
+    console_helpers.print_section("Password Policy")
+    assert output.getvalue() == "Table\n\n[Password Policy]\n\n"
+
+
+def test_anonymous_evidence_separates_records_without_trailing_blank(monkeypatch):
+    output = io.StringIO()
+    console = Console(file=output, width=200)
+    monkeypatch.setattr(unauthenticated, "console", console)
+    monkeypatch.setattr(console_helpers, "console", console)
+    records = [
+        unauthenticated.CheckEvidence("ldap-DC", ["first"], "first output", ""),
+        unauthenticated.CheckEvidence("ldap-anonymous-users-DC", ["second"], "denied", ""),
+    ]
+    unauthenticated._show_anonymous_evidence(
+        records, [{"dc_hostname": "DC", "anonymous_bind": "[red]✗ Permitted[/red]"}], "ldap"
+    )
+    console_helpers.print_section("Next")
+    text = output.getvalue()
+    assert "first output\n\n$ second\n" in text
+    assert "No user or share rows confirmed in this output.\n\n[Next]\n" in text
+
+
+@pytest.mark.parametrize("with_host", [False, True])
+@pytest.mark.parametrize("with_evidence", [False, True])
+@pytest.mark.parametrize("needs_auth", [False, True])
+def test_smb_progress_and_heading_spacing(
+    monkeypatch, tmp_path, with_host, with_evidence, needs_auth
+):
+    output = io.StringIO()
+    console = Console(file=output, width=200)
+    monkeypatch.setattr(unauthenticated, "console", console)
+    monkeypatch.setattr(console_helpers, "console", console)
+    monkeypatch.setattr(unauthenticated, "print_section", console_helpers.print_section)
+    monkeypatch.setattr(
+        unauthenticated, "progress",
+        lambda message: (console.print(f"PROGRESS: {message}") or nullcontext()),
+    )
+    monkeypatch.setattr(unauthenticated, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user", "domain_computers_exported": True,
+    })
+    monkeypatch.setattr(
+        unauthenticated, "load_domain_computers", lambda: ["DC"] + (["HOST"] if with_host else [])
+    )
+    monkeypatch.setattr(unauthenticated, "load_dc_hostnames", lambda: ["DC"])
+    monkeypatch.setattr(unauthenticated, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(unauthenticated, "record_findings", lambda *_args: None)
+    monkeypatch.setattr(unauthenticated, "_check_share_access", lambda *_args: [])
+    monkeypatch.setattr(unauthenticated, "print_info", lambda message: console.print(message))
+    monkeypatch.setattr(
+        unauthenticated, "authenticate_standard_user",
+        lambda **_kwargs: (console.print("Authentication succeeded.") or "secret"),
+    )
+
+    def configuration(host, *_args, **_kwargs):
+        if with_evidence and host == "DC":
+            append_captured_evidence([
+                unauthenticated.CheckEvidence("smb-DC", ["nxc", "smb", "DC"], "evidence", "")
+            ])
+        return {
+            "host": host, "signing": "[green]✓ Enabled[/green]",
+            "smbv1": "[green]✓ Disabled[/green]", "null_auth": with_evidence and host == "DC",
+            "guest_auth": False, "anonymous_shares": 1 if with_evidence and host == "DC" else 0,
+            "anonymous_users": 0, "anonymous_incomplete": [],
+        }
+
+    monkeypatch.setattr(unauthenticated, "smb_configuration_check", configuration)
+    console.print("Previous prompt")
+    unauthenticated.run_smb_checks(None if needs_auth else "secret")
+    text = output.getvalue()
+    assert "Previous prompt\n\nPROGRESS: Checking SMB configuration for Domain Controllers" in text
+    if with_evidence:
+        following = (
+            "PROGRESS: Checking SMB configuration for hosts"
+            if with_host else "[SMB Checks - Hosts]"
+        )
+        assert f"evidence\n\n{following}" in text
+    assert "\n\nPROGRESS: Checking SMB share access" in text
+    if needs_auth:
+        assert "Authentication succeeded.\n\nPROGRESS: Checking SMB share access" in text
+    assert "\n\n\n[SMB Checks - Hosts]" not in text
+
+
+def test_smb_without_hosts_does_not_add_blank_before_next_heading(monkeypatch, tmp_path):
+    output = io.StringIO()
+    console = Console(file=output)
+    monkeypatch.setattr(unauthenticated, "console", console)
+    monkeypatch.setattr(console_helpers, "console", console)
+    monkeypatch.setattr(unauthenticated, "print_section", console_helpers.print_section)
+    monkeypatch.setattr(unauthenticated, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "", "domain_computers_exported": True,
+    })
+    monkeypatch.setattr(unauthenticated, "load_domain_computers", lambda: [])
+    monkeypatch.setattr(unauthenticated, "load_dc_hostnames", lambda: [])
+    monkeypatch.setattr(unauthenticated, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(unauthenticated, "record_findings", lambda *_args: None)
+    unauthenticated.run_smb_checks()
+    console_helpers.print_section("Next")
+    assert "\n\n[Next]\n" in output.getvalue()
+    assert "\n\n\n[Next]\n" not in output.getvalue()
+
+
+def test_tombstone_progress_is_separated_from_previous_output(monkeypatch):
+    output = io.StringIO()
+    console = Console(file=output)
+    monkeypatch.setattr(unauthenticated, "console", console)
+    monkeypatch.setattr(unauthenticated, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user",
+    })
+    monkeypatch.setattr(
+        unauthenticated, "progress",
+        lambda message: (console.print(f"PROGRESS: {message}") or nullcontext()),
+    )
+    monkeypatch.setattr(unauthenticated, "track_items", lambda items, _label: items)
+
+    def stop_after_progress(*_args):
+        raise ValueError("stop")
+
+    monkeypatch.setattr(unauthenticated, "tombstone_check", stop_after_progress)
+    console.print("Previous output")
+    with pytest.raises(ValueError, match="stop"):
+        unauthenticated.run_tombstone_checks("secret")
+    assert (
+        "Previous output\n\nPROGRESS: Checking Standard User access to deleted objects..."
+    ) in output.getvalue()
 
 
 def test_ldap_selects_one_sample_with_users_over_unconfirmed_results(monkeypatch):

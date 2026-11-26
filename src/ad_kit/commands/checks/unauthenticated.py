@@ -118,11 +118,12 @@ def _show_anonymous_evidence(
                 break
 
     if sample is None:
-        console.print()
         return False
     host, names, selected = sample
     console.print(f"\nAnonymous evidence - {host}\n", markup=False)
-    for record in selected:
+    for index, record in enumerate(selected):
+        if index:
+            console.print()
         if record.name == names[0]:
             excerpt = record.stdout
         else:
@@ -138,7 +139,6 @@ def _show_anonymous_evidence(
         console.print(
             format_check_evidence(record, excerpt), markup=False, highlight=False
         )
-        console.print()
     return True
 
 
@@ -211,6 +211,7 @@ def run_tombstone_checks(
     results = []
     findings = []
 
+    console.print()
     with progress("Checking Standard User access to deleted objects..."):
 
         for dc_ip in track_items(dc_ips, "Deleted-object domain controllers"):
@@ -458,6 +459,8 @@ def run_smb_checks(
             batch_results.append(result)
         return batch_results, evidence
 
+    if dc_targets:
+        console.print()
     dc_results, dc_evidence = check_configuration_batch(dc_targets, "Domain Controllers")
 
     print_section("SMB Checks - Domain Controllers")
@@ -508,6 +511,8 @@ def run_smb_checks(
         "smb",
     )
 
+    if host_targets:
+        console.print()
     host_results, host_evidence = check_configuration_batch(host_targets, "hosts")
 
     print_section("SMB Checks - Hosts")
@@ -574,7 +579,7 @@ def run_smb_checks(
             ],
             "smb",
         )
-    else:
+    if hosts:
         console.print()
 
     for result in dc_results + host_results:
@@ -594,6 +599,7 @@ def run_smb_checks(
             if std_pass is None:
                 try:
                     std_pass = authenticate_standard_user(trailing_blank=False)
+                    console.print()
                 except CheckExecutionError as exc:
                     record_incomplete("SMB share access", "all hosts", str(exc))
             if std_pass is not None:
@@ -651,7 +657,8 @@ def run_smb_checks(
             )
 
     console.print(share_table)
-    console.print()
+    if share_checks_run or share_failed_hosts:
+        console.print()
 
     if share_checks_run:
         if not displayed_shares and not share_failed_hosts:
