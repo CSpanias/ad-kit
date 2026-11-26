@@ -16,17 +16,21 @@ from ad_kit.reporting.markdown import format_evidence, format_paragraphs
 _findings: list[dict[str, str]] = []
 
 
+def integration_finding(finding: Finding) -> dict[str, str]:
+    """Convert a finding to the integration export format."""
+    description = format_paragraphs(finding.commentary).strip()
+    if finding.commentary_note:
+        note = "Note: " + format_paragraphs(finding.commentary_note).strip()
+        description = "\n\n".join(part for part in (description, note) if part)
+    if finding.evidence_in_commentary:
+        evidence = format_evidence(finding, "###")
+        description = "\n\n".join(part for part in (description, evidence) if part)
+    return {"id": finding.id, "description": description}
+
+
 def collect(findings: list[Finding]) -> None:
     """Collect all findings using their YAML IDs and commentary."""
-    for finding in findings:
-        description = format_paragraphs(finding.commentary).strip()
-        if finding.commentary_note:
-            note = "Note: " + format_paragraphs(finding.commentary_note).strip()
-            description = "\n\n".join(part for part in (description, note) if part)
-        if finding.evidence_in_commentary:
-            evidence = format_evidence(finding, "###")
-            description = "\n\n".join(part for part in (description, evidence) if part)
-        _findings.append({"id": finding.id, "description": description})
+    _findings.extend(integration_finding(finding) for finding in findings)
 
 
 def reset() -> None:

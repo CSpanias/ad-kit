@@ -562,6 +562,8 @@ def run_coercion_checks(
             host.rstrip(".").casefold()
             for host in (*coercible_dcs, *coercion_results["spooler_dcs"])
         }
+        finding.affected_assets.extend(sorted(affected))
+        finding.show_affected_assets = False
         format_counted_commentary(finding, len(affected), "system", "systems")
 
         if coercible_dcs:

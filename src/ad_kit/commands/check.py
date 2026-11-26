@@ -7,7 +7,7 @@ from ad_kit.core.console import console as console
 from ad_kit.core.console import print_error
 from ad_kit.core.exceptions import ADKitError
 from ad_kit.core.util import get_artefacts_dir, require_session
-from ad_kit.reporting import results
+from ad_kit.reporting import results, sureformat
 
 from .checks.credentials import authenticate_standard_user
 from .checks.hosts import run_nopac_checks, run_scriptpath_checks
@@ -158,21 +158,24 @@ AVAILABLE_CHECKS: dict[str, CheckDefinition] = {
 }
 
 
-def _export_domain(csacyber: bool, dc: str | None) -> str | None:
-    if dc is not None and (not csacyber or not dc.strip()):
-        raise ValueError("--dc requires --csacyber and a non-empty hostname.")
+def _export_domain(csacyber: bool, dc: bool) -> str | None:
+    if dc and not csacyber:
+        raise ValueError("--dc requires --csacyber.")
     if not csacyber:
         return None
-    domain = require_session().get("domain")
+    session = require_session()
+    domain = session.get("domain")
     if not isinstance(domain, str) or not domain.strip():
         raise ValueError(
             "SureFormat export requires a domain in session metadata. Run 'ad-kit enum'."
         )
+    if dc:
+        sureformat.dc_inventory(session)
     return domain.strip()
 
 
 def run_selected_checks(
-    modules: list[str], *, csacyber: bool = False, dc: str | None = None
+    modules: list[str], *, csacyber: bool = False, dc: bool = False
 ) -> None:
     """Execute selected checks, reusing one Standard User password."""
     domain = _export_domain(csacyber, dc)
@@ -201,12 +204,13 @@ def run_selected_checks(
         module for module in modules if module in AVAILABLE_CHECKS
     )) or "selected"
     results.write_reports(
-        get_artefacts_dir(), run_name=run_name, domain=domain, dc=dc.strip() if dc else None
+        get_artefacts_dir(), run_name=run_name, domain=domain,
+        dc_controllers=sureformat.dc_inventory(require_session()) if dc else None,
     )
 
 
 def run_checks(
-    *, csacyber: bool = False, dc: str | None = None, exclude: set[str] | None = None
+    *, csacyber: bool = False, dc: bool = False, exclude: set[str] | None = None
 ) -> None:
     """Execute all assessment checks in the established workflow order."""
     excluded = exclude or set()
@@ -251,4 +255,7 @@ def run_checks(
                 std_pass = authenticate_standard_user(trailing_blank=False)
             std_pass = _run_authed(module, runner, std_pass)
 
-    results.write_reports(get_artefacts_dir(), domain=domain, dc=dc.strip() if dc else None)
+    results.write_reports(
+        get_artefacts_dir(), domain=domain,
+        dc_controllers=sureformat.dc_inventory(require_session()) if dc else None,
+    )

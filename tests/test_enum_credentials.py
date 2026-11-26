@@ -102,6 +102,7 @@ def test_failed_admin_validation_continues_with_standard_user(monkeypatch, tmp_p
     assert session["da_validated"] is False
     assert session["domain_users_exported"] is True
     assert session["domain_computers_exported"] is True
+    assert session["dc_controllers"] == [{"hostname": "DC01.EXAMPLE.TEST", "ip": "192.0.2.1"}]
     assert session["ntds_dumped"] is False
     assert "secret" not in session_text
     assert any("Continuing enumeration" in message for message in messages)
@@ -237,6 +238,10 @@ def test_enumeration_retrieves_only_current_run_files(
         expected.append(output_dir / "EXAMPLE.TEST.ntds")
     assert captured == expected
     assert sessions[-1]["ntds_attempted"] is True
+    assert sessions[-1]["dc_controllers"] == [
+        {"hostname": "DC02.EXAMPLE.TEST", "ip": "192.0.2.2"},
+        {"hostname": "DC01.EXAMPLE.TEST", "ip": "192.0.2.1"},
+    ]
     assert sessions[-1]["ntds_dumped"] is dump_succeeded
     assert attempted_dcs == (["192.0.2.1"] if dump_succeeded else ["192.0.2.1", "192.0.2.2"])
     if dump_succeeded:

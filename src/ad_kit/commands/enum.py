@@ -768,6 +768,10 @@ def run_enumeration() -> None:
             "dc_hostname": dc_hostnames[0],
             "dc_ips": dc_ips,
             "dc_hostnames": dc_hostnames,
+            "dc_controllers": [
+                {"hostname": hostname, "ip": ip}
+                for hostname, ip in domain_controllers
+            ],
             "dc_count": len(dc_hostnames),
 
             "standard_user": std_user,

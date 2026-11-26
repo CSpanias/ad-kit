@@ -175,7 +175,7 @@ def check_callback(
     csacyber: bool = typer.Option(
         False, "--csacyber", help="Export SureFormat XML instead of JSON."
     ),
-    dc: str | None = typer.Option(None, "--dc", help="Split DC findings into a separate XML."),
+    dc: bool = typer.Option(False, "--dc", help="Assign DC findings to individual IPs in XML."),
     workers: int | None = typer.Option(
         None, "--workers", min=1, max=16,
         help="Parallel check workers (1-16; default: 4).",
@@ -196,7 +196,7 @@ def check_callback(
 
 
 def _run_check_command(
-    modules: list[str] | None, csacyber: bool, dc: str | None, workers: int,
+    modules: list[str] | None, csacyber: bool, dc: bool, workers: int,
     exclude: list[str],
 ) -> None:
     if len(exclude) > 1:
@@ -222,18 +222,21 @@ def _run_check_command(
         modules = remaining
 
     with check_workers(workers):
-        if csacyber or dc is not None:
+        if csacyber or dc:
             try:
                 check._export_domain(csacyber, dc)
             except (ValueError, RuntimeError) as exc:
                 raise typer.BadParameter(str(exc)) from exc
-            if modules is None:
-                if excluded:
-                    check.run_checks(csacyber=csacyber, dc=dc, exclude=excluded)
+            try:
+                if modules is None:
+                    if excluded:
+                        check.run_checks(csacyber=csacyber, dc=dc, exclude=excluded)
+                    else:
+                        check.run_checks(csacyber=csacyber, dc=dc)
                 else:
-                    check.run_checks(csacyber=csacyber, dc=dc)
-            else:
-                check.run_selected_checks(modules, csacyber=csacyber, dc=dc)
+                    check.run_selected_checks(modules, csacyber=csacyber, dc=dc)
+            except check.sureformat.DCExportError as exc:
+                raise typer.BadParameter(str(exc)) from exc
         elif modules is None:
             if excluded:
                 check.run_checks(exclude=excluded)
@@ -244,17 +247,17 @@ def _run_check_command(
 
 
 def _check_options(
-    ctx: typer.Context, csacyber: bool, dc: str | None, workers: int | None,
+    ctx: typer.Context, csacyber: bool, dc: bool, workers: int | None,
     exclude: list[str] | None,
-) -> tuple[bool, str | None, int, list[str]]:
+) -> tuple[bool, bool, int, list[str]]:
     parent_csacyber, parent_dc, parent_workers, parent_exclude = ctx.parent.obj
-    if dc is not None and parent_dc is not None:
+    if dc and parent_dc:
         raise typer.BadParameter("Specify --dc only once.")
     if workers is not None and parent_workers is not None:
         raise typer.BadParameter("Specify --workers only once.")
     return (
         csacyber or parent_csacyber,
-        dc if dc is not None else parent_dc,
+        dc or parent_dc,
         workers if workers is not None else parent_workers or 4,
         parent_exclude + (exclude or []),
     )
@@ -271,7 +274,7 @@ def check_all(
     csacyber: bool = typer.Option(
         False, "--csacyber", help="Export SureFormat XML instead of JSON."
     ),
-    dc: str | None = typer.Option(None, "--dc", help="Split DC findings into a separate XML."),
+    dc: bool = typer.Option(False, "--dc", help="Assign DC findings to individual IPs in XML."),
     workers: int | None = typer.Option(
         None, "--workers", min=1, max=16,
         help="Parallel check workers (1-16; default: 4).",
@@ -299,7 +302,7 @@ def _make_check_command(module_name: str):
         csacyber: bool = typer.Option(
             False, "--csacyber", help="Export SureFormat XML instead of JSON."
         ),
-        dc: str | None = typer.Option(None, "--dc", help="Split DC findings into a separate XML."),
+        dc: bool = typer.Option(False, "--dc", help="Assign DC findings to individual IPs in XML."),
         workers: int | None = typer.Option(
             None, "--workers", min=1, max=16,
             help="Parallel check workers (1-16; default: 4).",
@@ -338,7 +341,7 @@ def selected(
     csacyber: bool = typer.Option(
         False, "--csacyber", help="Export SureFormat XML instead of JSON."
     ),
-    dc: str | None = typer.Option(None, "--dc", help="Split DC findings into a separate XML."),
+    dc: bool = typer.Option(False, "--dc", help="Assign DC findings to individual IPs in XML."),
     workers: int | None = typer.Option(
         None, "--workers", min=1, max=16,
         help="Parallel check workers (1-16; default: 4).",

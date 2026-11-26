@@ -18,18 +18,23 @@ def _vulnerabilities(path):
     return root, item, service, service.findall("./vulnerabilities/vulnerability")
 
 
-@pytest.mark.parametrize("dc", [None, "DC01.example.com"])
+@pytest.mark.parametrize("dc", [False, True])
 def test_sureformat_export_matches_adapter_and_optional_dc_split(monkeypatch, tmp_path, dc):
     findings = [
         Finding("SMB-001", "SMB", "SMB signing details.", ""),
-        Finding("LDAP-001", "LDAP", "LDAP signing details.", ""),
-        Finding("NOPAC-001", "NoPAC", "NoPAC details.", ""),
+        Finding("LDAP-001", "LDAP", "LDAP signing details.", "",
+                affected_assets=["DC01.EXAMPLE.COM", "dc02.example.com."]),
+        Finding("NOPAC-001", "NoPAC", "NoPAC details.", "",
+                affected_assets=["192.0.2.2"]),
         Finding("OTHER-001", "Unmapped", "Other details.", ""),
         Finding("PRIV-001", "Privileged accounts", "Privilege details.", ""),
         Finding("PRIV-002", "Protected accounts", "Protected details.", ""),
     ]
     monkeypatch.setattr(check, "get_artefacts_dir", lambda: tmp_path)
-    monkeypatch.setattr(check, "require_session", lambda: {"domain": "EXAMPLE.COM"})
+    monkeypatch.setattr(check, "require_session", lambda: {
+        "domain": "EXAMPLE.COM", "dc_hostnames": ["DC01.EXAMPLE.COM", "DC02.EXAMPLE.COM"],
+        "dc_ips": ["192.0.2.1", "192.0.2.2"],
+    })
     monkeypatch.setitem(
         check.AVAILABLE_CHECKS,
         "fake",
@@ -52,13 +57,15 @@ def test_sureformat_export_matches_adapter_and_optional_dc_split(monkeypatch, tm
     assert smb.findtext("information") == "SMB signing details."
     assert (tmp_path / "ad-kit_findings_fake.html").exists()
     assert not (tmp_path / "ad-kit_findings_fake.json").exists()
-    dc_path = tmp_path / "ad-kit_findings_fake-dc.xml"
     if dc:
-        _, dc_item, _, dc_vulnerabilities = _vulnerabilities(dc_path)
-        assert dc_item.attrib["hostname"] == dc
-        assert [v.attrib["id"] for v in dc_vulnerabilities] == ["SC-6080", "SC-3704"]
-    else:
-        assert not dc_path.exists()
+        dc1, dc2 = root.findall("item")[1:]
+        assert dc1.attrib == {"hostname": "DC01.EXAMPLE.COM", "ipaddress": "192.0.2.1"}
+        assert dc2.attrib == {"hostname": "DC02.EXAMPLE.COM", "ipaddress": "192.0.2.2"}
+        assert [v.attrib["id"] for v in dc1.findall(".//vulnerability")] == ["SC-6080"]
+        assert [v.attrib["id"] for v in dc2.findall(".//vulnerability")] == [
+            "SC-6080", "SC-3704",
+        ]
+    assert not (tmp_path / "ad-kit_findings_fake-dc.xml").exists()
 
 
 def test_sureformat_escapes_data_and_warns_for_missing_mapping(monkeypatch, tmp_path):
@@ -100,6 +107,70 @@ def test_sureformat_exports_builtin_administrator_finding(tmp_path):
     assert vulnerabilities[0].findtext("information") == "Built-in Administrator enabled."
 
 
+@pytest.mark.parametrize("session", [
+    {"dc_hostnames": ["dc1"], "dc_ips": []},
+    {"dc_controllers": [{"hostname": "dc1", "ip": "not-an-ip"}]},
+    {"dc_controllers": [
+        {"hostname": "dc1.example.com", "ip": "192.0.2.1"},
+        {"hostname": "dc2.example.com", "ip": "192.0.2.1"},
+    ]},
+])
+def test_cli_rejects_unreliable_dc_inventory_before_running_checks(monkeypatch, session):
+    monkeypatch.setattr(check, "require_session", lambda: {"domain": "example.com", **session})
+    monkeypatch.setattr(check, "run_checks", lambda **kwargs: pytest.fail("checks ran"))
+    result = CliRunner().invoke(app, ["check", "--csacyber", "--dc"])
+    assert result.exit_code != 0
+    assert "DC" in result.output
+
+
+@pytest.mark.parametrize("assets", [[], ["unknown.example.com"], ["shared"]])
+def test_dc_export_fails_instead_of_guessing_missing_or_ambiguous_assets(tmp_path, assets):
+    path = tmp_path / "report.xml"
+    path.write_text("previous export", encoding="utf-8")
+    with pytest.raises(sureformat.DCExportError):
+        sureformat.write_findings(
+            path, "example.com", [],
+            controllers=[("shared.example.com", "192.0.2.1"), ("shared.other.com", "192.0.2.2")],
+            dc_findings=[Finding("LDAP-001", "LDAP", "", "", affected_assets=assets)],
+        )
+    assert path.read_text(encoding="utf-8") == "previous export"
+
+
+def test_dc_export_normalises_ip_and_omits_unaffected_controllers(tmp_path):
+    path = tmp_path / "report.xml"
+    sureformat.write_findings(
+        path, "example.com", [],
+        controllers=[("dc1.example.com", "2001:db8::1"), ("dc2.example.com", "192.0.2.2")],
+        dc_findings=[
+            Finding("NOPAC-001", "NoPAC", "", "", affected_assets=["2001:0db8:0:0::1"])
+        ],
+    )
+    items = ET.parse(path).getroot().findall("item")
+    assert [item.attrib for item in items] == [
+        {"hostname": "example.com", "ipaddress": ""},
+        {"hostname": "dc1.example.com", "ipaddress": "2001:db8::1"},
+    ]
+
+
+def test_cli_reports_unmatched_dc_finding(monkeypatch, tmp_path):
+    monkeypatch.setattr(util, "ARTEFACTS_DIR", tmp_path)
+    monkeypatch.setattr(check, "require_session", lambda: {
+        "domain": "example.com", "dc_hostnames": ["dc1.example.com"], "dc_ips": ["192.0.2.1"]
+    })
+    monkeypatch.setitem(
+        check.AVAILABLE_CHECKS, "ldap",
+        check.CheckDefinition(
+            lambda password: results.record_findings([
+                Finding("LDAP-001", "LDAP", "", "", affected_assets=["dc2.example.com"])
+            ]), False,
+        ),
+    )
+    result = CliRunner().invoke(app, ["check", "ldap", "--csacyber", "--dc"])
+    assert result.exit_code != 0
+    assert "Cannot uniquely match DC" in result.output
+    assert not (tmp_path / "ad-kit_findings_ldap.xml").exists()
+
+
 def test_full_run_exports_xml_without_replacing_previous_json(monkeypatch, tmp_path):
     previous_json = tmp_path / "ad-kit_findings_all.json"
     previous_json.write_text("previous output", encoding="utf-8")
@@ -119,29 +190,42 @@ def test_full_run_exports_xml_without_replacing_previous_json(monkeypatch, tmp_p
     assert previous_json.read_text(encoding="utf-8") == "previous output"
 
 
-def test_cli_creates_domain_and_dc_xml_from_session(monkeypatch, tmp_path):
-    (tmp_path / "session.json").write_text(json.dumps({"domain": "example.com"}), encoding="utf-8")
+def test_cli_creates_single_xml_with_domain_and_dc_items(monkeypatch, tmp_path):
+    (tmp_path / "session.json").write_text(json.dumps({
+        "domain": "example.com",
+        "dc_controllers": [
+            {"hostname": "DC1.example.com", "ip": "192.0.2.1"},
+            {"hostname": "DC2.example.com", "ip": "192.0.2.2"},
+        ],
+    }), encoding="utf-8")
     monkeypatch.setattr(util, "ARTEFACTS_DIR", tmp_path)
     monkeypatch.setitem(
         check.AVAILABLE_CHECKS,
         "ldap",
         check.CheckDefinition(
-            lambda password: results.record_findings([Finding("LDAP-003", "LDAP", "", "")]),
+            lambda password: results.record_findings([
+                Finding("LDAP-003", "LDAP", "", "", affected_assets=["dc1"]),
+                Finding("COERCE-001", "Coercion", "", "",
+                        affected_assets=["DC2", "dc1.example.com"]),
+            ]),
             False,
         ),
     )
 
-    result = CliRunner().invoke(app, ["check", "ldap", "--csacyber", "--dc", "dc.example.com"])
+    result = CliRunner().invoke(app, ["check", "ldap", "--csacyber", "--dc"])
 
     assert result.exit_code == 0, result.output
-    _, domain_item, _, domain_vulnerabilities = _vulnerabilities(
+    root, domain_item, _, domain_vulnerabilities = _vulnerabilities(
         tmp_path / "ad-kit_findings_ldap.xml"
     )
-    _, dc_item, _, dc_vulnerabilities = _vulnerabilities(tmp_path / "ad-kit_findings_ldap-dc.xml")
     assert domain_item.attrib["hostname"] == "example.com"
     assert not domain_vulnerabilities
-    assert dc_item.attrib["hostname"] == "dc.example.com"
-    assert [v.attrib["id"] for v in dc_vulnerabilities] == ["SC-1000"]
+    dc1, dc2 = root.findall("item")[1:]
+    assert dc1.attrib == {"hostname": "DC1.example.com", "ipaddress": "192.0.2.1"}
+    assert [v.attrib["id"] for v in dc1.findall(".//vulnerability")] == ["SC-9018", "SC-1000"]
+    assert dc2.attrib == {"hostname": "DC2.example.com", "ipaddress": "192.0.2.2"}
+    assert [v.attrib["id"] for v in dc2.findall(".//vulnerability")] == ["SC-9018"]
+    assert not (tmp_path / "ad-kit_findings_ldap-dc.xml").exists()
 
 
 def test_selected_checks_xml_uses_all_selected_names(monkeypatch, tmp_path):
@@ -169,16 +253,18 @@ def test_selected_checks_xml_uses_all_selected_names(monkeypatch, tmp_path):
     [
         (["check", "--csacyber"], None),
         (["check", "all", "--csacyber"], None),
-        (["check", "--csacyber", "ldap", "--dc", "dc.example.com"], ["ldap"]),
+        (["check", "--csacyber", "ldap", "--dc"], ["ldap"]),
         (["check", "run", "ldap", "smb", "--csacyber"], ["ldap", "smb"]),
         (["check", "run", "pass-pol,dns", "--csacyber", "--workers", "16"],
          ["pass-pol", "dns"]),
-        (["check", "--csacyber", "--dc", "dc.example.com", "run", "ldap"], ["ldap"]),
+        (["check", "--csacyber", "--dc", "run", "ldap"], ["ldap"]),
     ],
 )
 def test_cli_dispatches_sureformat_options(monkeypatch, args, expected):
     calls = []
-    monkeypatch.setattr(check, "require_session", lambda: {"domain": "example.com"})
+    monkeypatch.setattr(check, "require_session", lambda: {
+        "domain": "example.com", "dc_hostnames": ["dc.example.com"], "dc_ips": ["192.0.2.1"]
+    })
     monkeypatch.setattr(
         check, "run_checks", lambda **kwargs: calls.append((None, kwargs))
     )
@@ -188,7 +274,7 @@ def test_cli_dispatches_sureformat_options(monkeypatch, args, expected):
 
     result = CliRunner().invoke(app, args)
     assert result.exit_code == 0, result.output
-    expected_dc = "dc.example.com" if "--dc" in args else None
+    expected_dc = "--dc" in args
     assert calls == [(expected, {"csacyber": True, "dc": expected_dc})]
 
 
@@ -261,16 +347,18 @@ def test_cli_excludes_checks(monkeypatch, args, expected_modules, expected_exclu
 @pytest.mark.parametrize("args", [
     [
         "check", "--workers", "8", "--exclude", "ldap,smb",
-        "all", "--csacyber", "--dc", "example.com DCs",
+        "all", "--csacyber", "--dc",
     ],
     [
-        "check", "all", "--csacyber", "--dc", "example.com DCs",
+        "check", "all", "--csacyber", "--dc",
         "--workers", "8", "--exclude", "ldap,smb",
     ],
 ])
 def test_cli_exclusions_combine_with_export_and_worker_options(monkeypatch, args):
     calls = []
-    monkeypatch.setattr(check, "require_session", lambda: {"domain": "example.com"})
+    monkeypatch.setattr(check, "require_session", lambda: {
+        "domain": "example.com", "dc_hostnames": ["dc.example.com"], "dc_ips": ["192.0.2.1"]
+    })
     monkeypatch.setattr(
         check, "run_checks",
         lambda **kwargs: calls.append((util._check_workers.get(), kwargs)),
@@ -278,7 +366,7 @@ def test_cli_exclusions_combine_with_export_and_worker_options(monkeypatch, args
     result = CliRunner().invoke(app, args)
     assert result.exit_code == 0, result.output
     assert calls == [(8, {
-        "csacyber": True, "dc": "example.com DCs", "exclude": {"ldap", "smb"},
+        "csacyber": True, "dc": True, "exclude": {"ldap", "smb"},
     })]
 
 
@@ -316,9 +404,24 @@ def test_cli_rejects_missing_domain_before_running_checks(monkeypatch, domain):
 
 def test_cli_rejects_dc_without_csacyber(monkeypatch):
     monkeypatch.setattr(check, "run_checks", lambda **kwargs: pytest.fail("checks ran"))
-    result = CliRunner().invoke(app, ["check", "--dc", "dc.example.com"])
+    result = CliRunner().invoke(app, ["check", "--dc"])
     assert result.exit_code != 0
     assert "--dc requires --csacyber" in result.output
+
+
+@pytest.mark.parametrize("args", [
+    ["check", "ldap", "--csacyber", "--dc", "old-group-name"],
+    ["check", "--csacyber", "--dc", "ldap", "--dc"],
+])
+def test_cli_rejects_old_dc_value_and_duplicate_flags(monkeypatch, args):
+    monkeypatch.setattr(check, "require_session", lambda: {
+        "domain": "example.com", "dc_hostnames": ["dc.example.com"], "dc_ips": ["192.0.2.1"]
+    })
+    monkeypatch.setattr(check, "run_selected_checks", lambda *_args, **_kwargs: pytest.fail(
+        "checks ran"
+    ))
+    result = CliRunner().invoke(app, args)
+    assert result.exit_code != 0
 
 
 def test_cli_reports_missing_session(monkeypatch):

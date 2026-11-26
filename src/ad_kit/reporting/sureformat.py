@@ -1,9 +1,12 @@
 """Export integration findings in SureFormat XML."""
 
+import ipaddress
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from ad_kit.core.console import print_warning
+from ad_kit.core.finding import Finding
+from ad_kit.reporting.json import integration_finding
 
 FINDING_MAP = {
     "SMB-001": "SC-7704",
@@ -47,10 +50,56 @@ DC_FINDING_IDS = {
 }
 
 
-def write_findings(path: Path, hostname: str, findings: list[dict[str, str]]) -> None:
-    """Write mapped findings with the same structure as the SureCloud adapter."""
-    root = ET.Element("items", source="SureFormat", version="1.0.0")
-    item = ET.SubElement(root, "item", ipaddress="", hostname=hostname)
+class DCExportError(ValueError):
+    """A DC finding cannot be reliably assigned to an IP address."""
+
+
+def dc_inventory(session: dict) -> list[tuple[str, str]]:
+    """Load paired DC identities, including sessions created by older versions."""
+    controllers = session.get("dc_controllers")
+    if controllers is None:
+        hostnames, ips = session.get("dc_hostnames"), session.get("dc_ips")
+        if (
+            not isinstance(hostnames, list)
+            or not isinstance(ips, list)
+            or len(hostnames) != len(ips)
+        ):
+            raise DCExportError("DC hostname/IP pairs are missing. Run 'ad-kit enum' again.")
+        controllers = [{"hostname": host, "ip": ip} for host, ip in zip(hostnames, ips)]
+    if not isinstance(controllers, list) or not controllers:
+        raise DCExportError("DC hostname/IP pairs are missing. Run 'ad-kit enum' again.")
+
+    inventory: list[tuple[str, str]] = []
+    seen_hosts: set[str] = set()
+    seen_ips: set[str] = set()
+    for controller in controllers:
+        if not isinstance(controller, dict):
+            raise DCExportError("Invalid DC inventory. Run 'ad-kit enum' again.")
+        hostname, address = controller.get("hostname"), controller.get("ip")
+        if not isinstance(hostname, str) or not hostname.strip().rstrip("."):
+            raise DCExportError("Invalid DC hostname in session metadata. Run 'ad-kit enum' again.")
+        try:
+            if not isinstance(address, str):
+                raise ValueError("IP address must be a string")
+            ip = str(ipaddress.ip_address(address.strip()))
+        except ValueError as exc:
+            raise DCExportError(
+                "Invalid DC IP in session metadata. Run 'ad-kit enum' again."
+            ) from exc
+        hostname = hostname.strip().rstrip(".")
+        key = hostname.casefold()
+        if key in seen_hosts or ip in seen_ips:
+            raise DCExportError("Ambiguous DC hostname/IP mapping. Run 'ad-kit enum' again.")
+        seen_hosts.add(key)
+        seen_ips.add(ip)
+        inventory.append((hostname, ip))
+    return inventory
+
+
+def _append_item(
+    root: ET.Element, hostname: str, ip: str, findings: list[dict[str, str]]
+) -> None:
+    item = ET.SubElement(root, "item", ipaddress=ip, hostname=hostname)
     services = ET.SubElement(item, "services")
     service = ET.SubElement(services, "service", name="", port="", protocol="tcp")
     vulnerabilities = ET.SubElement(service, "vulnerabilities")
@@ -69,6 +118,51 @@ def write_findings(path: Path, hostname: str, findings: list[dict[str, str]]) ->
             information = ET.SubElement(vulnerability, "information")
             information.text = finding["description"]
             mapped_vulnerabilities[vulnerability_id] = information
+
+
+def write_findings(
+    path: Path,
+    hostname: str,
+    findings: list[dict[str, str]],
+    *,
+    controllers: list[tuple[str, str]] | None = None,
+    dc_findings: list[Finding] | None = None,
+) -> None:
+    """Write domain findings and, optionally, per-controller findings."""
+    root = ET.Element("items", source="SureFormat", version="1.0.0")
+    _append_item(root, hostname, "", findings)
+    if controllers is not None:
+        aliases: dict[str, set[int]] = {}
+        for index, (dc_hostname, ip) in enumerate(controllers):
+            host = dc_hostname.casefold().rstrip(".")
+            for alias in (host, host.split(".")[0], ip):
+                aliases.setdefault(alias, set()).add(index)
+
+        per_dc: list[list[dict[str, str]]] = [[] for _ in controllers]
+        for finding in dc_findings or []:
+            if not finding.affected_assets:
+                raise DCExportError(f"Finding {finding.id} has no affected DCs; cannot export it.")
+            matched: set[int] = set()
+            for asset in finding.affected_assets:
+                key = asset.strip().casefold().rstrip(".")
+                try:
+                    key = str(ipaddress.ip_address(key))
+                except ValueError:
+                    pass
+                matches = aliases.get(key, set())
+                if len(matches) != 1:
+                    raise DCExportError(
+                        f"Cannot uniquely match DC '{asset}' for {finding.id} to session IPs."
+                    )
+                matched.update(matches)
+            for index in sorted(matched):
+                per_dc[index].append(integration_finding(finding))
+        for (dc_hostname, ip), dc_items in zip(controllers, per_dc):
+            if dc_items:
+                dc_items.sort(
+                    key=lambda item: (item["id"].casefold(), item["description"].casefold())
+                )
+                _append_item(root, dc_hostname, ip, dc_items)
 
     tree = ET.ElementTree(root)
     ET.indent(tree, space="    ")

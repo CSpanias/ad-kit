@@ -360,6 +360,7 @@ def test_coercion_methods_are_shown_for_each_host(monkeypatch):
     assert any("Print Spooler" in evidence and "DC3" in evidence
                for finding in recorded_findings for evidence in finding.evidence)
     finding = recorded_findings[0]
+    assert finding.affected_assets == ["dc1", "dc2", "dc3"]
     assert "identified three\nsystems exposing" in finding.commentary
     markdown = format_finding_sections(finding)["Evidence"]
     assert "Domain Controller (DC)" in finding.commentary

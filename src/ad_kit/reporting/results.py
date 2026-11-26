@@ -35,7 +35,8 @@ def record_incomplete(
 
 
 def write_reports(
-    directory: Path, *, run_name: str = "all", domain: str | None = None, dc: str | None = None
+    directory: Path, *, run_name: str = "all", domain: str | None = None,
+    dc_controllers: list[tuple[str, str]] | None = None,
 ) -> None:
     """Write the full HTML report and the selected integration export."""
     basename = f"ad-kit_findings_{run_name}"
@@ -52,9 +53,10 @@ def write_reports(
 
     findings = json.get_findings()
     domain_findings = [
-        f for f in findings if dc is None or f["id"] not in sureformat.DC_FINDING_IDS
+        f for f in findings if dc_controllers is None or f["id"] not in sureformat.DC_FINDING_IDS
     ]
-    sureformat.write_findings(directory / f"{basename}.xml", domain.lower(), domain_findings)
-    if dc is not None:
-        dc_findings = [f for f in findings if f["id"] in sureformat.DC_FINDING_IDS]
-        sureformat.write_findings(directory / f"{basename}-dc.xml", dc, dc_findings)
+    dc_findings = [f for f in _findings if f.id in sureformat.DC_FINDING_IDS]
+    sureformat.write_findings(
+        directory / f"{basename}.xml", domain.lower(), domain_findings,
+        controllers=dc_controllers, dc_findings=dc_findings,
+    )
