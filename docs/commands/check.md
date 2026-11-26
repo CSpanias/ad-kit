@@ -55,22 +55,25 @@ Report filenames identify the checks in the current run:
   filename.
 
 With `--csacyber`, XML is written instead of JSON using the same suffix.
-Add `--dc` (without a value) to assign DC-specific LDAP, NoPAC, and coercion
-findings to individual DC IP addresses in the same XML, alongside the domain
-item. Only confirmed affected DCs receive each finding. DC hostname/IP pairs
-come from enumeration; ambiguous or missing mappings stop the export rather
-than assigning findings to the wrong asset. Run `ad-kit enum` again if session
-metadata is incomplete.
+The XML contains the domain item and separate items for affected hosts for
+LDAP, NoPAC, coercion, SMB, and DC local-administrator findings. Only confirmed
+affected hosts receive each finding. Domain-wide findings remain on the domain
+item. Findings without a SureFormat mapping are omitted with a warning.
+
+DC hostname/IP pairs come from enumeration. Other hosts are resolved using the
+session's DC as a DNS server. If a hostname cannot be resolved to one
+unambiguous IP, it is exported by hostname with an empty IP and a warning.
+Review those warnings before importing the XML. A host finding with no recorded
+affected host remains on the domain item with a warning.
 
 ```bash
-ad-kit check --csacyber --dc
-ad-kit check run ldap,nopac,coercion --csacyber --dc
+ad-kit check --csacyber
+ad-kit check run ldap,nopac,coercion,smb --csacyber
 ```
 
-Without `--dc`, all mapped findings remain under the domain item. `--dc` no
-longer accepts an asset-group name. Each run replaces only the matching HTML
-and selected export; older exports, including previously generated `-dc.xml`
-files, are not removed.
+The separate `--dc` switch has been removed. Each run replaces only the
+matching HTML and selected export; older exports, including previously
+generated `-dc.xml` files, are not removed.
 
 When a command or host check cannot be completed, ad-kit preserves confirmed
 findings and lists incomplete checks in the console and HTML report. The JSON

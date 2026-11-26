@@ -60,7 +60,7 @@ platform IDs and warns about findings without a mapping. The exports contain
 findings from the current run only. Multiple selected checks use their names
 in execution order as the suffix. A run replaces files with the same suffix
 and format; older files in other formats are left untouched. The domain
-hostname in the XML is lowercase; a separately supplied DC label is preserved
-as entered.
+hostname in the XML is lowercase. Host-specific findings use separate items;
+hosts with missing or ambiguous IPs are exported by hostname with a warning.
 
 Evidence is stored in `ad-kit/evidence/`.

@@ -17,6 +17,7 @@ ad-kit runs NetExec against the Domain Controller:
 ```bash
 nxc ldap <dc_ip> -u <username> -p <password> --query '(&(sAMAccountType=805306368)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))' 'sAMAccountName adminCount'
 nxc ldap <dc_ip> -u <username> -p <password> --get-sid
+nxc ldap <dc_ip> -u <username> -p <password> --query '(objectSid=<trustee_sid>)' 'sAMAccountType userAccountControl'
 bloodyAD -u <username> -p <password> -d <domain> --dc-ip <dc_ip> get object <domain_sid-rid> --attr sAMAccountName
 nxc ldap <dc_ip> -u <username> -p <password> -M whoami -o USER=<resolved_name>
 ```
@@ -50,7 +51,11 @@ ad-kit:
 - Reads the domain DACL with
   [`dacledit.py`](https://github.com/fortra/impacket/blob/master/examples/dacledit.py)
   to find non-default principals with DCSync-related replication rights or
-  GenericAll on the domain object.
+  GenericAll on the domain object. Each trustee is looked up by SID, and
+  confirmed disabled user and computer accounts are excluded. Group trustees
+  remain included because groups do not have an enabled/disabled account
+  status. Failed or unreadable status lookups are recorded as incomplete;
+  those trustees remain visible with an unknown status.
 
 Previously saved expected trustee SIDs remain excluded for resolved trustees
 other than `Cisco_Connector`; the check no longer prompts for selections.

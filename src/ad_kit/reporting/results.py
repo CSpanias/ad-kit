@@ -36,7 +36,7 @@ def record_incomplete(
 
 def write_reports(
     directory: Path, *, run_name: str = "all", domain: str | None = None,
-    dc_controllers: list[tuple[str, str]] | None = None,
+    session: dict[str, object] | None = None,
 ) -> None:
     """Write the full HTML report and the selected integration export."""
     basename = f"ad-kit_findings_{run_name}"
@@ -51,12 +51,30 @@ def write_reports(
         json.write_findings(directory / f"{basename}.json")
         return
 
-    findings = json.get_findings()
-    domain_findings = [
-        f for f in findings if dc_controllers is None or f["id"] not in sureformat.DC_FINDING_IDS
-    ]
-    dc_findings = [f for f in _findings if f.id in sureformat.DC_FINDING_IDS]
+    host_findings = []
+    domain_findings = []
+    for finding in _findings:
+        if finding.id in sureformat.HOST_FINDING_IDS and finding.affected_assets:
+            host_findings.append(finding)
+        else:
+            if finding.id in sureformat.HOST_FINDING_IDS:
+                print_warning(
+                    f"Finding {finding.id} has no affected hosts; exporting under domain."
+                )
+            domain_findings.append(json.integration_finding(finding))
+    domain_findings.sort(key=lambda item: (item["id"].casefold(), item["description"].casefold()))
+    controllers = []
+    if host_findings:
+        try:
+            controllers = sureformat.dc_inventory(session or {})
+        except sureformat.DCExportError as exc:
+            print_warning(f"Cannot use DC inventory: {exc}")
+    dns_server = (session or {}).get("dc_ip")
+    if dns_server is not None and not isinstance(dns_server, str):
+        print_warning("Cannot use the session DNS server: its IP is not a string.")
+        dns_server = None
     sureformat.write_findings(
         directory / f"{basename}.xml", domain.lower(), domain_findings,
-        controllers=dc_controllers, dc_findings=dc_findings,
+        controllers=controllers, host_findings=host_findings,
+        dns_server=dns_server,
     )

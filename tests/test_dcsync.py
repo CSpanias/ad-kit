@@ -6,12 +6,23 @@ from rich.console import Console
 
 from ad_kit.checks import dcsync
 from ad_kit.commands.checks import privileged
-from ad_kit.core.exceptions import ADKitError
+from ad_kit.core.exceptions import ADKitError, CheckExecutionError
 from ad_kit.reporting.html import render_html
 from ad_kit.reporting.markdown import format_finding_sections
 
 DOMAIN_SID = "S-1-5-21-1-2-3"
 RIGHTS = dcsync.DCSYNC_RIGHTS
+
+
+def _account_entry(account_type=805306368, uac=512):
+    prefix = "LDAP dc 389 DC "
+    lines = [
+        f"{prefix}[+] Response for object: CN=account,DC=example",
+        f"{prefix}sAMAccountType       {account_type}",
+    ]
+    if uac is not None:
+        lines.append(f"{prefix}userAccountControl   {uac}")
+    return "\n".join(lines)
 
 
 def _ace(
@@ -115,12 +126,17 @@ def test_dcsync_checks_full_domain_dacl_and_excludes_default_generic_all(monkeyp
 
     def run(name, command, sensitive_values):
         calls.append((name, command))
-        return f"Domain SID: {DOMAIN_SID}" if name == "dcsync-domain-sid" else output
+        if name == "dcsync-domain-sid":
+            return f"Domain SID: {DOMAIN_SID}"
+        if name == "dcsync-rights":
+            return output
+        return _account_entry()
 
     monkeypatch.setattr(dcsync, "run_check", run)
     trustees = dcsync.dcsync_check("dc", "example.test", "user", "password", set(), [])
     assert trustees == [
-        {"name": "operator", "sid": user_sid, "rights": ["GenericAll"], "complete": True}
+        {"name": "operator", "sid": user_sid, "rights": ["GenericAll"], "complete": True,
+         "account_status": "enabled"}
     ]
     assert calls[1][1][calls[1][1].index("-action") + 1] == "read"
     assert calls[1][1][calls[1][1].index("-target-sid") + 1] == DOMAIN_SID
@@ -158,6 +174,8 @@ def test_dcsync_check_reports_unexpected_trustees_and_excludes_defaults(
                 _ace(index, guid, name, sid)
                 for index, guid, name, sid in aces
             ),
+            _account_entry(),
+            _account_entry(),
         ]
     )
     commands = []
@@ -193,6 +211,61 @@ def test_dcsync_check_reports_unexpected_trustees_and_excludes_defaults(
         "Password123!",
         "example.test/poppy:Password123!",
     ]
+    assert commands[2][1][-3:] == [
+        "--query", f"(objectSid={DOMAIN_SID}-2806)", "sAMAccountType userAccountControl",
+    ]
+    assert commands[2][2] == ["Password123!"]
+
+
+def test_dcsync_excludes_disabled_accounts_and_keeps_groups_and_unknown(monkeypatch):
+    names = ["enabled", "disabled", "computer", "group", "unknown", "broken"]
+    sids = [f"{DOMAIN_SID}-{2000 + i}" for i in range(len(names))]
+    acl = "".join(
+        _full_control_ace(i, name, sid, "0xf01ff")
+        for i, (name, sid) in enumerate(zip(names, sids))
+    )
+    outputs = {
+        sids[0]: _account_entry(),
+        sids[1]: _account_entry(uac=514),
+        sids[2]: _account_entry(account_type=805306369, uac=4098),
+        sids[3]: _account_entry(account_type=268435456, uac=None),
+        sids[4]: "",
+    }
+    incomplete = []
+
+    def fake_run(name, command, sensitive_values):
+        if name == "dcsync-domain-sid":
+            return f"Domain SID: {DOMAIN_SID}"
+        if name == "dcsync-rights":
+            return acl
+        sid = command[-2][len("(objectSid="):-1]
+        if sid == sids[5]:
+            raise CheckExecutionError(name, [], stderr="LDAP unavailable")
+        return outputs[sid]
+
+    monkeypatch.setattr(dcsync, "run_check", fake_run)
+    monkeypatch.setattr(dcsync, "record_incomplete", lambda *args: incomplete.append(args))
+    trustees = dcsync.dcsync_check("dc", "example.test", "user", "password", set(), [])
+    assert [(t["name"], t["account_status"]) for t in trustees] == [
+        ("broken", "unknown"), ("enabled", "enabled"), ("group", "group"), ("unknown", "unknown")
+    ]
+    assert {entry[1] for entry in incomplete} == {sids[4], sids[5]}
+    evidence = dcsync.dcsync_findings(trustees)[0].evidence
+    assert sum("account status unknown" in entry for entry in evidence) == 2
+    assert all("disabled" not in entry and "computer" not in entry for entry in evidence)
+
+
+@pytest.mark.parametrize("output", [
+    "",
+    _account_entry(uac=None),
+    _account_entry(uac=512) + "\nLDAP dc 389 DC [-] search error",
+    _account_entry() + "\n" + _account_entry(),
+    _account_entry(account_type=42),
+    _account_entry().replace("userAccountControl   512", "userAccountControl   invalid"),
+])
+def test_dcsync_account_status_rejects_incomplete_ldap_results(output):
+    with pytest.raises(ValueError):
+        dcsync._account_status(output)
 
 
 def test_saved_expected_sids_are_validated():
@@ -312,7 +385,7 @@ def test_dcsync_output_and_findings(monkeypatch, unknown_count, cisco_complete, 
         ])
     trustees.extend(
         {"name": "UNKNOWN", "sid": f"{DOMAIN_SID}-{1010 + i}",
-         "rights": ["right"], "complete": True}
+         "rights": ["right"], "complete": True, "account_status": "unknown"}
         for i in range(unknown_count)
     )
     monkeypatch.setattr(privileged, "console", Console(file=output, width=160))
@@ -354,6 +427,7 @@ def test_dcsync_output_and_findings(monkeypatch, unknown_count, cisco_complete, 
         finding = next(finding for finding in findings if finding.id == "PRIV-005")
         assert len(finding.evidence) == total
         assert sum("UNKNOWN" in item for item in finding.evidence) == unknown_count
+        assert sum("account status unknown" in item for item in finding.evidence) == unknown_count
         assert any("Cisco_Connector" in item for item in finding.evidence) is cisco_complete
         assert all("mSoL_connector" not in item and "partial" not in item
                    for item in finding.evidence)

@@ -7,7 +7,7 @@ from ad_kit.core.console import console as console
 from ad_kit.core.console import print_error
 from ad_kit.core.exceptions import ADKitError
 from ad_kit.core.util import get_artefacts_dir, require_session
-from ad_kit.reporting import results, sureformat
+from ad_kit.reporting import results
 
 from .checks.credentials import authenticate_standard_user
 from .checks.hosts import run_nopac_checks, run_scriptpath_checks
@@ -158,9 +158,7 @@ AVAILABLE_CHECKS: dict[str, CheckDefinition] = {
 }
 
 
-def _export_domain(csacyber: bool, dc: bool) -> str | None:
-    if dc and not csacyber:
-        raise ValueError("--dc requires --csacyber.")
+def _export_domain(csacyber: bool) -> str | None:
     if not csacyber:
         return None
     session = require_session()
@@ -169,16 +167,12 @@ def _export_domain(csacyber: bool, dc: bool) -> str | None:
         raise ValueError(
             "SureFormat export requires a domain in session metadata. Run 'ad-kit enum'."
         )
-    if dc:
-        sureformat.dc_inventory(session)
     return domain.strip()
 
 
-def run_selected_checks(
-    modules: list[str], *, csacyber: bool = False, dc: bool = False
-) -> None:
+def run_selected_checks(modules: list[str], *, csacyber: bool = False) -> None:
     """Execute selected checks, reusing one Standard User password."""
-    domain = _export_domain(csacyber, dc)
+    domain = _export_domain(csacyber)
     results.reset()
 
     requires_authentication = any(
@@ -205,12 +199,12 @@ def run_selected_checks(
     )) or "selected"
     results.write_reports(
         get_artefacts_dir(), run_name=run_name, domain=domain,
-        dc_controllers=sureformat.dc_inventory(require_session()) if dc else None,
+        session=require_session() if csacyber else None,
     )
 
 
 def run_checks(
-    *, csacyber: bool = False, dc: bool = False, exclude: set[str] | None = None
+    *, csacyber: bool = False, exclude: set[str] | None = None
 ) -> None:
     """Execute all assessment checks in the established workflow order."""
     excluded = exclude or set()
@@ -220,7 +214,7 @@ def run_checks(
     if not set(AVAILABLE_CHECKS).difference(excluded):
         raise ValueError("At least one check must remain.")
 
-    domain = _export_domain(csacyber, dc)
+    domain = _export_domain(csacyber)
     results.reset()
 
     std_pass = None
@@ -257,5 +251,5 @@ def run_checks(
 
     results.write_reports(
         get_artefacts_dir(), domain=domain,
-        dc_controllers=sureformat.dc_inventory(require_session()) if dc else None,
+        session=require_session() if csacyber else None,
     )

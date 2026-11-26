@@ -3,9 +3,10 @@ Checks for unexpected Active Directory replication rights.
 """
 
 import re
-from typing import TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 from ad_kit.core.checks import parse_domain_sid, run_check
+from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import (
     format_counted_commentary,
@@ -13,6 +14,7 @@ from ad_kit.core.findings import (
     load_finding_definition,
 )
 from ad_kit.core.util import count_form
+from ad_kit.reporting.results import record_incomplete
 
 ACE_BLOCK_PATTERN = re.compile(
     r"ACE\[\s*\d+\s*\]\s+info(.*?)(?=ACE\[\s*\d+\s*\]\s+info|\Z)",
@@ -39,6 +41,9 @@ ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 GENERIC_ALL = 0x10000000
 FULL_CONTROL = 0x000F01FF
 CONTROL_ACCESS = 0x00000100
+ACCOUNT_DISABLED = 0x0002
+ACCOUNT_TYPES = {805306368, 805306369, 805306370}
+GROUP_TYPES = {268435456, 268435457, 536870912, 536870913}
 
 DCSYNC_RIGHTS = {
     "1131f6aa-9c07-11d1-f79f-00c04fc2dcd2": "DS-Replication-Get-Changes",
@@ -58,6 +63,7 @@ class DCSyncTrustee(TypedDict):
     sid: str
     rights: list[str]
     complete: bool
+    account_status: NotRequired[Literal["enabled", "group", "unknown"]]
 
 
 class _ParsedTrustee(TypedDict):
@@ -183,6 +189,36 @@ def _default_trustee_sids(domain_sid: str) -> set[str]:
     }
 
 
+def _account_status(output: str) -> Literal["enabled", "disabled", "group"]:
+    entries = 0
+    attributes: dict[str, str] = {}
+    for line in ANSI_ESCAPE_PATTERN.sub("", output).splitlines():
+        match = re.match(r"^\s*LDAP\s+\S+\s+\d+\s+\S+\s+(.*)$", line)
+        if not match:
+            continue
+        payload = match.group(1).strip()
+        if payload.startswith(("[-]", "[!]")):
+            raise ValueError("LDAP reported an error while looking up the trustee.")
+        if re.match(r"^\[\+\]\s+Response for object:", payload, re.IGNORECASE):
+            entries += 1
+            continue
+        attribute = re.match(r"^(sAMAccountType|userAccountControl)\s+(\d+)\s*$",
+                             payload, re.IGNORECASE)
+        if attribute:
+            key = attribute.group(1).casefold()
+            if key in attributes:
+                raise ValueError("LDAP returned duplicate account attributes.")
+            attributes[key] = attribute.group(2)
+    if entries != 1 or "samaccounttype" not in attributes:
+        raise ValueError("LDAP did not return one trustee with a readable account type.")
+    account_type = int(attributes["samaccounttype"])
+    if account_type in GROUP_TYPES:
+        return "group"
+    if account_type not in ACCOUNT_TYPES or "useraccountcontrol" not in attributes:
+        raise ValueError("LDAP did not return a readable account status.")
+    return "disabled" if int(attributes["useraccountcontrol"]) & ACCOUNT_DISABLED else "enabled"
+
+
 def dcsync_check(
     dc_ip: str,
     domain: str,
@@ -195,8 +231,9 @@ def dcsync_check(
     Identify non-default trustees assigned DCSync rights or domain GenericAll.
 
     Domain Admins, Enterprise Admins, Domain Controllers, Enterprise Domain
-    Controllers, other well-known default administrators, and known members of
-    the Domain Admins and Enterprise Admins groups are excluded.
+    Controllers, other well-known default administrators, known members of
+    Domain Admins and Enterprise Admins, and confirmed disabled accounts are
+    excluded. Groups and trustees with unknown status remain visible.
     """
 
     sid_output = run_check(
@@ -251,7 +288,29 @@ def dcsync_check(
         and _normalize_principal(trustee["name"]) not in default_names
     ]
 
-    return trustees
+    filtered: list[DCSyncTrustee] = []
+    for trustee in trustees:
+        sid = trustee["sid"]
+        try:
+            status_output = run_check(
+                f"dcsync-account-status-{sid}",
+                [
+                    "nxc", "ldap", dc_ip, "-u", username, "-p", password,
+                    "--query", f"(objectSid={sid})", "sAMAccountType userAccountControl",
+                ],
+                sensitive_values=[password],
+            )
+            status = _account_status(status_output)
+        except (CheckExecutionError, ValueError) as exc:
+            record_incomplete("DCSync account status", sid, str(exc))
+            trustee["account_status"] = "unknown"
+        else:
+            if status == "disabled":
+                continue
+            trustee["account_status"] = status
+        filtered.append(trustee)
+
+    return filtered
 
 
 def dcsync_findings(trustees: list[DCSyncTrustee]) -> list[Finding]:
@@ -292,6 +351,8 @@ def dcsync_findings(trustees: list[DCSyncTrustee]) -> list[Finding]:
                 ):
                     labels.append("explicit core DCSync rights")
                 evidence += " - " + "; ".join(labels)
+            if trustee.get("account_status") == "unknown":
+                evidence += " - account status unknown"
             finding.evidence.append(evidence)
 
         findings.append(finding)

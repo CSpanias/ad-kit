@@ -85,7 +85,7 @@ def test_local_admin_uses_one_bulk_command_with_progress(monkeypatch, tmp_path):
     (tmp_path / "domain-computers.txt").write_text("host.example.test\n", encoding="utf-8")
     calls = []
     monkeypatch.setattr(local_admin, "get_artefacts_dir", lambda: tmp_path)
-    monkeypatch.setattr(local_admin, "load_dc_hostnames", lambda: ["DC01"])
+    monkeypatch.setattr(local_admin, "load_dc_hostnames", lambda: ["DC01.EXAMPLE.TEST"])
 
     def run(name, command, **kwargs):
         calls.append((name, command, kwargs))

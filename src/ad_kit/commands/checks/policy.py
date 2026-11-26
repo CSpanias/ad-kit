@@ -122,6 +122,8 @@ def run_local_admin_checks(
     if local_admin_results["domain_controllers"]:
 
         finding = load_finding("local_admin", "LA-002")
+        finding.affected_assets.extend(local_admin_results["domain_controllers"])
+        finding.show_affected_assets = False
         controller_count = len(local_admin_results["domain_controllers"])
         format_counted_commentary(
             finding, controller_count, "Domain Controller (DC)", "Domain Controllers (DCs)"

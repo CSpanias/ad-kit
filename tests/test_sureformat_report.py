@@ -1,6 +1,8 @@
 import json
 import xml.etree.ElementTree as ET
+from types import SimpleNamespace
 
+import dns.resolver
 import pytest
 from typer.testing import CliRunner
 
@@ -18,10 +20,16 @@ def _vulnerabilities(path):
     return root, item, service, service.findall("./vulnerabilities/vulnerability")
 
 
-@pytest.mark.parametrize("dc", [False, True])
-def test_sureformat_export_matches_adapter_and_optional_dc_split(monkeypatch, tmp_path, dc):
+def test_sureformat_export_assigns_findings_to_affected_hosts(monkeypatch, tmp_path):
     findings = [
-        Finding("SMB-001", "SMB", "SMB signing details.", ""),
+        Finding("SMB-001", "SMB", "SMB signing details.", "",
+                affected_assets=["DC02.EXAMPLE.COM", "HOST01.EXAMPLE.COM"]),
+        Finding("SMB-002", "SMBv1", "SMBv1 details.", "",
+                affected_assets=["HOST01.EXAMPLE.COM"]),
+        Finding("SMB-003", "SMB", "Anonymous enumeration.", "",
+                affected_assets=["DC01.EXAMPLE.COM"]),
+        Finding("SMB-004", "SMB", "Writable shares.", "",
+                affected_assets=["HOST01.EXAMPLE.COM"]),
         Finding("LDAP-001", "LDAP", "LDAP signing details.", "",
                 affected_assets=["DC01.EXAMPLE.COM", "dc02.example.com."]),
         Finding("NOPAC-001", "NoPAC", "NoPAC details.", "",
@@ -29,42 +37,44 @@ def test_sureformat_export_matches_adapter_and_optional_dc_split(monkeypatch, tm
         Finding("OTHER-001", "Unmapped", "Other details.", ""),
         Finding("PRIV-001", "Privileged accounts", "Privilege details.", ""),
         Finding("PRIV-002", "Protected accounts", "Protected details.", ""),
+        Finding("LA-002", "Local admin", "DC access.", "", affected_assets=["dc01"]),
     ]
     monkeypatch.setattr(check, "get_artefacts_dir", lambda: tmp_path)
     monkeypatch.setattr(check, "require_session", lambda: {
         "domain": "EXAMPLE.COM", "dc_hostnames": ["DC01.EXAMPLE.COM", "DC02.EXAMPLE.COM"],
-        "dc_ips": ["192.0.2.1", "192.0.2.2"],
+        "dc_ips": ["192.0.2.1", "192.0.2.2"], "dc_ip": "192.0.2.1",
     })
+    monkeypatch.setattr(sureformat, "_resolve_host", lambda *_args: "192.0.2.3")
     monkeypatch.setitem(
         check.AVAILABLE_CHECKS,
         "fake",
         check.CheckDefinition(lambda password: results.record_findings(findings), False),
     )
 
-    check.run_selected_checks(["fake"], csacyber=True, dc=dc)
+    check.run_selected_checks(["fake"], csacyber=True)
 
     root, item, service, vulnerabilities = _vulnerabilities(tmp_path / "ad-kit_findings_fake.xml")
     assert root.attrib == {"source": "SureFormat", "version": "1.0.0"}
     assert item.attrib == {"ipaddress": "", "hostname": "example.com"}
     assert service.attrib == {"name": "", "port": "", "protocol": "tcp"}
-    assert [v.attrib["id"] for v in vulnerabilities] == (
-        ["SC-10674", "SC-10700", "SC-7704"]
-        if dc else ["SC-6080", "SC-3704", "SC-10674", "SC-10700", "SC-7704"]
-    )
+    assert [v.attrib["id"] for v in vulnerabilities] == ["SC-10674", "SC-10700"]
     protected = next(v for v in vulnerabilities if v.attrib["id"] == "SC-10700")
     assert protected.findtext("information") == "Protected details."
-    smb = next(v for v in vulnerabilities if v.attrib["id"] == "SC-7704")
-    assert smb.findtext("information") == "SMB signing details."
     assert (tmp_path / "ad-kit_findings_fake.html").exists()
     assert not (tmp_path / "ad-kit_findings_fake.json").exists()
-    if dc:
-        dc1, dc2 = root.findall("item")[1:]
-        assert dc1.attrib == {"hostname": "DC01.EXAMPLE.COM", "ipaddress": "192.0.2.1"}
-        assert dc2.attrib == {"hostname": "DC02.EXAMPLE.COM", "ipaddress": "192.0.2.2"}
-        assert [v.attrib["id"] for v in dc1.findall(".//vulnerability")] == ["SC-6080"]
-        assert [v.attrib["id"] for v in dc2.findall(".//vulnerability")] == [
-            "SC-6080", "SC-3704",
-        ]
+    dc1, dc2, host = root.findall("item")[1:]
+    assert dc1.attrib == {"hostname": "DC01.EXAMPLE.COM", "ipaddress": "192.0.2.1"}
+    assert dc2.attrib == {"hostname": "DC02.EXAMPLE.COM", "ipaddress": "192.0.2.2"}
+    assert host.attrib == {"hostname": "HOST01.EXAMPLE.COM", "ipaddress": "192.0.2.3"}
+    assert [v.attrib["id"] for v in dc1.findall(".//vulnerability")] == [
+        "SC-6642", "SC-6080", "SC-1909",
+    ]
+    assert [v.attrib["id"] for v in dc2.findall(".//vulnerability")] == [
+        "SC-6080", "SC-3704", "SC-7704",
+    ]
+    assert [v.attrib["id"] for v in host.findall(".//vulnerability")] == [
+        "SC-7704", "SC-3576", "SC-7367",
+    ]
     assert not (tmp_path / "ad-kit_findings_fake-dc.xml").exists()
 
 
@@ -115,25 +125,27 @@ def test_sureformat_exports_builtin_administrator_finding(tmp_path):
         {"hostname": "dc2.example.com", "ip": "192.0.2.1"},
     ]},
 ])
-def test_cli_rejects_unreliable_dc_inventory_before_running_checks(monkeypatch, session):
-    monkeypatch.setattr(check, "require_session", lambda: {"domain": "example.com", **session})
-    monkeypatch.setattr(check, "run_checks", lambda **kwargs: pytest.fail("checks ran"))
-    result = CliRunner().invoke(app, ["check", "--csacyber", "--dc"])
-    assert result.exit_code != 0
-    assert "DC" in result.output
-
-
-@pytest.mark.parametrize("assets", [[], ["unknown.example.com"], ["shared"]])
-def test_dc_export_fails_instead_of_guessing_missing_or_ambiguous_assets(tmp_path, assets):
-    path = tmp_path / "report.xml"
-    path.write_text("previous export", encoding="utf-8")
+def test_rejects_unreliable_dc_inventory(session):
     with pytest.raises(sureformat.DCExportError):
-        sureformat.write_findings(
-            path, "example.com", [],
-            controllers=[("shared.example.com", "192.0.2.1"), ("shared.other.com", "192.0.2.2")],
-            dc_findings=[Finding("LDAP-001", "LDAP", "", "", affected_assets=assets)],
-        )
-    assert path.read_text(encoding="utf-8") == "previous export"
+        sureformat.dc_inventory(session)
+
+
+@pytest.mark.parametrize("asset", ["unknown.example.com", "shared"])
+def test_export_warns_and_uses_hostname_for_unresolved_or_ambiguous_assets(
+    monkeypatch, tmp_path, asset
+):
+    path = tmp_path / "report.xml"
+    warnings = []
+    monkeypatch.setattr(sureformat, "print_warning", warnings.append)
+    sureformat.write_findings(
+        path, "example.com", [],
+        controllers=[("shared.example.com", "192.0.2.1"), ("shared.other.com", "192.0.2.2")],
+        host_findings=[Finding("LDAP-001", "LDAP", "", "", affected_assets=[asset])],
+    )
+    item = ET.parse(path).getroot().findall("item")[1]
+    assert item.attrib == {"hostname": asset, "ipaddress": ""}
+    assert [v.attrib["id"] for v in item.findall(".//vulnerability")] == ["SC-6080"]
+    assert len(warnings) == 1
 
 
 def test_dc_export_normalises_ip_and_omits_unaffected_controllers(tmp_path):
@@ -141,7 +153,7 @@ def test_dc_export_normalises_ip_and_omits_unaffected_controllers(tmp_path):
     sureformat.write_findings(
         path, "example.com", [],
         controllers=[("dc1.example.com", "2001:db8::1"), ("dc2.example.com", "192.0.2.2")],
-        dc_findings=[
+        host_findings=[
             Finding("NOPAC-001", "NoPAC", "", "", affected_assets=["2001:0db8:0:0::1"])
         ],
     )
@@ -152,7 +164,71 @@ def test_dc_export_normalises_ip_and_omits_unaffected_controllers(tmp_path):
     ]
 
 
-def test_cli_reports_unmatched_dc_finding(monkeypatch, tmp_path):
+@pytest.mark.parametrize(("addresses", "expected"), [
+    (["192.0.2.3"], "192.0.2.3"),
+    (["2001:db8::1"], "2001:db8::1"),
+    (["192.0.2.3", "192.0.2.4"], None),
+    (["192.0.2.3", "2001:db8::1"], None),
+])
+def test_host_resolution_uses_dc_dns_and_rejects_multiple_addresses(
+    monkeypatch, addresses, expected
+):
+    class FakeResolver:
+        def __init__(self, *, configure):
+            assert configure is False
+            self.nameservers = []
+            self.timeout = 0
+            self.lifetime = 0
+
+        def resolve(self, name, kind, *, search):
+            assert self.nameservers == ["192.0.2.1"]
+            assert name == "host.example.com"
+            assert search is False
+            result = [SimpleNamespace(address=address) for address in addresses
+                      if (":" in address) == (kind == "AAAA")]
+            if not result:
+                raise dns.resolver.NoAnswer
+            return result
+
+    monkeypatch.setattr(sureformat.dns.resolver, "Resolver", FakeResolver)
+    if expected is None:
+        with pytest.raises(ValueError, match="DNS returned 2 IP addresses"):
+            sureformat._resolve_host("host", "example.com", "192.0.2.1")
+    else:
+        assert sureformat._resolve_host("host", "example.com", "192.0.2.1") == expected
+
+
+def test_host_export_does_not_assign_shared_ip_to_different_hosts(monkeypatch, tmp_path):
+    warnings = []
+    monkeypatch.setattr(sureformat, "print_warning", warnings.append)
+    monkeypatch.setattr(sureformat, "_resolve_host", lambda *_args: "192.0.2.1")
+    path = tmp_path / "report.xml"
+    sureformat.write_findings(
+        path, "example.com", [],
+        controllers=[("dc.example.com", "192.0.2.1")],
+        host_findings=[
+            Finding("SMB-001", "SMB", "", "",
+                    affected_assets=["dc.example.com", "host.example.com"]),
+        ],
+    )
+    dc, host = ET.parse(path).getroot().findall("item")[1:]
+    assert dc.attrib == {"hostname": "dc.example.com", "ipaddress": "192.0.2.1"}
+    assert host.attrib == {"hostname": "host.example.com", "ipaddress": ""}
+    assert any("matches multiple hosts" in warning for warning in warnings)
+
+
+def test_host_finding_without_affected_hosts_warns_and_remains_in_domain(monkeypatch, tmp_path):
+    warnings = []
+    monkeypatch.setattr(results, "print_warning", warnings.append)
+    results.reset()
+    results.record_findings([Finding("SMB-001", "SMB", "Details.", "")])
+    results.write_reports(tmp_path, domain="example.com", session={})
+    _, _, _, vulnerabilities = _vulnerabilities(tmp_path / "ad-kit_findings_all.xml")
+    assert [v.attrib["id"] for v in vulnerabilities] == ["SC-7704"]
+    assert any("no affected hosts" in warning for warning in warnings)
+
+
+def test_cli_exports_unmatched_dc_finding_by_hostname(monkeypatch, tmp_path):
     monkeypatch.setattr(util, "ARTEFACTS_DIR", tmp_path)
     monkeypatch.setattr(check, "require_session", lambda: {
         "domain": "example.com", "dc_hostnames": ["dc1.example.com"], "dc_ips": ["192.0.2.1"]
@@ -165,10 +241,11 @@ def test_cli_reports_unmatched_dc_finding(monkeypatch, tmp_path):
             ]), False,
         ),
     )
-    result = CliRunner().invoke(app, ["check", "ldap", "--csacyber", "--dc"])
-    assert result.exit_code != 0
-    assert "Cannot uniquely match DC" in result.output
-    assert not (tmp_path / "ad-kit_findings_ldap.xml").exists()
+    result = CliRunner().invoke(app, ["check", "ldap", "--csacyber"])
+    assert result.exit_code == 0, result.output
+    item = ET.parse(tmp_path / "ad-kit_findings_ldap.xml").getroot().findall("item")[1]
+    assert item.attrib == {"hostname": "dc2.example.com", "ipaddress": ""}
+    assert "Cannot determine IP" in result.output
 
 
 def test_full_run_exports_xml_without_replacing_previous_json(monkeypatch, tmp_path):
@@ -212,7 +289,7 @@ def test_cli_creates_single_xml_with_domain_and_dc_items(monkeypatch, tmp_path):
         ),
     )
 
-    result = CliRunner().invoke(app, ["check", "ldap", "--csacyber", "--dc"])
+    result = CliRunner().invoke(app, ["check", "ldap", "--csacyber"])
 
     assert result.exit_code == 0, result.output
     root, domain_item, _, domain_vulnerabilities = _vulnerabilities(
@@ -253,11 +330,11 @@ def test_selected_checks_xml_uses_all_selected_names(monkeypatch, tmp_path):
     [
         (["check", "--csacyber"], None),
         (["check", "all", "--csacyber"], None),
-        (["check", "--csacyber", "ldap", "--dc"], ["ldap"]),
+        (["check", "--csacyber", "ldap"], ["ldap"]),
         (["check", "run", "ldap", "smb", "--csacyber"], ["ldap", "smb"]),
         (["check", "run", "pass-pol,dns", "--csacyber", "--workers", "16"],
          ["pass-pol", "dns"]),
-        (["check", "--csacyber", "--dc", "run", "ldap"], ["ldap"]),
+        (["check", "--csacyber", "run", "ldap"], ["ldap"]),
     ],
 )
 def test_cli_dispatches_sureformat_options(monkeypatch, args, expected):
@@ -274,8 +351,7 @@ def test_cli_dispatches_sureformat_options(monkeypatch, args, expected):
 
     result = CliRunner().invoke(app, args)
     assert result.exit_code == 0, result.output
-    expected_dc = "--dc" in args
-    assert calls == [(expected, {"csacyber": True, "dc": expected_dc})]
+    assert calls == [(expected, {"csacyber": True})]
 
 
 @pytest.mark.parametrize(
@@ -347,10 +423,10 @@ def test_cli_excludes_checks(monkeypatch, args, expected_modules, expected_exclu
 @pytest.mark.parametrize("args", [
     [
         "check", "--workers", "8", "--exclude", "ldap,smb",
-        "all", "--csacyber", "--dc",
+        "all", "--csacyber",
     ],
     [
-        "check", "all", "--csacyber", "--dc",
+        "check", "all", "--csacyber",
         "--workers", "8", "--exclude", "ldap,smb",
     ],
 ])
@@ -366,7 +442,7 @@ def test_cli_exclusions_combine_with_export_and_worker_options(monkeypatch, args
     result = CliRunner().invoke(app, args)
     assert result.exit_code == 0, result.output
     assert calls == [(8, {
-        "csacyber": True, "dc": True, "exclude": {"ldap", "smb"},
+        "csacyber": True, "exclude": {"ldap", "smb"},
     })]
 
 
@@ -402,18 +478,12 @@ def test_cli_rejects_missing_domain_before_running_checks(monkeypatch, domain):
     assert "requires a domain in session metadata" in result.output
 
 
-def test_cli_rejects_dc_without_csacyber(monkeypatch):
-    monkeypatch.setattr(check, "run_checks", lambda **kwargs: pytest.fail("checks ran"))
-    result = CliRunner().invoke(app, ["check", "--dc"])
-    assert result.exit_code != 0
-    assert "--dc requires --csacyber" in result.output
-
-
 @pytest.mark.parametrize("args", [
+    ["check", "--dc"],
     ["check", "ldap", "--csacyber", "--dc", "old-group-name"],
     ["check", "--csacyber", "--dc", "ldap", "--dc"],
 ])
-def test_cli_rejects_old_dc_value_and_duplicate_flags(monkeypatch, args):
+def test_cli_rejects_removed_dc_flag(monkeypatch, args):
     monkeypatch.setattr(check, "require_session", lambda: {
         "domain": "example.com", "dc_hostnames": ["dc.example.com"], "dc_ips": ["192.0.2.1"]
     })

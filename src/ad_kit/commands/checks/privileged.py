@@ -193,6 +193,7 @@ def run_privileged_group_checks(
     dcsync_table.add_column("Trustee", style="cyan")
     dcsync_table.add_column("SID", style="green")
     dcsync_table.add_column("Rights", style="yellow")
+    dcsync_table.add_column("Status", style="yellow")
 
     if dcsync_trustees:
         for trustee in dcsync_trustees:
@@ -200,9 +201,10 @@ def run_privileged_group_checks(
                 trustee["name"],
                 trustee["sid"],
                 ", ".join(trustee["rights"]),
+                trustee.get("account_status", "unknown").capitalize(),
             )
     else:
-        dcsync_table.add_row("No unexpected trustees found", "", "")
+        dcsync_table.add_row("No unexpected trustees found", "", "", "")
 
     console.print()
     console.print(dcsync_table)

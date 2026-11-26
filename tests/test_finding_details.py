@@ -477,6 +477,24 @@ def test_other_checks_show_known_affected_objects(monkeypatch, kind):
         assert "one deleted object on 'DC1'" in recorded_findings[0].evidence[0]
 
 
+def test_local_admin_dc_finding_preserves_affected_hosts(monkeypatch):
+    findings = []
+    monkeypatch.setattr(policy, "console", Console(file=io.StringIO(), width=160))
+    monkeypatch.setattr(policy, "print_section", lambda *_args: None)
+    monkeypatch.setattr(policy, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(policy, "record_findings", findings.extend)
+    monkeypatch.setattr(policy, "require_session", lambda: {
+        "dc_ip": "dc", "domain": "example.test", "standard_user": "user",
+        "domain_computers_exported": True,
+    })
+    monkeypatch.setattr(policy, "local_admin_check", lambda *_args: {
+        "hosts": [], "domain_controllers": ["DC1", "DC2"],
+    })
+    policy.run_local_admin_checks("pw")
+    assert findings[0].id == "LA-002"
+    assert findings[0].affected_assets == ["DC1", "DC2"]
+
+
 def test_privileged_summary_omits_member_list(monkeypatch):
     output = io.StringIO()
     findings = [object()]

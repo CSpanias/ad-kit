@@ -87,7 +87,8 @@ def local_admin_check(
         nxc_progress=True,
     )
 
-    dc_hostnames = {dc.lower() for dc in load_dc_hostnames()}
+    dc_hostnames = {dc.rstrip(".").casefold() for dc in load_dc_hostnames()}
+    dc_short_names = {dc.split(".", 1)[0] for dc in dc_hostnames}
 
     workstation_access = set()
     dc_access = set()
@@ -104,7 +105,7 @@ def local_admin_check(
 
         hostname = parts[3].strip()
 
-        if hostname.lower() in dc_hostnames:
+        if hostname.rstrip(".").casefold() in dc_hostnames | dc_short_names:
 
             dc_access.add(hostname)
 
