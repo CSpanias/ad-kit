@@ -58,6 +58,28 @@ def test_share_access_uses_one_command_and_ignores_inaccessible_shares(
     assert calls[0][2:] == (["secret"], False)
 
 
+def test_share_access_parses_netexec_table_with_type_column(monkeypatch):
+    output = "\n".join([
+        "SMB 192.168.77.10 445 DC01 [*] Enumerated shares",
+        "SMB 192.168.77.10 445 DC01 Share           Permissions     Type       Remark",
+        "SMB 192.168.77.10 445 DC01 -----           -----------     ----       ------",
+        "SMB 192.168.77.10 445 DC01 ADKIT-Logon     READ,WRITE      DISKTREE   ",
+        "SMB 192.168.77.10 445 DC01 ADMIN$                          DISKTREE   Remote Admin",
+        "SMB 192.168.77.10 445 DC01 IPC$            READ            IPC        Remote IPC",
+        "SMB 192.168.77.10 445 DC01 NETLOGON        READ            DISKTREE   Logon server",
+    ])
+    monkeypatch.setattr(smb, "run_check", lambda *_args, **_kwargs: output)
+
+    shares, errors = smb.smb_share_access_check("dc", "dc", "user", "secret")
+
+    assert errors == []
+    assert shares == [
+        {"name": "ADKIT-Logon", "permissions": ("READ", "WRITE")},
+        {"name": "IPC$", "permissions": ("READ",)},
+        {"name": "NETLOGON", "permissions": ("READ",)},
+    ]
+
+
 def test_share_access_reports_command_failure(monkeypatch):
     def run(name, command, sensitive_values, *, show_progress):
         raise CheckExecutionError(name, [], returncode=1)

@@ -89,11 +89,18 @@ def _has_share_table(output: str) -> bool:
 def _share_column_widths(output: str) -> tuple[int, int] | None:
     for line in output.splitlines():
         row = _smb_log_payload(line, keep_padding=True)
-        if row is None or not re.match(r"^Share\s+Permissions\s+Remark", row, re.I):
+        if row is None:
+            continue
+        header = re.match(
+            r"^Share\s+Permissions\s+(?:(?P<type>Type)\s+)?(?P<remark>Remark)(?:\s|$)",
+            row,
+            re.I,
+        )
+        if header is None:
             continue
         permission_start = row.lower().index("permissions")
-        remark_start = row.lower().index("remark", permission_start)
-        return permission_start - 1, remark_start - permission_start - 1
+        next_start = header.start("type" if header.group("type") else "remark")
+        return permission_start - 1, next_start - permission_start - 1
     return None
 
 
