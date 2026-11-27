@@ -27,6 +27,29 @@ class LDAPResult(TypedDict):
     anonymous_users: int | None
 
 
+def _anonymous_bind_reported(line: str) -> bool:
+    if "[+]" not in line:
+        return False
+    identity = line.split("[+]", 1)[1].strip().split(":", 1)[0].strip()
+    return identity.endswith("\\")
+
+
+def _anonymous_user_search_denied(output: str) -> bool:
+    bind_reported = False
+    for line in output.splitlines():
+        if _anonymous_bind_reported(line):
+            bind_reported = True
+        elif bind_reported:
+            lower = line.lower()
+            if (
+                "error in searchrequest" in lower
+                and "operationserror" in lower
+                and "successful bind must be completed" in lower
+            ):
+                return True
+    return False
+
+
 def _anonymous_user_summary(results: list[LDAPResult]) -> str:
     confirmed = sum(
         1 for result in results
@@ -83,38 +106,31 @@ def _check_controller(
             return result, incomplete, evidence
 
         for line in output.splitlines():
-            lower = line.lower()
-            if "signing:" in lower:
-                start = lower.find("signing:")
-                end = lower.find(")", start)
-                if end != -1:
-                    signing = lower[start + 8:end].strip()
-                    result["signing"] = (
-                        "[red]✗ Not Required[/red]" if signing == "none" else signing
+            signing_match = re.search(r"signing:\s*([^)]*)\)", line, re.IGNORECASE)
+            if signing_match:
+                signing = signing_match.group(1).strip()
+                result["signing"] = (
+                    "[red]✗ Not Required[/red]" if signing.casefold() == "none" else signing
+                )
+
+            binding_match = re.search(r"channel binding:\s*([^)]*)\)", line, re.IGNORECASE)
+            if binding_match:
+                binding = binding_match.group(1).strip()
+                if binding.casefold() == "no tls cert":
+                    result["channel_binding"] = _UNKNOWN
+                    incomplete.append((
+                        "LDAP channel binding",
+                        "TLS connection failed (NetExec reported No TLS cert); "
+                        "channel binding could not be verified",
+                    ))
+                else:
+                    result["channel_binding"] = (
+                        "[red]✗ Not Enforced[/red]"
+                        if binding.casefold() == "never" else binding
                     )
 
-            if "channel binding:" in lower:
-                start = lower.find("channel binding:")
-                end = lower.find(")", start)
-                if end != -1:
-                    binding = lower[start + 16:end].strip()
-                    if binding == "no tls cert":
-                        result["channel_binding"] = _UNKNOWN
-                        incomplete.append((
-                            "LDAP channel binding",
-                            "TLS connection failed (NetExec reported No TLS cert); "
-                            "channel binding could not be verified",
-                        ))
-                    else:
-                        result["channel_binding"] = (
-                            "[red]✗ Not Enforced[/red]" if binding == "never" else binding
-                        )
-
-            if "[+]" in line:
-                success_message = line.split("[+]", 1)[1].strip()
-                identity = success_message.split(":", 1)[0].strip()
-                if identity.endswith(chr(92)):
-                    anonymous_bind_confirmed = True
+            if _anonymous_bind_reported(line):
+                anonymous_bind_confirmed = True
 
         if anonymous_bind_confirmed:
             evidence_name = f"ldap-anonymous-users-{dc_hostname}"
@@ -125,6 +141,7 @@ def _check_controller(
                     show_progress=False,
                 )
             except CheckExecutionError as exc:
+                result["anonymous_bind"] = _UNKNOWN
                 incomplete.append(("LDAP anonymous user enumeration", str(exc)))
             else:
                 users_match = re.search(r"Enumerated\s+(\d+)\s+domain users:", users_output, re.I)
@@ -134,7 +151,10 @@ def _check_controller(
                     result["anonymous_bind"] = "[red]✗ Permitted[/red]"
                 elif result["anonymous_users"] is not None:
                     result["anonymous_bind"] = "[green]✓ Disabled[/green]"
+                elif _anonymous_user_search_denied(users_output):
+                    result["anonymous_bind"] = "[green]✓ Disabled[/green]"
                 else:
+                    result["anonymous_bind"] = _UNKNOWN
                     incomplete.append((
                         "LDAP anonymous user enumeration",
                         f"No confirmed user enumeration; see {evidence_name}.txt",

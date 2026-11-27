@@ -12,7 +12,7 @@ or compromise of privileged accounts.
 import re
 from typing import TypedDict
 
-from ad_kit.core.checks import ANSI_ESCAPE_PATTERN, load_dc_hostnames, run_check
+from ad_kit.core.checks import ANSI_ESCAPE_PATTERN, NXC_LDAP_LINE, load_dc_hostnames, run_check
 from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import load_finding
@@ -23,7 +23,6 @@ IGNORED_DELEGATION_ACCOUNTS = {
         "azureadkerberos$",
     }
 
-NXC_LDAP_LINE = re.compile(r"^\s*LDAP\s+\S+\s+\d+\s+\S+\s+(.*)$")
 DELEGATION_ROW = re.compile(
     r"^(.*?)\s+(Unconstrained|Constrained w/ Protocol Transition|"
     r"Resource-Based Constrained|Constrained)\s+(.+)$"

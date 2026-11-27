@@ -22,9 +22,10 @@ nxc ldap <controller> -u '' -p '' --users
 
 The user enumeration command runs when NetExec reports a successful anonymous
 bind. Anonymous enumeration is marked as permitted only when NetExec confirms
-that domain users were returned. If NetExec does not confirm enumeration, it is
-reported as disabled; this does not prove that the bind or search was denied.
-Incomplete attempts are recorded separately. It does not report SMB shares.
+that domain users were returned. A successful zero-result search or an explicit
+search rejection requiring a successful bind is reported as disabled, without
+a coverage gap. An attempted user search with an inconclusive output or command
+failure is reported as unknown and recorded as incomplete. It does not report SMB shares.
 If NetExec reports `No TLS cert`, channel binding is recorded as unknown rather
 than not enforced, because the TLS connection did not establish its setting.
 Controllers are checked concurrently, with four workers by default; use

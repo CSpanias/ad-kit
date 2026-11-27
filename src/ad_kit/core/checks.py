@@ -44,6 +44,7 @@ PASSWORD_POLICY_BASELINE = {
 
 DOMAIN_SID_PATTERN = re.compile(r"\b(S-1-5-21-(?:\d+-){2}\d+)\b(?!-\d)", re.IGNORECASE)
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+NXC_LDAP_LINE = re.compile(r"^\s*LDAP\s+\S+\s+\d+\s+\S+\s+(.*)$")
 NXC_PROGRESS_PATTERN = re.compile(
     r"^Running nxc against \d+ targets?\s+.*?\s+(\d{1,3})%(?:\s|$)"
 )

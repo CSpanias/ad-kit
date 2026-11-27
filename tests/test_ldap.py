@@ -11,6 +11,30 @@ from ad_kit.reporting.html import render_html
 from ad_kit.reporting.markdown import format_finding_sections, format_paragraphs
 
 
+@pytest.mark.parametrize(("signing", "binding", "expected_signing", "expected_binding"), [
+    ("Enforced", "When Supported", "Enforced", "When Supported"),
+    ("ENFORCED", "WHEN SUPPORTED", "ENFORCED", "WHEN SUPPORTED"),
+    ("NoNe", "NeVeR", "[red]✗ Not Required[/red]", "[red]✗ Not Enforced[/red]"),
+    ("Enforced", "NO TLS CERT", "Enforced", "[yellow]⚠ Unknown[/yellow]"),
+])
+def test_ldap_preserves_reported_casing_without_changing_classification(
+    monkeypatch, signing, binding, expected_signing, expected_binding
+):
+    monkeypatch.setattr(ldap, "load_dc_hostnames", lambda: ["DC"])
+    monkeypatch.setattr(ldap, "record_incomplete", lambda *_args: None)
+    monkeypatch.setattr(
+        ldap, "run_check",
+        lambda *_args, **_kwargs: f"LDAP dc 389 DC (signing:{signing}) "
+        f"(channel binding:{binding})",
+    )
+    results, findings = ldap.ldap_check()
+    assert results[0]["signing"] == expected_signing
+    assert results[0]["channel_binding"] == expected_binding
+    assert {finding.id for finding in findings} == (
+        {"LDAP-001", "LDAP-002"} if signing.casefold() == "none" else set()
+    )
+
+
 @pytest.mark.parametrize(
     ("output", "expected_status", "expected_finding"),
     [
@@ -104,9 +128,36 @@ def test_ldap_user_search_without_results_is_not_treated_as_denied(monkeypatch):
         ldap, "load_finding", lambda *_args: ldap.Finding("LDAP-003", "", "", "")
     )
     results, findings = ldap.ldap_check()
-    assert results[0]["anonymous_bind"] == "[green]✓ Disabled[/green]"
+    assert results[0]["anonymous_bind"] == "[yellow]⚠ Unknown[/yellow]"
     assert not findings
     assert any("No confirmed user enumeration" in entry[2] for entry in incomplete)
+
+
+@pytest.mark.parametrize("after_bind", [True, False])
+def test_ldap_explicit_user_search_rejection_is_not_a_coverage_gap(monkeypatch, after_bind):
+    incomplete = []
+    prefix = "LDAP dc 389 DC "
+    denial = (
+        prefix + "[-] Error in searchRequest -> operationsError: "
+        "In order to perform this operation a successful bind must be completed on the connection."
+    )
+    bind = prefix + "[+] example.test\\:********"
+    monkeypatch.setattr(ldap, "load_dc_hostnames", lambda: ["DC"])
+    monkeypatch.setattr(ldap, "record_incomplete", lambda *args: incomplete.append(args))
+    monkeypatch.setattr(
+        ldap, "run_check",
+        lambda name, *_args, **_kwargs: (
+            f"{prefix}(signing:Enforced) (channel binding:When Supported)\n{bind}"
+            if name == "ldap-DC"
+            else f"{denial}\n{bind}\n{denial if after_bind else ''}"
+        ),
+    )
+    results, findings = ldap.ldap_check()
+    assert results[0]["anonymous_bind"] == (
+        "[green]✓ Disabled[/green]" if after_bind else "[yellow]⚠ Unknown[/yellow]"
+    )
+    assert not findings
+    assert bool(incomplete) is not after_bind
 
 
 @pytest.mark.parametrize(("outputs", "expected"), [
@@ -157,7 +208,7 @@ def test_ldap_anonymous_finding_reports_user_enumeration(monkeypatch, outputs, e
         elif isinstance(output, int):
             assert result["anonymous_bind"] == "[green]✓ Disabled[/green]"
         else:
-            assert result["anonymous_bind"] == "[green]✓ Disabled[/green]"
+            assert result["anonymous_bind"] == "[yellow]⚠ Unknown[/yellow]"
     assert format_paragraphs(finding.commentary).endswith(expected)
     assert expected in render_html([finding])
     assert "shares" not in expected

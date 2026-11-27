@@ -1,4 +1,46 @@
+import pytest
+
 from ad_kit.checks import password_never_expires
+from ad_kit.core.exceptions import CheckExecutionError
+
+
+def test_password_never_expires_parses_netexec_table(monkeypatch):
+    prefix = "LDAP 192.168.77.10 389 DC01 "
+    output = "\n".join([
+        prefix + "[+] adkit.test\\sylune:********",
+        prefix + f"{'-Username-':<30}{'-Last PW Set-':<20}",
+        prefix + f"{'Administrator':<30}{'2026-11-27 20:54:44':<20}",
+        prefix + f"{'poppy':<30}{'2026-11-27 21:45:08':<20}",
+        prefix + f"{'freya':<30}{'<never>':<20}",
+        prefix + f"{'Service Account':<30}{'':<20}",
+        prefix + f"{'COMPUTER$':<30}{'2026-11-27 21:45:08':<20}",
+    ])
+    monkeypatch.setattr(password_never_expires, "run_check", lambda *_args: output)
+    results, findings = password_never_expires.password_never_expires_check("dc", "user", "pw")
+    assert results["accounts"] == ["Administrator", "Service Account", "freya", "poppy"]
+    assert [finding.id for finding in findings] == ["PASS-003"]
+
+
+def test_password_never_expires_accepts_explicit_no_entries(monkeypatch):
+    output = "LDAP dc 389 DC [+] example\\user:********\nLDAP dc 389 DC [-] No entries found!"
+    monkeypatch.setattr(password_never_expires, "run_check", lambda *_args: output)
+    results, findings = password_never_expires.password_never_expires_check("dc", "user", "pw")
+    assert results["account_count"] == 0
+    assert not findings
+
+
+@pytest.mark.parametrize("output", [
+    "LDAP dc 389 DC [+] example\\user:********",
+    "LDAP dc 389 DC [+] example\\user:********\n"
+    "LDAP dc 389 DC [-] searchRequest operationsError\nLDAP dc 389 DC [-] No entries found!",
+    "LDAP dc 389 DC [+] example\\user:********\n"
+    "LDAP dc 389 DC -Username-                    -Last PW Set-\n"
+    "LDAP dc 389 DC user                          invalid date",
+])
+def test_password_never_expires_rejects_incomplete_output(monkeypatch, output):
+    monkeypatch.setattr(password_never_expires, "run_check", lambda *_args: output)
+    with pytest.raises(CheckExecutionError):
+        password_never_expires.password_never_expires_check("dc", "user", "pw")
 
 
 def test_password_never_expires_check_returns_enabled_user_accounts_and_finding(monkeypatch):

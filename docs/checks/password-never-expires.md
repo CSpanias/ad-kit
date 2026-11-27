@@ -24,7 +24,9 @@ nxc ldap <dc_ip> -u <username> -p <password> --password-never-expires
 
 ad-kit lists accounts with the `DONT_EXPIRE_PASSWD` flag set and reports enabled
 user accounts. Machine accounts (names ending in `$`) are excluded because their
-secrets rotate independently of this flag.
+secrets rotate independently of this flag. NetExec's current table filters out
+disabled accounts. Unrecognized or failed output is reported as incomplete rather
+than as an empty result.
 
 ## How it works
 
