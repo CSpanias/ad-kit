@@ -34,6 +34,7 @@ uv tool install git+https://github.com/CSpanias/ad-kit
 
 # Verify installation
 ad-kit -h
+ad-kit --version
 
 # Update
 uv tool upgrade ad-kit

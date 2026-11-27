@@ -59,6 +59,12 @@ def _with_password(check: Callable[[str | None], None]) -> CheckRunner:
     return run
 
 
+def _record_skipped_check(module: str, exc: Exception) -> None:
+    print_error(f"Skipped '{module}': {exc}")
+    results.record_incomplete(module, "", str(exc), notify=False)
+    results.record_check_failure()
+
+
 def _run_step(
     module: str,
     runnable: Callable[[], str | None],
@@ -84,9 +90,8 @@ def _run_step(
 
     try:
         result = runnable()
-    except ADKitError as exc:
-        print_error(f"Skipped '{module}': {exc}")
-        results.record_incomplete(module, "", str(exc), notify=False)
+    except (ADKitError, OSError, ValueError, RuntimeError) as exc:
+        _record_skipped_check(module, exc)
         result = None
 
     return result if result is not None else std_pass
@@ -170,24 +175,28 @@ def _export_domain(csacyber: bool) -> str | None:
     return domain.strip()
 
 
-def run_selected_checks(modules: list[str], *, csacyber: bool = False) -> None:
+def run_selected_checks(modules: list[str], *, csacyber: bool = False) -> bool:
     """Execute selected checks, reusing one Standard User password."""
+    unknown = set(modules).difference(AVAILABLE_CHECKS)
+    if unknown:
+        raise ValueError("Unknown check(s): " + ", ".join(sorted(unknown)))
     domain = _export_domain(csacyber)
     results.reset()
 
-    requires_authentication = any(
-        module in AVAILABLE_CHECKS
-        and AVAILABLE_CHECKS[module].requires_authentication
-        for module in modules
-    )
-
-    std_pass = authenticate_standard_user(trailing_blank=False) if requires_authentication else None
+    std_pass = None
+    auth_error: Exception | None = None
 
     for module in modules:
-        check = AVAILABLE_CHECKS.get(module)
-        if check is None:
-            print_error(f"Unknown module: {module}")
-            continue
+        check = AVAILABLE_CHECKS[module]
+        if check.requires_authentication and std_pass is None:
+            if auth_error is None:
+                try:
+                    std_pass = authenticate_standard_user(trailing_blank=False)
+                except (ADKitError, OSError, ValueError, RuntimeError) as exc:
+                    auth_error = exc
+            if auth_error is not None:
+                _record_skipped_check(module, auth_error)
+                continue
         std_pass = _run_step(
             module,
             lambda: check.runner(std_pass),
@@ -201,11 +210,12 @@ def run_selected_checks(modules: list[str], *, csacyber: bool = False) -> None:
         get_artefacts_dir(), run_name=run_name, domain=domain,
         session=require_session() if csacyber else None,
     )
+    return not results.has_failed_checks()
 
 
 def run_checks(
     *, csacyber: bool = False, exclude: set[str] | None = None
-) -> None:
+) -> bool:
     """Execute all assessment checks in the established workflow order."""
     excluded = exclude or set()
     unknown = excluded.difference(AVAILABLE_CHECKS)
@@ -243,13 +253,22 @@ def run_checks(
         ("tombstone", run_tombstone_checks),
         ("coercion", run_coercion_checks),
     )
+    auth_error: Exception | None = None
     for module, runner in authenticated_checks:
         if module not in excluded:
             if std_pass is None:
-                std_pass = authenticate_standard_user(trailing_blank=False)
+                if auth_error is None:
+                    try:
+                        std_pass = authenticate_standard_user(trailing_blank=False)
+                    except (ADKitError, OSError, ValueError, RuntimeError) as exc:
+                        auth_error = exc
+                if auth_error is not None:
+                    _record_skipped_check(module, auth_error)
+                    continue
             std_pass = _run_authed(module, runner, std_pass)
 
     results.write_reports(
         get_artefacts_dir(), domain=domain,
         session=require_session() if csacyber else None,
     )
+    return not results.has_failed_checks()

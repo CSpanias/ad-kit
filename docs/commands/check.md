@@ -29,6 +29,21 @@ checks. Some checks (e.g., MAQ) may prompt for DA credentials.
 Specify it once and quote the list if it contains spaces.
 It is available before or after `all`, `run`, and individual check commands.
 Unknown names and excluding every selected check are errors.
+`script-path` is an alias for the existing `scriptPath` check and can also be
+used in `run` and `--exclude` lists. Report filenames retain `scriptPath`.
+
+Commands return a nonzero exit status for invalid input or a check that could
+not run. Remaining checks still execute and reports are written with coverage
+gaps. An incomplete observation alone does not necessarily mean a check failed
+to run; review the incomplete checks in the HTML report.
+
+Before checks start, an advisory preflight warns about known missing local tools,
+session data and required inventory files. It does not test connectivity, tool
+versions or credentials, and does not stop the remaining checks.
+The impact summary lists selected checks and asks for confirmation when they may
+create temporary objects, request roastable Kerberos material, or actively probe
+NoPAC or authentication coercion. MAQ and DNS attempt cleanup, but manual
+removal may be needed if cleanup fails. Declining cancels the run.
 
 Checks show progress through known targets, groups, script paths or queries where
 available. Counts represent items processed, including incomplete checks.
@@ -105,7 +120,7 @@ includes them.
 | NoPAC | `ad-kit check nopac` | NoPAC vulnerability on Domain Controllers |
 | DNS | `ad-kit check dns` | ADIDNS record creation permissions |
 | Pre-Windows 2000 | `ad-kit check pre2k` | Pre-2000 computer account passwords |
-| Script Path | `ad-kit check scriptPath` | User logon script path write access |
+| Script Path | `ad-kit check script-path` | User logon script path write access (`scriptPath` remains supported) |
 | Privileged Groups | `ad-kit check privileged` | Privileged group membership + DCSync rights |
 | Delegation | `ad-kit check delegation` | Unconstrained/constrained delegation |
 | Password Policy | `ad-kit check pass-pol` | Domain password policy assessment |

@@ -2,6 +2,8 @@
 Main AD-Kit command-line interface.
 """
 
+from importlib.metadata import version
+
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -11,6 +13,9 @@ from ad_kit.commands.check import AVAILABLE_CHECKS
 from ad_kit.commands.enum import run_enumeration
 from ad_kit.commands.tools.install import install_tool
 from ad_kit.commands.tools.status import show_status
+from ad_kit.core.console import print_error
+from ad_kit.core.exceptions import ADKitError
+from ad_kit.core.preflight import check_preflight, confirm_check_impact
 from ad_kit.core.util import check_workers
 from ad_kit.registry import ToolRegistry
 
@@ -47,8 +52,22 @@ app.add_typer(check_app, name="check")
 
 console = Console()
 
+CHECK_ALIASES = {"script-path": "scriptPath"}
+
+
+def _show_version(value: bool) -> None:
+    if value:
+        typer.echo(f"ad-kit {version('ad-kit')}")
+        raise typer.Exit()
+
+
 @app.callback()
-def main() -> None:
+def main(
+    show_version: bool = typer.Option(
+        False, "--version", callback=_show_version, is_eager=True,
+        help="Show the installed version and exit.",
+    ),
+) -> None:
     """
     ad-kit command-line interface entrypoint.
 
@@ -131,7 +150,8 @@ def install(
         ad-kit tools install netexec
         ad-kit tools install all
     """
-    install_tool(tool, force=force)
+    if not install_tool(tool, force=force):
+        raise typer.Exit(code=1)
 
 #-------------------------------------------------------------------------------
 # ENUM COMMANDS
@@ -162,7 +182,8 @@ def enum() -> None:
     Examples:
         ad-kit enum
     """
-    run_enumeration()
+    if not run_enumeration():
+        raise typer.Exit(code=1)
 
 #-------------------------------------------------------------------------------
 # CHECK COMMANDS
@@ -205,12 +226,14 @@ def _run_check_command(
     names = [name.strip() for value in exclude for name in value.split(",")]
     if any(not name for name in names):
         raise typer.BadParameter("Check names cannot be empty.", param_hint="--exclude")
-    excluded = set(names)
+    excluded = {CHECK_ALIASES.get(name, name) for name in names}
     unknown = excluded.difference(AVAILABLE_CHECKS)
     if unknown:
         raise typer.BadParameter(
             "Unknown check(s): " + ", ".join(sorted(unknown)), param_hint="--exclude"
         )
+    if modules is not None:
+        modules = [CHECK_ALIASES.get(name, name) for name in modules]
     remaining = [
         name for name in (modules if modules is not None else AVAILABLE_CHECKS)
         if name not in excluded
@@ -218,28 +241,46 @@ def _run_check_command(
     if not remaining or (excluded and not any(name in AVAILABLE_CHECKS for name in remaining)):
         raise typer.BadParameter("At least one check must remain.", param_hint="--exclude")
     if modules is not None:
+        unknown_modules = set(modules).difference(AVAILABLE_CHECKS)
+        if unknown_modules:
+            raise typer.BadParameter(
+                "Unknown check(s): " + ", ".join(sorted(unknown_modules))
+                + ". Run 'ad-kit check --help' to see available checks.",
+                param_hint="MODULES",
+            )
+    if modules is not None:
         modules = remaining
 
-    with check_workers(workers):
+    try:
         if csacyber:
-            try:
-                check._export_domain(csacyber)
-            except (ValueError, RuntimeError) as exc:
-                raise typer.BadParameter(str(exc)) from exc
-            if modules is None:
-                if excluded:
-                    check.run_checks(csacyber=True, exclude=excluded)
+            check._export_domain(csacyber)
+        check_preflight(remaining)
+        if not confirm_check_impact(remaining):
+            print_error("Assessment cancelled.")
+            raise typer.Exit(code=1)
+        with check_workers(workers):
+            if csacyber:
+                if modules is None:
+                    if excluded:
+                        success = check.run_checks(csacyber=True, exclude=excluded)
+                    else:
+                        success = check.run_checks(csacyber=True)
                 else:
-                    check.run_checks(csacyber=True)
+                    success = check.run_selected_checks(modules, csacyber=True)
+            elif modules is None:
+                if excluded:
+                    success = check.run_checks(exclude=excluded)
+                else:
+                    success = check.run_checks()
             else:
-                check.run_selected_checks(modules, csacyber=True)
-        elif modules is None:
-            if excluded:
-                check.run_checks(exclude=excluded)
-            else:
-                check.run_checks()
-        else:
-            check.run_selected_checks(modules)
+                success = check.run_selected_checks(modules)
+    except typer.Exit:
+        raise
+    except (ADKitError, ValueError, RuntimeError) as exc:
+        print_error(str(exc))
+        raise typer.Exit(code=1) from exc
+    if not success:
+        raise typer.Exit(code=1)
 
 
 def _check_options(
@@ -317,6 +358,11 @@ for _module_name in AVAILABLE_CHECKS:
         name=_module_name,
         help=f"Execute {_module_name} assessment checks.",
     )(_make_check_command(_module_name))
+
+check_app.command(
+    name="script-path",
+    help="Execute user logon script path checks (alias for scriptPath).",
+)(_make_check_command("scriptPath"))
 
 
 #-------------------------------------------------------------------------------

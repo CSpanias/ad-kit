@@ -449,14 +449,14 @@ def test_comma_separated_checks_use_individual_names_in_report_filename(monkeypa
 )
 def test_cli_dispatches_checks(monkeypatch, args, expected):
     calls = []
-    monkeypatch.setattr(check, "run_checks", lambda: calls.append("all"))
+    monkeypatch.setattr(check, "run_checks", lambda: calls.append("all") or True)
     monkeypatch.setattr(
         check,
         "run_selected_checks",
-        lambda modules: calls.append(modules),
+        lambda modules: calls.append(modules) or True,
     )
 
-    result = CliRunner().invoke(app, args)
+    result = CliRunner().invoke(app, args, input="y\n")
     assert result.exit_code == 0, result.output
     assert calls == [expected]
 

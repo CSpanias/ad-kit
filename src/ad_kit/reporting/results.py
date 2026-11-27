@@ -9,13 +9,26 @@ from ad_kit.reporting import html, json, sureformat
 
 _findings: list[Finding] = []
 _incomplete: list[str] = []
+_failed_checks = False
 
 
 def reset() -> None:
     """Start a new reporting run."""
+    global _failed_checks
     _findings.clear()
     _incomplete.clear()
+    _failed_checks = False
     json.reset()
+
+
+def record_check_failure() -> None:
+    """Mark a check that could not be executed."""
+    global _failed_checks
+    _failed_checks = True
+
+
+def has_failed_checks() -> bool:
+    return _failed_checks
 
 
 def record_findings(findings: list[Finding]) -> None:

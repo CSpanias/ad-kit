@@ -12,8 +12,14 @@ from rich.table import Table
 
 from ad_kit.commands.rusthound import run_rusthound
 from ad_kit.core.console import (
-    console, print_error, print_info, print_section, print_success, print_warning,
+    console,
+    print_error,
+    print_info,
+    print_section,
+    print_success,
+    print_warning,
 )
+from ad_kit.core.preflight import confirm_enum_impact, enum_preflight
 from ad_kit.core.util import generate_scp_command, get_artefacts_dir, progress, save_session
 
 
@@ -557,7 +563,7 @@ def print_summary(
 #-------------------------------------------------------------------------------
 # Main function
 #-------------------------------------------------------------------------------
-def run_enumeration() -> None:
+def run_enumeration() -> bool:
     """
     Bootstrap an Active Directory assessment.
 
@@ -570,6 +576,7 @@ def run_enumeration() -> None:
     #---------------------------------------------------------------------------
     
     try:
+        completed = True
 
         #-----------------------------------------------------------------------
         # ASSESSMENT CONFIGURATION
@@ -630,6 +637,13 @@ def run_enumeration() -> None:
             "Generate SCP retrieval command?",
             default=False,
         )
+
+        enum_preflight(
+            collect=collect, dump_ntds=dump_ntds, retrieval=generate_scp_retrieval
+        )
+        if not confirm_enum_impact(collect=collect, dump_ntds=dump_ntds):
+            print_warning("Enumeration cancelled.")
+            return False
         
         #-----------------------------------------------------------------------
         # DOMAIN ENUMERATION
@@ -671,11 +685,11 @@ def run_enumeration() -> None:
 
             if not valid:
                 print_error("Standard user LDAP authentication failed.")
-                return
+                return False
 
             if pwned:
                 print_error("Standard user is marked privileged by NetExec LDAP.")
-                return
+                return False
 
             std_validated = True
             print_success("Standard user authenticated via LDAP (not marked privileged by NetExec).")
@@ -700,8 +714,9 @@ def run_enumeration() -> None:
                     )
 
             if not da_validated:
+                completed = False
                 if not std_validated:
-                    return
+                    return False
                 print_warning("Continuing enumeration using the validated standard user.")
                 if dump_ntds:
                     print_warning("NTDS dump skipped because privileged access was not confirmed.")
@@ -883,6 +898,8 @@ def run_enumeration() -> None:
                         print_warning("No new or updated BloodHound ZIP was found for retrieval.")
                     retrieval_files.extend(collected)
                 save_session(session_data)
+            else:
+                completed = False
 
         #-----------------------------------------------------------------------
         # NTDS DUMP
@@ -911,6 +928,7 @@ def run_enumeration() -> None:
                     print_success(f"NTDS dump completed using {dump_dc}.")
                 else:
                     print_error("NTDS dump failed; no complete dump was collected.")
+                    completed = False
                 save_session(session_data)
 
         #-----------------------------------------------------------------------
@@ -921,7 +939,9 @@ def run_enumeration() -> None:
             generate_scp_command(retrieval_files)
         
         print_summary(session_data)
+        return completed
 
 
     except Exception as exc:
         print_error(str(exc))
+        return False

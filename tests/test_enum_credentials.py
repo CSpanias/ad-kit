@@ -2,14 +2,12 @@ import json
 import shlex
 import subprocess
 from contextlib import nullcontext
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from ad_kit.commands import enum
 from ad_kit.core import util
-
 
 NTDS_RECORD = (
     "example.test\\alice:1105:aad3b435b51404eeaad3b435b51404ee:"
@@ -66,6 +64,7 @@ def test_failed_admin_validation_continues_with_standard_user(monkeypatch, tmp_p
 
     monkeypatch.setattr(enum.typer, "prompt", lambda *_args, **_kwargs: next(prompts))
     monkeypatch.setattr(enum.typer, "confirm", lambda *_args, **_kwargs: next(confirms))
+    monkeypatch.setattr(enum, "confirm_enum_impact", lambda **_kwargs: True)
     monkeypatch.setattr(enum, "identify_domain_controller", lambda _dc: ("DC01", "EXAMPLE.TEST"))
     monkeypatch.setattr(enum, "configure_nxc", lambda: None)
 
@@ -93,7 +92,7 @@ def test_failed_admin_validation_continues_with_standard_user(monkeypatch, tmp_p
     monkeypatch.setattr(enum, "print_summary", lambda _data: None)
     monkeypatch.setattr(enum, "print_warning", messages.append)
 
-    enum.run_enumeration()
+    assert enum.run_enumeration() is False
 
     session_text = (tmp_path / "ad-kit" / "session.json").read_text(encoding="utf-8")
     session = json.loads(session_text)
@@ -115,6 +114,7 @@ def test_failed_admin_validation_without_standard_user_stops(monkeypatch):
     saved = []
     monkeypatch.setattr(enum.typer, "prompt", lambda *_args, **_kwargs: next(prompts))
     monkeypatch.setattr(enum.typer, "confirm", lambda *_args, **_kwargs: next(confirms))
+    monkeypatch.setattr(enum, "confirm_enum_impact", lambda **_kwargs: True)
     monkeypatch.setattr(enum, "identify_domain_controller", lambda _dc: ("DC01", "EXAMPLE.TEST"))
     monkeypatch.setattr(enum, "configure_nxc", lambda: None)
     monkeypatch.setattr(enum, "validate_credentials", lambda *_args: (False, False))
@@ -123,7 +123,7 @@ def test_failed_admin_validation_without_standard_user_stops(monkeypatch):
         enum, "enumerate_domain_controllers",
         lambda *_args: pytest.fail("Enumeration should stop without a validated account"),
     )
-    enum.run_enumeration()
+    assert enum.run_enumeration() is False
     assert saved == []
 
 
@@ -198,6 +198,7 @@ def test_enumeration_retrieves_only_current_run_files(
     captured, sessions, attempted_dcs = [], [], []
     monkeypatch.setattr(enum.typer, "prompt", lambda *_args, **_kwargs: next(prompts))
     monkeypatch.setattr(enum.typer, "confirm", lambda *_args, **_kwargs: next(confirms))
+    monkeypatch.setattr(enum, "confirm_enum_impact", lambda **_kwargs: True)
     monkeypatch.setattr(enum, "identify_domain_controller", lambda _dc: ("DC01", "EXAMPLE.TEST"))
     monkeypatch.setattr(enum, "configure_nxc", lambda: None)
     monkeypatch.setattr(
@@ -230,7 +231,7 @@ def test_enumeration_retrieves_only_current_run_files(
 
     monkeypatch.setattr(enum, "run_rusthound", collect)
     monkeypatch.setattr(enum.subprocess, "run", dump)
-    enum.run_enumeration()
+    assert enum.run_enumeration() is (collection_succeeded and dump_succeeded)
     expected = []
     if collection_succeeded:
         expected.append(output_dir / "current.zip")

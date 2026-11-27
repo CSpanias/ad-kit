@@ -71,3 +71,4 @@ nav:
     - Authentication Coercion: checks/coercion.md
   - Findings: findings/index.md
   - Artefacts: artefacts.md
+  - Releasing: releasing.md

@@ -386,13 +386,13 @@ def test_cli_dispatches_sureformat_options(monkeypatch, args, expected):
         "domain": "example.com", "dc_hostnames": ["dc.example.com"], "dc_ips": ["192.0.2.1"]
     })
     monkeypatch.setattr(
-        check, "run_checks", lambda **kwargs: calls.append((None, kwargs))
+        check, "run_checks", lambda **kwargs: calls.append((None, kwargs)) or True
     )
     monkeypatch.setattr(
-        check, "run_selected_checks", lambda modules, **kwargs: calls.append((modules, kwargs))
+        check, "run_selected_checks", lambda modules, **kwargs: calls.append((modules, kwargs)) or True
     )
 
-    result = CliRunner().invoke(app, args)
+    result = CliRunner().invoke(app, args, input="y\n")
     assert result.exit_code == 0, result.output
     assert calls == [(expected, {"csacyber": True})]
 
@@ -412,13 +412,13 @@ def test_cli_dispatches_sureformat_options(monkeypatch, args, expected):
 def test_cli_applies_worker_limit_to_each_check_entrypoint(monkeypatch, args, expected_workers):
     seen = []
     monkeypatch.setattr(
-        check, "run_checks", lambda **_kwargs: seen.append(util._check_workers.get())
+        check, "run_checks", lambda **_kwargs: seen.append(util._check_workers.get()) or True
     )
     monkeypatch.setattr(
         check, "run_selected_checks",
-        lambda _modules, **_kwargs: seen.append(util._check_workers.get()),
+        lambda _modules, **_kwargs: seen.append(util._check_workers.get()) or True,
     )
-    result = CliRunner().invoke(app, args)
+    result = CliRunner().invoke(app, args, input="y\n")
     assert result.exit_code == 0, result.output
     assert seen == [expected_workers]
     assert util._check_workers.get() == 4
@@ -439,6 +439,33 @@ def test_cli_rejects_invalid_or_duplicate_worker_limits(monkeypatch, args):
     assert "--workers" in result.output
 
 
+@pytest.mark.parametrize("modules", [["not-a-check"], ["ldap", "not-a-check"]])
+def test_cli_rejects_unknown_checks_before_execution_or_report(monkeypatch, tmp_path, modules):
+    monkeypatch.setattr(check, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        check, "run_selected_checks", lambda *_args, **_kwargs: pytest.fail("checks ran")
+    )
+    result = CliRunner().invoke(app, ["check", "run", *modules])
+    assert result.exit_code != 0
+    assert "Unknown check(s): not-a-check" in result.output
+    assert "ad-kit check " in result.output and "--help" in result.output
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize(("args", "expected"), [
+    (["check", "script-path"], ["scriptPath"]),
+    (["check", "scriptPath"], ["scriptPath"]),
+    (["check", "run", "ldap,script-path"], ["ldap", "scriptPath"]),
+    (["check", "run", "ldap,scriptPath", "--exclude", "script-path"], ["ldap"]),
+])
+def test_script_path_alias_preserves_existing_check_name(monkeypatch, args, expected):
+    seen = []
+    monkeypatch.setattr(check, "run_selected_checks", lambda modules: seen.append(modules) or True)
+    result = CliRunner().invoke(app, args)
+    assert result.exit_code == 0, result.output
+    assert seen == [expected]
+
+
 @pytest.mark.parametrize(
     ("args", "expected_modules", "expected_exclusions"),
     [
@@ -453,12 +480,12 @@ def test_cli_rejects_invalid_or_duplicate_worker_limits(monkeypatch, args):
 def test_cli_excludes_checks(monkeypatch, args, expected_modules, expected_exclusions):
     calls = []
     monkeypatch.setattr(
-        check, "run_checks", lambda **kwargs: calls.append((None, kwargs.get("exclude", set())))
+        check, "run_checks", lambda **kwargs: calls.append((None, kwargs.get("exclude", set()))) or True
     )
     monkeypatch.setattr(
-        check, "run_selected_checks", lambda modules, **_kwargs: calls.append((modules, set()))
+        check, "run_selected_checks", lambda modules, **_kwargs: calls.append((modules, set())) or True
     )
-    result = CliRunner().invoke(app, args)
+    result = CliRunner().invoke(app, args, input="y\n")
     assert result.exit_code == 0, result.output
     assert calls == [(expected_modules, expected_exclusions)]
 
@@ -480,9 +507,9 @@ def test_cli_exclusions_combine_with_export_and_worker_options(monkeypatch, args
     })
     monkeypatch.setattr(
         check, "run_checks",
-        lambda **kwargs: calls.append((util._check_workers.get(), kwargs)),
+        lambda **kwargs: calls.append((util._check_workers.get(), kwargs)) or True,
     )
-    result = CliRunner().invoke(app, args)
+    result = CliRunner().invoke(app, args, input="y\n")
     assert result.exit_code == 0, result.output
     assert calls == [(8, {
         "csacyber": True, "exclude": {"ldap", "smb"},

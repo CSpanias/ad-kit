@@ -8,7 +8,7 @@ from ad_kit.installers.factory import get_installer
 from ad_kit.registry import ToolRegistry
 
 
-def install_tool(tool_name: str, force: bool = False) -> None:
+def install_tool(tool_name: str, force: bool = False) -> bool:
     """
     Install a tool or all registered tools.
 
@@ -17,8 +17,7 @@ def install_tool(tool_name: str, force: bool = False) -> None:
         force: Reinstall already installed tools.
     """
     if tool_name.lower() == "all":
-        install_all_tools(force=force)
-        return
+        return install_all_tools(force=force)
 
     registry = ToolRegistry()
 
@@ -30,7 +29,7 @@ def install_tool(tool_name: str, force: bool = False) -> None:
         print_error(f"Unknown tool: {tool_name}")
         print_info(f"Available tools: {available_tools}")
 
-        return
+        return False
 
     tool = registry.get_tool(tool_name)
     installer = get_installer(tool.installer)
@@ -41,13 +40,16 @@ def install_tool(tool_name: str, force: bool = False) -> None:
     except InstallationError as exc:
         print_error(f"Failed to install {exc.tool_name}: {exc.reason}")
 
-        return
+        return False
 
     except Exception as exc:
         print_error(str(exc))
+        return False
+
+    return True
 
 
-def install_all_tools(force: bool = False) -> None:
+def install_all_tools(force: bool = False) -> bool:
     """
     Install all tools defined in the registry.
 
@@ -76,3 +78,4 @@ def install_all_tools(force: bool = False) -> None:
         f"Installation completed. "
         f"Success: {successful}, Failed: {failed}"
     )
+    return failed == 0

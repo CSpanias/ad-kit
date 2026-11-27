@@ -49,6 +49,38 @@ def test_install_all_passes_force_to_each_installer(monkeypatch):
     installer.install.assert_called_once_with(tool, force=True)
 
 
+def test_unknown_tool_returns_nonzero_and_lists_available_tools():
+    result = CliRunner().invoke(cli.app, ["tools", "install", "not-a-tool"])
+    assert result.exit_code != 0
+    assert "Unknown tool: not-a-tool" in result.output
+    assert "Available tools:" in result.output
+
+
+@pytest.mark.parametrize("tool", ["kerbrute", "all"])
+def test_failed_install_returns_nonzero(monkeypatch, tool):
+    monkeypatch.setattr(
+        install_commands, "get_installer",
+        lambda _: SimpleNamespace(install=Mock(side_effect=InstallationError(tool, "failed"))),
+    )
+    result = CliRunner().invoke(cli.app, ["tools", "install", tool])
+    assert result.exit_code != 0
+    assert "failed" in result.output.lower()
+
+
+def test_cli_version_uses_package_metadata():
+    from importlib.metadata import version
+
+    result = CliRunner().invoke(cli.app, ["--version"])
+    assert result.exit_code == 0
+    assert result.output.strip() == f"ad-kit {version('ad-kit')}"
+
+
+def test_cli_returns_nonzero_when_enumeration_fails(monkeypatch):
+    monkeypatch.setattr(cli, "run_enumeration", lambda: False)
+    result = CliRunner().invoke(cli.app, ["enum"])
+    assert result.exit_code != 0
+
+
 def test_github_reinstall_replaces_only_managed_path_and_reports_shadowing(
     monkeypatch, tmp_path
 ):

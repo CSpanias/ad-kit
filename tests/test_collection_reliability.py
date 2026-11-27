@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from ad_kit.checks import privileged_excessive
 from ad_kit.commands import enum
 from ad_kit.commands.checks import policy, unauthenticated
-from ad_kit.checks import privileged_excessive
 from ad_kit.core.exceptions import ADKitError
 from ad_kit.core.privileged import PRIVILEGED_GROUPS
 
@@ -148,7 +148,7 @@ def test_user_collection_is_saved_before_computer_failure(monkeypatch):
 
     monkeypatch.setattr(enum, "export_domain_computers", failed_computers)
     monkeypatch.setattr(enum, "print_error", errors.append)
-    enum.run_enumeration()
+    assert enum.run_enumeration() is False
     assert saved[0]["excluded_users"] == ["tester"]
     assert saved[-1]["domain_users_exported"] is True
     assert saved[-1]["domain_users_filtered_count"] == 1
