@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 from ad_kit.cli import app
 from ad_kit.commands import check
 from ad_kit.core import util
+from ad_kit.core.checks import ANSI_ESCAPE_PATTERN
 from ad_kit.core.finding import Finding
 from ad_kit.reporting import results, sureformat
 
@@ -436,7 +437,7 @@ def test_cli_rejects_invalid_or_duplicate_worker_limits(monkeypatch, args):
     )
     result = CliRunner().invoke(app, args)
     assert result.exit_code != 0
-    assert "--workers" in result.output
+    assert "--workers" in ANSI_ESCAPE_PATTERN.sub("", result.output)
 
 
 @pytest.mark.parametrize("modules", [["not-a-check"], ["ldap", "not-a-check"]])
@@ -448,7 +449,8 @@ def test_cli_rejects_unknown_checks_before_execution_or_report(monkeypatch, tmp_
     result = CliRunner().invoke(app, ["check", "run", *modules])
     assert result.exit_code != 0
     assert "Unknown check(s): not-a-check" in result.output
-    assert "ad-kit check " in result.output and "--help" in result.output
+    output = ANSI_ESCAPE_PATTERN.sub("", result.output)
+    assert "ad-kit check " in output and "--help" in output
     assert not list(tmp_path.iterdir())
 
 
@@ -536,7 +538,7 @@ def test_cli_rejects_invalid_or_empty_exclusions_before_running(monkeypatch, arg
     )
     result = CliRunner().invoke(app, args)
     assert result.exit_code != 0
-    assert "--exclude" in result.output
+    assert "--exclude" in ANSI_ESCAPE_PATTERN.sub("", result.output)
 
 
 @pytest.mark.parametrize("domain", [None, "", "   "])

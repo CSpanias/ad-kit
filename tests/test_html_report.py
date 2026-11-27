@@ -6,6 +6,7 @@ from typer.testing import CliRunner
 
 from ad_kit.cli import app
 from ad_kit.commands import check
+from ad_kit.core.checks import ANSI_ESCAPE_PATTERN
 from ad_kit.core.finding import EvidenceTable, Finding
 from ad_kit.core.findings import load_finding
 from ad_kit.reporting import html, introductions, markdown, results
@@ -475,4 +476,4 @@ def test_cli_rejects_empty_selected_check_names(monkeypatch, modules):
 def test_cli_rejects_removed_markdown_option(args):
     result = CliRunner().invoke(app, args)
     assert result.exit_code != 0
-    assert "No such option: --markdown" in result.output
+    assert "No such option: --markdown" in ANSI_ESCAPE_PATTERN.sub("", result.output)
