@@ -39,10 +39,11 @@ Description and info values are checked for whole credential-related terms,
 such as password, secret, credential, and token. Generic service names such as
 SQL and VPN are not treated as matches. These terms still require review and
 can produce false positives. Returned password attributes are also reported.
-The console lists affected accounts and attributes with a masked value preview:
-the first four characters followed by `[REDACTED]`, or just `[REDACTED]` for
-values of four characters or fewer. Finding evidence and saved command output
-retain the full values.
+The console lists affected settings, accounts and attributes in one table with
+a masked value preview: the first four characters followed by `[REDACTED]`, or
+just `[REDACTED]` for values of four characters or fewer. If a password
+attribute result cannot be parsed, the table directs the user to the saved
+evidence. Finding evidence and saved command output retain the full values.
 
 ## How it works
 

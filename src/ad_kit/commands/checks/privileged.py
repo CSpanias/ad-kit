@@ -437,26 +437,9 @@ def run_ldap_info_checks(
                 )
             )
 
-    table = Table()
-
-    table.add_column("Setting", style="cyan")
-    table.add_column("Value", style="green")
-
-    table.add_row("Sensitive LDAP Attributes", str(len(sensitive_attributes)))
-    table.add_row(
-        "userPassword Values",
-        str(len(ldap_info_results["user_passwords"])),
-    )
-
-    table.add_row(
-        "unixUserPassword Values",
-        str(len(ldap_info_results["unix_passwords"])),
-    )
-
-    console.print(table)
-
     exposed_accounts = [
-        (user, attribute, value) for user, value, attribute in sensitive_attributes
+        ("Sensitive LDAP Attributes", user, attribute, value)
+        for user, value, attribute in sensitive_attributes
     ]
     for attribute, lines in (
         ("userPassword", ldap_info_results["user_passwords"]),
@@ -470,19 +453,28 @@ def run_ldap_info_checks(
             )
             if match and match.group(1).strip():
                 exposed_accounts.append(
-                    (match.group(1).strip(), attribute, match.group(2).strip())
+                    (
+                        f"{attribute} Values", match.group(1).strip(),
+                        attribute, match.group(2).strip(),
+                    )
+                )
+            else:
+                exposed_accounts.append(
+                    (f"{attribute} Values", "Unparsed (see evidence)", attribute, "")
                 )
 
     if exposed_accounts:
         detail_table = Table(title="Affected LDAP Attributes")
-        detail_table.add_column("Object", style="cyan")
+        detail_table.add_column("Setting", style="cyan")
+        detail_table.add_column("Object", style="yellow")
         detail_table.add_column("Attribute", style="yellow")
         detail_table.add_column("Value preview")
-        for user, attribute, value in sorted(set(exposed_accounts)):
+        for setting, user, attribute, value in sorted(set(exposed_accounts)):
             preview = (value[:4] if len(value) > 4 else "") + "[REDACTED]"
-            detail_table.add_row(object_text([user]), attribute, object_text([preview]))
-        console.print()
+            detail_table.add_row(setting, object_text([user]), attribute, object_text([preview]))
         console.print(detail_table)
+    else:
+        print_info("No sensitive LDAP attributes or password values found.")
 
     attributes = {attribute for _, _, attribute in sensitive_attributes}
     if ldap_info_results["user_passwords"]:

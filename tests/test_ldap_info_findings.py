@@ -49,6 +49,12 @@ def test_ldap_info_table_shows_masked_previews(monkeypatch):
     privileged.run_ldap_info_checks("password")
 
     text = output.getvalue()
+    headers = [line for line in text.splitlines() if "Setting" in line]
+    assert len(headers) == 1
+    assert all(column in headers[0] for column in ("Object", "Attribute", "Value preview"))
+    assert "Sensitive LDAP Attributes" in text
+    assert "userPassword Values" in text
+    assert "unixUserPassword Values" in text
     assert "Value preview" in text
     assert "pass[REDACTED]" in text
     assert "toke[REDACTED]" in text
@@ -57,6 +63,50 @@ def test_ldap_info_table_shows_masked_previews(monkeypatch):
     assert "token=abc" not in text
     assert "TestSecret" not in text
     assert "abc" not in text
+
+
+def test_ldap_info_reports_unparsed_password_result_without_exposing_it(monkeypatch):
+    output = io.StringIO()
+    monkeypatch.setattr(privileged, "console", Console(file=output, width=160))
+    monkeypatch.setattr(privileged, "print_section", lambda *_args: None)
+    monkeypatch.setattr(privileged, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user",
+    })
+    monkeypatch.setattr(privileged, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(privileged, "record_findings", lambda *_args: None)
+    monkeypatch.setattr(privileged, "ldap_info_check", lambda *_args: {
+        "descriptions": [],
+        "info_fields": [],
+        "user_passwords": ["User: alice unexpected format SECRET"],
+        "unix_passwords": [],
+    })
+
+    privileged.run_ldap_info_checks("password")
+
+    assert "userPassword Values" in output.getvalue()
+    assert "Unparsed (see evidence)" in output.getvalue()
+    assert "SECRET" not in output.getvalue()
+
+
+def test_ldap_info_reports_no_exposed_attributes(monkeypatch):
+    messages = []
+    monkeypatch.setattr(privileged, "print_section", lambda *_args: None)
+    monkeypatch.setattr(privileged, "print_info", messages.append)
+    monkeypatch.setattr(privileged, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user",
+    })
+    monkeypatch.setattr(privileged, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(privileged, "record_findings", lambda *_args: None)
+    monkeypatch.setattr(privileged, "ldap_info_check", lambda *_args: {
+        "descriptions": [{"user": "alice", "value": "ordinary note"}],
+        "info_fields": [],
+        "user_passwords": [],
+        "unix_passwords": [],
+    })
+
+    privileged.run_ldap_info_checks("password")
+
+    assert messages == ["No sensitive LDAP attributes or password values found."]
 
 
 @pytest.mark.parametrize(
