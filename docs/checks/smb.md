@@ -19,12 +19,14 @@ ad-kit runs NetExec against the discovered hosts:
 nxc smb <host> -u '' -p '' --dns-server <dc_ip>
 nxc smb <host> -u '' -p '' --shares --dns-server <dc_ip>
 nxc smb <dc> -u '' -p '' --shares --users --dns-server <dc_ip>
+nxc smb <dc> -u '' -p '' --users --dns-server <dc_ip>
 nxc smb <host> -u <username> -p <password> --shares --dns-server <dc_ip>
 ```
 
 The anonymous enumeration commands run when the empty-credential login
 succeeds, including when it is mapped to a Guest session. User enumeration is
-restricted to discovered Domain Controllers.
+restricted to discovered Domain Controllers. If the combined DC command does
+not return a user result, the user check is attempted separately.
 The share-access checks use the Standard User account and are prompted only
 when needed. SMB configuration is checked on Domain Controllers first, and
 their results are displayed before the remaining hosts are checked. Each batch
@@ -63,8 +65,10 @@ The DC table reports anonymous enumeration as **Permitted** when share names or
 users are observed, including through Guest-mapped sessions. Otherwise it
 reports **Disabled**, meaning enumeration was not confirmed, not necessarily
 that access was denied. The host summary counts confirmed enumeration as
-**Enabled** and other assessed hosts as **Disabled**. Incomplete checks remain
-recorded separately. User enumeration is attempted only on DCs. The DC table
+**Enabled** and other assessed hosts as **Disabled**. An explicit share-access
+denial and a successful user check with no returned users do not create
+coverage gaps. Other incomplete checks remain recorded separately. User
+enumeration is attempted only on DCs. The DC table
 includes share and user count columns only when the corresponding objects are
 observed on at least one DC. This status describes enumeration results, not
 whether a null session was established.

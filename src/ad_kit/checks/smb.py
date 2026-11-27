@@ -327,14 +327,67 @@ def smb_configuration_check(
             incomplete.append(str(exc))
         else:
             anonymous_shares = _parse_share_count(enumeration_output)
+            if anonymous_shares is None and re.search(
+                r"error enumerating shares:\s*(?:STATUS_)?ACCESS_DENIED\b",
+                enumeration_output,
+                re.IGNORECASE,
+            ):
+                anonymous_shares = 0
+                share_denied = True
+            else:
+                share_denied = False
+            if share_denied and any(
+                (payload := _smb_log_payload(line)) is not None
+                and payload.startswith("[-]")
+                and not re.search(
+                    r"error enumerating shares:\s*(?:STATUS_)?ACCESS_DENIED\b",
+                    payload,
+                    re.IGNORECASE,
+                )
+                for line in enumeration_output.splitlines()
+            ):
+                incomplete.append("Anonymous enumeration reported an error; see evidence")
             if anonymous_shares is not None and re.search(
                 r"error enumerating shares", enumeration_output, re.IGNORECASE
-            ):
+            ) and not share_denied:
                 incomplete.append("Share enumeration reported an error; see evidence")
             if enumerate_users:
                 anonymous_users, anonymous_users_complete = _parse_user_count(
                     enumeration_output
                 )
+                if (
+                    anonymous_users is None
+                    and not anonymous_users_complete
+                    and not re.search(
+                        r"error enumerating domain user", enumeration_output, re.IGNORECASE
+                    )
+                ):
+                    try:
+                        user_output = run_check(
+                            f"smb-anonymous-users-{host}",
+                            [
+                                "nxc", "smb", host, "-u", "", "-p", "",
+                                "--users", "--dns-server", dc_ip,
+                            ],
+                            show_progress=False,
+                        )
+                    except CheckExecutionError as exc:
+                        incomplete.append(str(exc))
+                    else:
+                        anonymous_users, anonymous_users_complete = _parse_user_count(
+                            user_output
+                        )
+                        user_null_auth, user_guest_auth = _parse_empty_credential_login(
+                            user_output
+                        )
+                        if (
+                            anonymous_users is None
+                            and not anonymous_users_complete
+                            and (user_null_auth or user_guest_auth)
+                            and not re.search(r"\[-\]", user_output)
+                        ):
+                            anonymous_users = 0
+                            anonymous_users_complete = True
             missing = []
             if anonymous_shares is None:
                 missing.append("share enumeration")

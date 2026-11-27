@@ -96,7 +96,7 @@ def test_smb_scopes_anonymous_users_and_displays_enumeration_status(monkeypatch,
     assert "Anonymous evidence - DC.EXAMPLE\n\n$ nxc smb" in dc_section
     assert "[+] EXAMPLE\\:\n\n$ nxc smb DC.EXAMPLE" in dc_section
     assert sorted(share_hosts) == ["DC.EXAMPLE", "FAIL", "HOST", "NO-NULL"]
-    assert any("FAIL" in entry and "share enumeration" in entry for entry in results._incomplete)
+    assert not any("FAIL" in entry and "share enumeration" in entry for entry in results._incomplete)
     finding = next(finding for finding in results._findings if finding.id == "SMB-003")
     assert any("DC.EXAMPLE" in entry and "one account," in entry for entry in finding.evidence)
     assert any("DC.EXAMPLE" in entry and "one share." in entry for entry in finding.evidence)
@@ -623,11 +623,105 @@ def test_share_failure_preserves_successful_dc_user_enumeration(monkeypatch):
 
     monkeypatch.setattr(smb, "run_check", run)
     result = smb.smb_configuration_check("dc", "192.0.2.1", enumerate_users=True)
-    assert result["anonymous_shares"] is None
+    assert result["anonymous_shares"] == 0
     assert result["anonymous_users"] == 1
     assert result["anonymous_users_complete"]
-    assert any("share enumeration" in entry for entry in result["anonymous_incomplete"])
+    assert result["anonymous_incomplete"] == []
     results.reset()
+
+
+@pytest.mark.parametrize(("users_output", "user_count", "incomplete"), [
+    ("", 0, False),
+    (
+        "SMB dc 445 DC -Username- -Last PW Set- -BadPW- -Description-\n"
+        "SMB dc 445 DC alice 2024-01-01 0 example\n"
+        "SMB dc 445 DC Enumerated 1 local users: EXAMPLE\n",
+        1, False,
+    ),
+    ("SMB dc 445 DC [-] Connection reset\n", None, True),
+])
+def test_share_denied_retries_users_without_false_coverage_gap(
+    monkeypatch, users_output, user_count, incomplete
+):
+    calls = []
+
+    def run(name, command, **_kwargs):
+        calls.append(command)
+        auth = (
+            "SMB dc 445 DC (signing:True) (SMBv1:False)\n"
+            "SMB dc 445 DC [+] EXAMPLE\\:********\n"
+        )
+        if name.startswith("smb-anonymous-enumeration"):
+            return auth + "SMB dc 445 DC [-] Error enumerating shares: STATUS_ACCESS_DENIED\n"
+        if name.startswith("smb-anonymous-users"):
+            return auth + users_output
+        return auth
+
+    monkeypatch.setattr(smb, "run_check", run)
+    result = smb.smb_configuration_check("dc", "192.0.2.1", enumerate_users=True)
+
+    assert result["anonymous_shares"] == 0
+    assert result["anonymous_users"] == user_count
+    assert bool(result["anonymous_incomplete"]) is incomplete
+    assert "--users" in calls[-1] and "--shares" not in calls[-1]
+    assert unauthenticated._anonymous_enumeration_status(
+        result, enumerate_users=True
+    ) == ("Permitted" if user_count else "Disabled")
+
+
+def test_denied_anonymous_enumeration_does_not_create_coverage_gap(monkeypatch, tmp_path):
+    results.reset()
+    output = io.StringIO()
+    monkeypatch.setattr(unauthenticated, "console", Console(file=output, width=160))
+    monkeypatch.setattr(unauthenticated, "print_section", lambda title: print(title, file=output))
+    monkeypatch.setattr(unauthenticated, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(unauthenticated, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user", "domain_computers_exported": True,
+    })
+    monkeypatch.setattr(unauthenticated, "load_domain_computers", lambda: ["DC"])
+    monkeypatch.setattr(unauthenticated, "load_dc_hostnames", lambda: ["DC"])
+    monkeypatch.setattr(unauthenticated, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(unauthenticated, "smb_share_access_check", lambda *_args: ([], []))
+
+    def run(name, _command, **_kwargs):
+        auth = (
+            "SMB dc 445 DC (signing:True) (SMBv1:False)\n"
+            "SMB dc 445 DC [+] EXAMPLE\\:********\n"
+        )
+        if name.startswith("smb-anonymous-enumeration"):
+            return auth + "SMB dc 445 DC [-] Error enumerating shares: STATUS_ACCESS_DENIED\n"
+        return auth
+
+    monkeypatch.setattr(smb, "run_check", run)
+    unauthenticated.run_smb_checks("secret")
+
+    assert "Disabled" in output.getvalue()
+    assert "SMB anonymous enumeration could not be completed" not in output.getvalue()
+    assert not results._incomplete
+    results.reset()
+
+
+def test_anonymous_evidence_includes_users_from_separate_check(monkeypatch):
+    output = io.StringIO()
+    monkeypatch.setattr(unauthenticated, "console", Console(file=output, width=160))
+    records = [
+        unauthenticated.CheckEvidence("smb-DC", ["nxc", "smb", "DC"], "", ""),
+        unauthenticated.CheckEvidence(
+            "smb-anonymous-enumeration-DC", ["nxc", "smb", "DC", "--shares", "--users"],
+            "SMB dc 445 DC [-] Error enumerating shares: STATUS_ACCESS_DENIED", "",
+        ),
+        unauthenticated.CheckEvidence(
+            "smb-anonymous-users-DC", ["nxc", "smb", "DC", "--users"],
+            "SMB dc 445 DC -Username- -Last PW Set- -BadPW- -Description-\n"
+            "SMB dc 445 DC alice 2024-01-01 0 example\n"
+            "SMB dc 445 DC Enumerated 1 local users: EXAMPLE", "",
+        ),
+    ]
+    assert unauthenticated._show_anonymous_evidence(
+        records, [{"host": "DC", "null_auth": True}], "smb"
+    )
+    assert "$ nxc smb DC --users" in output.getvalue()
+    assert "alice" in output.getvalue()
 
 
 @pytest.mark.parametrize(

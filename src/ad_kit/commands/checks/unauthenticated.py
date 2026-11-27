@@ -85,7 +85,7 @@ def _enumeration_excerpt(output: str, kind: str) -> tuple[str, bool]:
 def _show_anonymous_evidence(
     records: list[CheckEvidence], results: list[dict], protocol: str
 ) -> bool:
-    sample: tuple[str, tuple[str, str], list[CheckEvidence]] | None = None
+    sample: tuple[str, tuple[str, ...], list[CheckEvidence]] | None = None
     best_rank = 3
     for result in results:
         host = result["dc_hostname"] if protocol == "ldap" else result["host"]
@@ -99,18 +99,22 @@ def _show_anonymous_evidence(
         names = (
             (f"ldap-{host}", f"ldap-anonymous-users-{host}")
             if protocol == "ldap"
-            else (f"smb-{host}", f"smb-anonymous-enumeration-{host}")
+            else (
+                f"smb-{host}", f"smb-anonymous-enumeration-{host}",
+                f"smb-anonymous-users-{host}",
+            )
         )
         selected = [record for record in records if record.name in names]
         if not selected:
             continue
-        enumeration = next((record for record in selected if record.name == names[1]), None)
+        enumerations = [record for record in selected if record.name in names[1:]]
         rank = 2
-        if enumeration:
-            if _enumeration_excerpt(enumeration.stdout, "users")[1]:
-                rank = 0
-            elif protocol == "smb" and _enumeration_excerpt(enumeration.stdout, "shares")[1]:
-                rank = 1
+        if any(_enumeration_excerpt(record.stdout, "users")[1] for record in enumerations):
+            rank = 0
+        elif protocol == "smb" and any(
+            _enumeration_excerpt(record.stdout, "shares")[1] for record in enumerations
+        ):
+            rank = 1
         if rank < best_rank:
             sample = (host, names, selected)
             best_rank = rank
