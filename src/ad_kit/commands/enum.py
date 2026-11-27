@@ -65,6 +65,7 @@ def _dump_ntds(
                         [
                             "secretsdump.py",
                             f"{domain}/{username}:{password}@{dc_ip}",
+                            "-debug",
                             "-user-status",
                             "-just-dc-ntlm",
                             "-outputfile",
@@ -83,6 +84,13 @@ def _dump_ntds(
                 line.strip() for line in output.splitlines()
                 if re.match(r"^\s*(?:\[-\]|\[!\]|ERROR:|CRITICAL:)", line, re.IGNORECASE)
             ]
+            for line in output.splitlines():
+                match = re.match(
+                    r"^\s*\[\+\]\s+Exiting NTDSHashes\.dump\(\) because\s+(.+)$",
+                    line, re.IGNORECASE,
+                )
+                if match:
+                    diagnostics.append(f"Preliminary NTDS check failed: {match.group(1)}")
             if not diagnostics and result.returncode and result.stderr.strip():
                 diagnostics = [result.stderr.strip().splitlines()[-1]]
             attempt_file = attempt_dir / f"{domain}.ntds"

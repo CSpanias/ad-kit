@@ -31,6 +31,10 @@ For an NTDS dump, ad-kit tries the supplied DC first, then other discovered
 DCs if necessary. Each attempt is isolated; failed or incomplete dumps are
 not used for retrieval. Authentication failures stop further attempts to
 reduce account-lockout risk. The successful DC is shown in the console.
+Secretsdump runs with debug logging so that early failures, including its
+preliminary SMB/RPC check, can be reported without retrying the dump on the
+same DC. Only failure diagnostics are displayed, with the supplied password
+and NTLM hashes redacted; raw debug output is not displayed.
 
 User and computer exports are checked before being accepted. If collection
 fails, existing files are not treated as this session's results; dependent

@@ -341,6 +341,67 @@ def test_ntds_authentication_failure_stops_retry_and_redacts_secrets(monkeypatch
     assert any("not trying additional DCs" in error for error in errors)
 
 
+def test_ntds_reports_debug_only_early_failure_and_retries_other_dc(monkeypatch, tmp_path):
+    calls, warnings = [], []
+    monkeypatch.setattr(enum, "progress", lambda _message: nullcontext())
+    monkeypatch.setattr(enum, "print_warning", warnings.append)
+
+    def run(command, **kwargs):
+        calls.append(command[1].rsplit("@", 1)[-1])
+        assert "-debug" in command
+        if len(calls) == 1:
+            return subprocess.CompletedProcess(
+                command, 0,
+                stdout=(
+                    "[+] Impacket Library Installation Path: /sensitive/path\n"
+                    "[+] Exiting NTDSHashes.dump() because SMB SessionError: "
+                    "STATUS_ACCESS_DENIED secret 0123456789abcdef0123456789abcdef\n"
+                    "[*] Cleaning up...\n"
+                ),
+                stderr="",
+            )
+        (kwargs["cwd"] / "EXAMPLE.TEST.ntds").write_text(NTDS_RECORD)
+        return subprocess.CompletedProcess(
+            command, 0, stdout="[+] Routine debug details\n" + NTDS_RECORD, stderr="",
+        )
+
+    monkeypatch.setattr(enum.subprocess, "run", run)
+    result = enum._dump_ntds(
+        "EXAMPLE.TEST", "admin", "secret", ["192.0.2.1", "192.0.2.2"], tmp_path,
+    )
+    assert result == (tmp_path / "EXAMPLE.TEST.ntds", "192.0.2.2")
+    assert calls == ["192.0.2.1", "192.0.2.2"]
+    assert any("Preliminary NTDS check failed: SMB SessionError: STATUS_ACCESS_DENIED" in warning
+               for warning in warnings)
+    assert "secret" not in " ".join(warnings)
+    assert "0123456789abcdef0123456789abcdef" not in " ".join(warnings)
+    assert "/sensitive/path" not in " ".join(warnings)
+    assert "No valid NTDS" not in " ".join(warnings)
+
+
+def test_ntds_debug_authentication_failure_stops_retry(monkeypatch, tmp_path):
+    calls, warnings, errors = [], [], []
+    monkeypatch.setattr(enum, "progress", lambda _message: nullcontext())
+    monkeypatch.setattr(enum, "print_warning", warnings.append)
+    monkeypatch.setattr(enum, "print_error", errors.append)
+
+    def run(command, **_kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(
+            command, 0,
+            stdout="[+] Exiting NTDSHashes.dump() because STATUS_ACCOUNT_LOCKED_OUT\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(enum.subprocess, "run", run)
+    assert enum._dump_ntds(
+        "EXAMPLE.TEST", "admin", "secret", ["192.0.2.1", "192.0.2.2"], tmp_path,
+    ) is None
+    assert len(calls) == 1
+    assert any("STATUS_ACCOUNT_LOCKED_OUT" in warning for warning in warnings)
+    assert any("not trying additional DCs" in error for error in errors)
+
+
 def test_missing_secretsdump_is_reported_without_retry(monkeypatch, tmp_path):
     calls, errors = [], []
     monkeypatch.setattr(enum, "progress", lambda _message: nullcontext())
