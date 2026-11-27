@@ -68,7 +68,7 @@ def test_failed_target_is_counted_as_processed(monkeypatch):
     monkeypatch.setattr(util, "Progress", FakeProgress)
     monkeypatch.setattr(nopac, "record_incomplete", lambda *args: None)
 
-    def run_check(name, command, sensitive_values):
+    def run_check(name, command, sensitive_values, *, kerberos_dc):
         if command[2] == "dc1":
             raise CheckExecutionError(name, command, returncode=1)
         return "TGT with PAC size 1800\nTGT without PAC size 1800"

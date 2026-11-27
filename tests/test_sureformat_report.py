@@ -375,10 +375,9 @@ def test_selected_checks_xml_uses_all_selected_names(monkeypatch, tmp_path):
         (["check", "--csacyber"], None),
         (["check", "all", "--csacyber"], None),
         (["check", "--csacyber", "ldap"], ["ldap"]),
-        (["check", "run", "ldap", "smb", "--csacyber"], ["ldap", "smb"]),
-        (["check", "run", "pass-pol,dns", "--csacyber", "--workers", "16"],
+        (["check", "ldap", "smb", "--csacyber"], ["ldap", "smb"]),
+        (["check", "pass-pol", "dns", "--csacyber", "--workers", "16"],
          ["pass-pol", "dns"]),
-        (["check", "--csacyber", "run", "ldap"], ["ldap"]),
     ],
 )
 def test_cli_dispatches_sureformat_options(monkeypatch, args, expected):
@@ -406,8 +405,8 @@ def test_cli_dispatches_sureformat_options(monkeypatch, args, expected):
         (["check", "all", "--workers", "16"], 16),
         (["check", "--workers", "3", "ldap"], 3),
         (["check", "smb", "--workers", "1"], 1),
-        (["check", "run", "ldap", "smb", "--workers", "2"], 2),
-        (["check", "run", "pass-pol,dns", "--workers", "16"], 16),
+        (["check", "ldap", "smb", "--workers", "2"], 2),
+        (["check", "pass-pol", "dns", "--workers", "16"], 16),
     ],
 )
 def test_cli_applies_worker_limit_to_each_check_entrypoint(monkeypatch, args, expected_workers):
@@ -440,13 +439,12 @@ def test_cli_rejects_invalid_or_duplicate_worker_limits(monkeypatch, args):
     assert "--workers" in ANSI_ESCAPE_PATTERN.sub("", result.output)
 
 
-@pytest.mark.parametrize("modules", [["not-a-check"], ["ldap", "not-a-check"]])
-def test_cli_rejects_unknown_checks_before_execution_or_report(monkeypatch, tmp_path, modules):
+def test_cli_rejects_unknown_checks_before_execution_or_report(monkeypatch, tmp_path):
     monkeypatch.setattr(check, "get_artefacts_dir", lambda: tmp_path)
     monkeypatch.setattr(
         check, "run_selected_checks", lambda *_args, **_kwargs: pytest.fail("checks ran")
     )
-    result = CliRunner().invoke(app, ["check", "run", *modules])
+    result = CliRunner().invoke(app, ["check", "ldap", "not-a-check"])
     assert result.exit_code != 0
     assert "Unknown check(s): not-a-check" in result.output
     output = ANSI_ESCAPE_PATTERN.sub("", result.output)
@@ -456,9 +454,9 @@ def test_cli_rejects_unknown_checks_before_execution_or_report(monkeypatch, tmp_
 
 @pytest.mark.parametrize(("args", "expected"), [
     (["check", "script-path"], ["scriptPath"]),
+    (["check", "ldap", "script-path"], ["ldap", "scriptPath"]),
     (["check", "scriptPath"], ["scriptPath"]),
-    (["check", "run", "ldap,script-path"], ["ldap", "scriptPath"]),
-    (["check", "run", "ldap,scriptPath", "--exclude", "script-path"], ["ldap"]),
+    (["check", "ldap", "scriptPath", "--exclude", "script-path"], ["ldap"]),
 ])
 def test_script_path_alias_preserves_existing_check_name(monkeypatch, args, expected):
     seen = []
@@ -472,11 +470,11 @@ def test_script_path_alias_preserves_existing_check_name(monkeypatch, args, expe
     ("args", "expected_modules", "expected_exclusions"),
     [
         (["check", "--exclude", "ldap"], None, {"ldap"}),
-        (["check", "all", "--exclude", "ldap,smb"], None, {"ldap", "smb"}),
-        (["check", "--exclude", "ldap, smb", "all"], None, {"ldap", "smb"}),
-        (["check", "run", "ldap", "smb", "--exclude", "ldap"], ["smb"], set()),
-        (["check", "run", "ldap,smb", "--exclude", "ldap"], ["smb"], set()),
-        (["check", "--exclude", "dns", "smb"], ["smb"], set()),
+        (["check", "all", "--exclude", "ldap", "smb"], None, {"ldap", "smb"}),
+        (["check", "--exclude", "ldap", "smb"], None, {"ldap", "smb"}),
+        (["check", "ldap", "smb", "--exclude", "ldap"], ["smb"], set()),
+        (["check", "ldap", "smb", "dns", "--exclude", "smb", "dns"], ["ldap"], set()),
+        (["check", "smb", "--exclude", "dns"], ["smb"], set()),
     ],
 )
 def test_cli_excludes_checks(monkeypatch, args, expected_modules, expected_exclusions):
@@ -494,12 +492,12 @@ def test_cli_excludes_checks(monkeypatch, args, expected_modules, expected_exclu
 
 @pytest.mark.parametrize("args", [
     [
-        "check", "--workers", "8", "--exclude", "ldap,smb",
-        "all", "--csacyber",
+        "check", "--workers", "8", "all", "--csacyber",
+        "--exclude", "ldap", "smb",
     ],
     [
         "check", "all", "--csacyber",
-        "--workers", "8", "--exclude", "ldap,smb",
+        "--workers", "8", "--exclude", "ldap", "smb",
     ],
 ])
 def test_cli_exclusions_combine_with_export_and_worker_options(monkeypatch, args):
@@ -523,13 +521,14 @@ def test_cli_exclusions_combine_with_export_and_worker_options(monkeypatch, args
     ["check", "all", "--exclude", "ldap,unknown"],
     ["check", "all", "--exclude", "ldap,,smb"],
     ["check", "all", "--exclude", "ldap,"],
+    ["check", "all", "--exclude"],
     ["check", "all", "--exclude", " "],
     ["check", "all", "--exclude", "ldap", "--exclude", "smb"],
-    ["check", "--exclude", "ldap", "all", "--exclude", "smb"],
-    ["check", "run", "ldap", "--exclude", "ldap"],
-    ["check", "run", "ldap", "not-a-check", "--exclude", "ldap"],
-    ["check", "--exclude", "smb", "smb"],
-    ["check", "all", "--exclude", ",".join(check.AVAILABLE_CHECKS)],
+    ["check", "all", "--exclude", "ldap", "--workers", "2"],
+    ["check", "ldap", "--exclude", "ldap"],
+    ["check", "ldap", "not-a-check", "--exclude", "ldap"],
+    ["check", "smb", "--exclude", "smb"],
+    ["check", "all", "--exclude", *check.AVAILABLE_CHECKS],
 ])
 def test_cli_rejects_invalid_or_empty_exclusions_before_running(monkeypatch, args):
     monkeypatch.setattr(check, "run_checks", lambda **_kwargs: pytest.fail("checks ran"))

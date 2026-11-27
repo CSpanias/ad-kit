@@ -7,6 +7,7 @@ from importlib.metadata import version
 import typer
 from rich.console import Console
 from rich.table import Table
+from typer.core import TyperGroup
 
 from ad_kit.commands import check
 from ad_kit.commands.check import AVAILABLE_CHECKS
@@ -34,7 +35,7 @@ app = typer.Typer(
 
         ad-kit check all
         ad-kit check ldap
-        ad-kit check run ldap pass-pol
+        ad-kit check ldap pass-pol
     """,
     no_args_is_help=True,
     context_settings={
@@ -47,7 +48,31 @@ tools_app = typer.Typer(help="Manage assessment tools.")
 app.add_typer(tools_app, name="tools")
 
 # Check module
-check_app = typer.Typer(help="Execute assessment checks.")
+class CheckGroup(TyperGroup):
+    def parse_args(self, ctx: typer.Context, args: list[str]) -> list[str]:
+        exclusions = [
+            index for index, arg in enumerate(args)
+            if arg == "--exclude" or arg.startswith("--exclude=")
+        ]
+        if len(exclusions) > 1:
+            raise typer.BadParameter("Specify --exclude only once.", param_hint="--exclude")
+        if exclusions:
+            index = exclusions[0]
+            option = args[index]
+            names = ([option.split("=", 1)[1]] if "=" in option else []) + args[index + 1:]
+            if not names or any(not name.strip() or name.startswith("-") for name in names):
+                raise typer.BadParameter(
+                    "Specify space-separated check names after --exclude; put other options first.",
+                    param_hint="--exclude",
+                )
+            args = ["--exclude", " ".join(names), *args[:index]]
+        return super().parse_args(ctx, args)
+
+
+check_app = typer.Typer(
+    cls=CheckGroup,
+    help="Execute all checks or select multiple checks, e.g. 'ad-kit check ldap smb'."
+)
 app.add_typer(check_app, name="check")
 
 console = Console()
@@ -201,7 +226,7 @@ def check_callback(
         help="Parallel check workers (1-16; default: 4).",
     ),
     exclude: list[str] | None = typer.Option(
-        None, "--exclude", help="Exclude checks using a comma-separated list of names.",
+        None, "--exclude", help="Exclude space-separated checks; place this option last.",
     ),
 ) -> None:
     """
@@ -221,11 +246,11 @@ def _run_check_command(
 ) -> None:
     if len(exclude) > 1:
         raise typer.BadParameter(
-            "Specify --exclude once with comma-separated check names.", param_hint="--exclude"
+            "Specify --exclude only once.", param_hint="--exclude"
         )
-    names = [name.strip() for value in exclude for name in value.split(",")]
-    if any(not name for name in names):
+    if any(not value.strip() for value in exclude):
         raise typer.BadParameter("Check names cannot be empty.", param_hint="--exclude")
+    names = [name for value in exclude for name in value.split()]
     excluded = {CHECK_ALIASES.get(name, name) for name in names}
     unknown = excluded.difference(AVAILABLE_CHECKS)
     if unknown:
@@ -233,6 +258,8 @@ def _run_check_command(
             "Unknown check(s): " + ", ".join(sorted(unknown)), param_hint="--exclude"
         )
     if modules is not None:
+        if any(not name.strip() for name in modules):
+            raise typer.BadParameter("Check names cannot be empty.", param_hint="MODULES")
         modules = [CHECK_ALIASES.get(name, name) for name in modules]
     remaining = [
         name for name in (modules if modules is not None else AVAILABLE_CHECKS)
@@ -313,7 +340,7 @@ def check_all(
         help="Parallel check workers (1-16; default: 4).",
     ),
     exclude: list[str] | None = typer.Option(
-        None, "--exclude", help="Exclude checks using a comma-separated list of names.",
+        None, "--exclude", help="Exclude space-separated checks; place this option last.",
     ),
 ) -> None:
     """
@@ -332,6 +359,9 @@ def _make_check_command(module_name: str):
 
     def run_check(
         ctx: typer.Context,
+        modules: list[str] | None = typer.Argument(
+            None, help="Additional check names to execute in order."
+        ),
         csacyber: bool = typer.Option(
             False, "--csacyber", help="Export SureFormat XML instead of JSON."
         ),
@@ -340,10 +370,13 @@ def _make_check_command(module_name: str):
             help="Parallel check workers (1-16; default: 4).",
         ),
         exclude: list[str] | None = typer.Option(
-            None, "--exclude", help="Exclude checks using a comma-separated list of names.",
+            None, "--exclude", help="Exclude space-separated checks; place this option last.",
         ),
     ) -> None:
-        _run_check_command([module_name], *_check_options(ctx, csacyber, workers, exclude))
+        _run_check_command(
+            [module_name, *(modules or [])],
+            *_check_options(ctx, csacyber, workers, exclude),
+        )
 
     run_check.__name__ = (
         f"check_{module_name.replace('-', '_').replace('.', '_')}"
@@ -363,46 +396,6 @@ check_app.command(
     name="script-path",
     help="Execute user logon script path checks (alias for scriptPath).",
 )(_make_check_command("scriptPath"))
-
-
-#-------------------------------------------------------------------------------
-# CHECK SELECTED
-#-------------------------------------------------------------------------------
-@check_app.command(
-    name="run",
-    help="Execute comma- or space-separated assessment modules.",
-)
-def selected(
-    ctx: typer.Context,
-    modules: list[str],
-    csacyber: bool = typer.Option(
-        False, "--csacyber", help="Export SureFormat XML instead of JSON."
-    ),
-    workers: int | None = typer.Option(
-        None, "--workers", min=1, max=16,
-        help="Parallel check workers (1-16; default: 4).",
-    ),
-    exclude: list[str] | None = typer.Option(
-        None, "--exclude", help="Exclude checks using a comma-separated list of names.",
-    ),
-) -> None:
-    """
-    Execute one or more specified assessment modules.
-
-    Modules are executed in the order provided on the command line, allowing
-    targeted assessment of specific Active Directory security controls without 
-    running the full assessment workflow.
-
-    Args:
-        modules:
-            Assessment modules to execute.
-    """
-
-    groups = " ".join(modules).split(",")
-    if any(not group.strip() for group in groups):
-        raise typer.BadParameter("Check names cannot be empty.", param_hint="MODULES")
-    names = [name for group in groups for name in group.split()]
-    _run_check_command(names, *_check_options(ctx, csacyber, workers, exclude))
 
 
 if __name__ == "__main__":

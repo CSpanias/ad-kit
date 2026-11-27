@@ -10,6 +10,8 @@ Kerberos authentication can be achieved using predictable default machine
 account credentials.
 """
 
+import re
+
 from ad_kit.core.checks import run_check
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import format_counted_commentary, load_finding
@@ -54,12 +56,14 @@ def pre2k_check(
             "-M",
             "pre2k",
         ],
+        kerberos_dc=dc_ip,
     )
 
     results = {
         "accounts_found": 0,
         "accounts": [],
         "tgt_obtained": False,
+        "account_tgts": {},
     }
 
     findings: list[Finding] = []
@@ -73,25 +77,26 @@ def pre2k_check(
             account = (line.split(":")[-1].strip())
             results["accounts"].append(account)
 
-        elif (
-            "found"
-            in lower_line
-            and "pre-created computer"
-            in lower_line
-        ):
+        elif match := re.search(r"\bfound\s+(\d+)\s+pre-created computer accounts?\b", lower_line):
 
-            parts = line.split()
-
-            for part in parts:
-
-                if part.isdigit():
-
-                    results["accounts_found"] = int(part)
-                    break
+            results["accounts_found"] = int(match.group(1))
 
         elif "successfully obtained tgt" in lower_line:
 
             results["tgt_obtained"] = True
+
+        match = re.search(
+            r"\b(successfully obtained tgt|failed to get tgt|error obtaining tgt)"
+            r"\s+for\s+([^\s@:]+)@",
+            lower_line,
+        )
+        if match:
+            account = match.group(2).removesuffix("$")
+            results["account_tgts"][account] = {
+                "successfully obtained tgt": "Successful",
+                "failed to get tgt": "Failed",
+                "error obtaining tgt": "Error",
+            }[match.group(1)]
 
     if (
         results["accounts_found"] > 0

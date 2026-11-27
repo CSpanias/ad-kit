@@ -9,28 +9,31 @@ ad-kit check
 ad-kit check all
 
 # Execute one or more selected assessment modules
-ad-kit check run ldap,smb,pass-pol
+ad-kit check ldap smb pass-pol
 
-# Skip checks using a comma-separated list
-ad-kit check all --exclude ldap,smb
-ad-kit check --exclude ldap run ldap smb
+# Skip checks using a space-separated list at the end
+ad-kit check all --exclude ldap smb
+ad-kit check ldap smb --exclude ldap
 
 # Limit concurrent target checks; 1 runs them sequentially
-ad-kit check --workers 2 run ldap smb
+ad-kit check --workers 2 ldap smb
 ad-kit check smb --workers 8
 ```
 
-Selected modules may be separated by commas or spaces and are executed in the
-order provided. Checks requiring a Standard User
-account will prompt for credentials once and reuse them across subsequent 
-checks. Some checks (e.g., MAQ) may prompt for DA credentials.
+Selected modules are separated by spaces and executed in the order provided,
+with one combined report. The former `check run` syntax and comma-separated
+check selection are no longer supported; use `ad-kit check ldap smb` instead.
+Checks requiring a Standard User account will prompt for credentials once and
+reuse them across subsequent checks. Some checks (e.g., MAQ) may prompt for DA
+credentials.
 
-`--exclude` accepts the exact check names listed below, separated by commas.
-Specify it once and quote the list if it contains spaces.
-It is available before or after `all`, `run`, and individual check commands.
+`--exclude` accepts the exact check names listed below, separated by spaces.
+Specify it once, after selected checks and all other options. Without selected
+checks, it applies to the full assessment. Comma-separated exclusions are no
+longer supported.
 Unknown names and excluding every selected check are errors.
 `script-path` is an alias for the existing `scriptPath` check and can also be
-used in `run` and `--exclude` lists. Report filenames retain `scriptPath`.
+used in selected checks and `--exclude` lists. Report filenames retain `scriptPath`.
 
 Commands return a nonzero exit status for invalid input or a check that could
 not run. Remaining checks still execute and reports are written with coverage
@@ -44,6 +47,12 @@ The impact summary lists selected checks and asks for confirmation when they may
 create temporary objects, request roastable Kerberos material, or actively probe
 NoPAC or authentication coercion. MAQ and DNS attempt cleanup, but manual
 removal may be needed if cleanup fails. Declining cancels the run.
+
+If Pre2k, NoPAC, AS-REP roasting or Kerberoasting reports Kerberos clock skew,
+AD-KIT offers to set the local system clock from that DC's unauthenticated NTP
+response and retry the command once. This affects other processes, needs
+permission to set the clock and requires UDP port 123 to the DC. Declining,
+an unavailable time source or continued skew leaves the check incomplete.
 
 Checks show progress through known targets, groups, script paths or queries where
 available. Counts represent items processed, including incomplete checks.
@@ -88,7 +97,7 @@ affected host remains on the domain item with a warning.
 
 ```bash
 ad-kit check --csacyber
-ad-kit check run ldap,nopac,coercion,smb --csacyber
+ad-kit check ldap nopac coercion smb --csacyber
 ```
 
 The separate `--dc` switch has been removed. Each run replaces only the

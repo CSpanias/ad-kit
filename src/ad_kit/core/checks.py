@@ -10,7 +10,11 @@ import codecs
 import os
 import re
 import shlex
+import socket
+import struct
 import subprocess
+import sys
+import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
@@ -18,6 +22,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 
+import typer
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 
 from ad_kit.core.console import console, print_warning
@@ -395,6 +400,45 @@ def _run_nxc_with_progress(command: list[str]) -> subprocess.CompletedProcess[st
     return subprocess.CompletedProcess(command, returncode, output, stderr)
 
 
+def _sync_clock_to_dc(dc: str) -> None:
+    if os.name != "posix":
+        raise RuntimeError("Clock synchronization is supported only on POSIX systems.")
+
+    addresses = socket.getaddrinfo(dc, 123, type=socket.SOCK_DGRAM)
+    if not addresses:
+        raise RuntimeError(f"No NTP address found for {dc}.")
+    family, socktype, protocol, _, address = addresses[0]
+    request = bytearray(48)
+    request[0] = 0x23
+    now = time.time() + 2208988800
+    seconds = int(now)
+    struct.pack_into("!II", request, 40, seconds & 0xFFFFFFFF, int((now - seconds) * 2**32))
+    start = time.monotonic()
+    with socket.socket(family, socktype, protocol) as client:
+        client.settimeout(5)
+        client.connect(address)
+        client.sendall(request)
+        response = client.recv(512)
+    elapsed = time.monotonic() - start
+    if (
+        len(response) < 48
+        or response[0] >> 6 == 3
+        or response[0] & 7 != 4
+        or not 1 <= response[1] <= 15
+        or response[24:32] != request[40:48]
+    ):
+        raise RuntimeError(f"Invalid NTP response from {dc}.")
+    seconds, fraction = struct.unpack_from("!II", response, 40)
+    if seconds == 0 and fraction == 0:
+        raise RuntimeError(f"NTP response from {dc} has no transmit time.")
+    era = round((now - seconds) / 2**32)
+    timestamp = seconds + era * 2**32 - 2208988800 + fraction / 2**32 + elapsed / 2
+    command = ["date", "--set", f"@{timestamp:.6f}"]
+    if os.geteuid() != 0:
+        command.insert(0, "sudo")
+    subprocess.run(command, check=True)
+
+
 def run_check(
     name: str,
     command: list[str],
@@ -402,6 +446,7 @@ def run_check(
     *,
     show_progress: bool = True,
     nxc_progress: bool = False,
+    kerberos_dc: str | None = None,
 ) -> str:
     """
     Execute an assessment check and preserve evidence.
@@ -469,47 +514,73 @@ def run_check(
         else:
             display_command.append(argument)
 
-    try:
-        if nxc_progress and show_progress and console.is_terminal:
-            result = _run_nxc_with_progress(command)
+    evidence_file = get_evidence_dir() / f"{name}.txt"
+    for attempt in range(2):
+        try:
+            if nxc_progress and show_progress and console.is_terminal:
+                result = _run_nxc_with_progress(command)
+            else:
+                activity = (
+                    progress("Running check...")
+                    if show_progress and not nxc_progress else nullcontext()
+                )
+                with activity:
+                    result = subprocess.run(command, capture_output=True, text=True)
+        except FileNotFoundError as exc:
+            raise CheckExecutionError(
+                name=name,
+                command=display_command,
+                stderr=f"command not found: {command[0]}",
+            ) from exc
+
+        output = result.stdout
+        error_output = result.stderr
+        for secret in secrets:
+            output = output.replace(secret, "[REDACTED]")
+            error_output = error_output.replace(secret, "[REDACTED]")
+
+        evidence = f"$ {shlex.join(display_command)}\n\n {output}"
+        if error_output:
+            evidence += f"\n\n[stderr]\n{error_output}"
+        if attempt:
+            with evidence_file.open("a", encoding="utf-8") as file:
+                file.write(f"\n\n[Retry after clock synchronization]\n{evidence}")
         else:
-            activity = (
-                progress("Running check...")
-                if show_progress and not nxc_progress else nullcontext()
+            evidence_file.write_text(evidence, encoding="utf-8")
+
+        records = _evidence_capture.get()
+        if records is not None:
+            records.append(CheckEvidence(name, display_command, output, error_output))
+
+        skew = kerberos_dc is not None and "KRB_AP_ERR_SKEW" in (output + error_output).upper()
+        if skew:
+            if attempt or not sys.stdin.isatty():
+                raise CheckExecutionError(
+                    name, display_command, stderr="Kerberos clock skew; check time on the DC."
+                )
+            print_warning(
+                f"Kerberos clock skew detected for {kerberos_dc}. Synchronizing changes "
+                "this machine's clock using unauthenticated DC time and may affect other services."
             )
-            with activity:
-                result = subprocess.run(command, capture_output=True, text=True)
-    except FileNotFoundError as exc:
-        raise CheckExecutionError(
-            name=name,
-            command=display_command,
-            stderr=f"command not found: {command[0]}",
-        ) from exc
+            if not typer.confirm("Synchronize this machine's clock and retry once?", default=False):
+                raise CheckExecutionError(
+                    name, display_command, stderr="Kerberos clock skew; synchronization declined."
+                )
+            try:
+                _sync_clock_to_dc(kerberos_dc)
+            except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:
+                raise CheckExecutionError(
+                    name, display_command, stderr=f"Clock synchronization failed: {exc}"
+                ) from exc
+            continue
 
-    output = result.stdout
-    for secret in secrets:
-        output = output.replace(secret, "[REDACTED]")
+        if result.returncode != 0:
+            raise CheckExecutionError(
+                name=name,
+                command=display_command,
+                returncode=result.returncode,
+                stderr=error_output,
+            )
+        return output
 
-    error_output = result.stderr
-    for secret in secrets:
-        error_output = error_output.replace(secret, "[REDACTED]")
-
-    evidence_file = (get_evidence_dir() / f"{name}.txt")
-    evidence = (f"$ {shlex.join(display_command)}\n\n {output}")
-    if error_output:
-        evidence += f"\n\n[stderr]\n{error_output}"
-    evidence_file.write_text(evidence, encoding="utf-8")
-
-    records = _evidence_capture.get()
-    if records is not None:
-        records.append(CheckEvidence(name, display_command, output, error_output))
-
-    if result.returncode != 0:
-        raise CheckExecutionError(
-            name=name,
-            command=display_command,
-            returncode=result.returncode,
-            stderr=error_output,
-        )
-
-    return output
+    raise RuntimeError("Kerberos check exhausted its retry.")

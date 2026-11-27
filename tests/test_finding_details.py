@@ -71,7 +71,7 @@ def test_kerberoast_parses_names_not_spns_and_ignores_other_output(monkeypatch, 
         "",
         "[-] Principal: EXAMPLE\\websvc - ticket request failed",
     ])
-    monkeypatch.setattr(kerberoast, "run_check", lambda *_args: output)
+    monkeypatch.setattr(kerberoast, "run_check", lambda *_args, **_kwargs: output)
     monkeypatch.setattr(kerberoast, "get_artefacts_dir", lambda: tmp_path)
     monkeypatch.setattr(kerberoast, "get_privileged_users", lambda *_args: {"websvc"})
 
@@ -92,14 +92,14 @@ def test_kerberoast_parses_names_not_spns_and_ignores_other_output(monkeypatch, 
 
 
 def test_kerberoast_rejects_unrecognised_output(monkeypatch, tmp_path):
-    monkeypatch.setattr(kerberoast, "run_check", lambda *_args: "Unexpected output")
+    monkeypatch.setattr(kerberoast, "run_check", lambda *_args, **_kwargs: "Unexpected output")
     monkeypatch.setattr(kerberoast, "get_artefacts_dir", lambda: tmp_path)
     with pytest.raises(CheckExecutionError, match="Could not parse"):
         kerberoast.kerberoast_check("dc", "example.test", "user", "pw")
 
 
 def test_kerberoast_empty_result_is_not_a_parse_error(monkeypatch, tmp_path):
-    monkeypatch.setattr(kerberoast, "run_check", lambda *_args: "No entries found!")
+    monkeypatch.setattr(kerberoast, "run_check", lambda *_args, **_kwargs: "No entries found!")
     monkeypatch.setattr(kerberoast, "get_artefacts_dir", lambda: tmp_path)
     result, findings = kerberoast.kerberoast_check("dc", "example.test", "user", "pw")
     assert result["accounts"] == [] and findings == []
@@ -114,7 +114,7 @@ def test_asreproast_finding_counts_use_correct_grammar(monkeypatch, tmp_path, co
         encoding="utf-8",
     )
     monkeypatch.setattr(asreproast, "get_artefacts_dir", lambda: tmp_path)
-    monkeypatch.setattr(asreproast, "run_check", lambda *_args: "")
+    monkeypatch.setattr(asreproast, "run_check", lambda *_args, **_kwargs: "")
     monkeypatch.setattr(asreproast, "get_privileged_users", lambda *_args: set(accounts))
     result, findings = asreproast.asreproast_check("dc", "example.test")
     _, privileged_findings = asreproast.asreproast_privileged_check(
@@ -153,12 +153,71 @@ def test_password_account_commentary_uses_actual_count(
     (1, "account", "one"), (2, "accounts", "two"),
 ])
 def test_pre2k_commentary_counts_identified_accounts(monkeypatch, count, noun, count_word):
-    output = f"Found {count} pre-created computer accounts\nSuccessfully obtained TGT"
-    monkeypatch.setattr(pre2k, "run_check", lambda *_args: output)
-    _, findings = pre2k.pre2k_check("dc", "user", "password")
+    output = (
+        f"PRE2K 192.0.2.10 389 DC01 [+] Found {count} pre-created computer accounts\n"
+        "PRE2K 192.0.2.10 389 DC01 [+] Successfully obtained TGT"
+    )
+    monkeypatch.setattr(pre2k, "run_check", lambda *_args, **_kwargs: output)
+    results, findings = pre2k.pre2k_check("dc", "user", "password")
+    assert results["accounts_found"] == count
     assert f"{count_word} pre-created computer\n{noun}" in findings[0].commentary
     assert "Ticket Granting Ticket (TGT)" in findings[0].commentary
     assert "A Kerberos TGT was successfully" in findings[0].evidence[-1]
+
+
+def test_pre2k_counts_accounts_when_tgt_request_is_denied(monkeypatch):
+    output = (
+        "PRE2K 192.0.2.10 389 DC01 Pre-created computer account: LAB-PRE2K$\n"
+        "PRE2K 192.0.2.10 389 DC01 [+] Found 1 pre-created computer accounts\n"
+        "PRE2K 192.0.2.10 389 DC01 [-] Failed to get TGT for "
+        "lab-pre2k@adkit.test: KDC_ERR_PREAUTH_FAILED"
+    )
+    monkeypatch.setattr(pre2k, "run_check", lambda *_args, **_kwargs: output)
+    results, findings = pre2k.pre2k_check("dc", "user", "password")
+    assert results == {
+        "accounts_found": 1,
+        "accounts": ["LAB-PRE2K$"],
+        "tgt_obtained": False,
+        "account_tgts": {"lab-pre2k": "Failed"},
+    }
+    assert not findings
+
+
+def test_pre2k_attributes_ticket_results_to_each_account(monkeypatch):
+    output = "\n".join([
+        "PRE2K dc 389 DC Pre-created computer account: FIRST$",
+        "PRE2K dc 389 DC Pre-created computer account: SECOND$",
+        "PRE2K dc 389 DC Pre-created computer account: THIRD$",
+        "PRE2K dc 389 DC [+] Found 3 pre-created computer accounts",
+        "PRE2K dc 389 DC [+] Successfully obtained TGT for first@example.test",
+        "PRE2K dc 389 DC [-] Error obtaining TGT for second@example.test: KDC_ERR_ETYPE_NOSUPP",
+        "PRE2K dc 389 DC [+] Successfully obtained TGT for 1 (pre-created) computer accounts",
+    ])
+    monkeypatch.setattr(pre2k, "run_check", lambda *_args, **_kwargs: output)
+    results, _ = pre2k.pre2k_check("dc", "user", "password")
+    assert results["account_tgts"] == {"first": "Successful", "second": "Error"}
+    assert results["accounts"] == ["FIRST$", "SECOND$", "THIRD$"]
+
+
+def test_pre2k_shows_each_account_and_its_ticket_result(monkeypatch):
+    output = io.StringIO()
+    monkeypatch.setattr(policy, "console", Console(file=output, width=160))
+    monkeypatch.setattr(policy, "print_section", lambda *_args: None)
+    monkeypatch.setattr(policy, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(policy, "record_findings", lambda *_args: None)
+    monkeypatch.setattr(policy, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user",
+    })
+    monkeypatch.setattr(policy, "pre2k_check", lambda *_args: ({
+        "accounts": ["FIRST$", "SECOND$", "THIRD$"],
+        "account_tgts": {"first": "Successful", "second": "Failed"},
+    }, []))
+    policy.run_pre2k_checks("pw")
+    text = output.getvalue()
+    assert "FIRST$" in text and "Successful" in text
+    assert "SECOND$" in text and "Failed" in text
+    assert "THIRD$" in text and "Unknown" in text
+    assert "Accounts Identified" not in text
 
 
 def test_delegation_parses_enabled_accounts_from_netexec_table(monkeypatch):
@@ -492,11 +551,19 @@ def test_other_checks_show_known_affected_objects(monkeypatch, kind):
         expected = "Template1"
     elif kind == "pre2k":
         monkeypatch.setattr(module, "pre2k_check", lambda *_args: (
-            {"accounts_found": 1, "accounts": ["OLDPC$"], "tgt_obtained": True},
+            {
+                "accounts_found": 1,
+                "accounts": ["OLDPC$"],
+                "tgt_obtained": True,
+                "account_tgts": {"oldpc": "Successful"},
+            },
             [object()],
         ))
         module.run_pre2k_checks("pw")
         expected = "OLDPC$"
+        assert "Account" in output.getvalue()
+        assert "TGT Acquisition" in output.getvalue()
+        assert "Successful" in output.getvalue()
     else:
         monkeypatch.setattr(module, "track_items", lambda items, _label: items)
         monkeypatch.setattr(module, "tombstone_check", lambda *_args: {

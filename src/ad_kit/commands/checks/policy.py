@@ -911,33 +911,17 @@ def run_pre2k_checks(
 
     table = Table()
 
-    table.add_column("Setting", style="cyan")
-    table.add_column("Value", style="green")
-
-    table.add_row(
-        "Accounts Identified",
-        str(
-            pre2k_results["accounts_found"]
-        ),
-    )
-
-    table.add_row(
-        "TGT Acquisition",
-        (
-            "[red]✗ Successful[/red]"
-            if pre2k_results["tgt_obtained"]
-            else "[green]✓ Denied[/green]"
-        ),
-    )
-
+    table.add_column("Account", style="cyan")
+    table.add_column("TGT Acquisition")
+    for account in pre2k_results["accounts"]:
+        status = pre2k_results["account_tgts"].get(
+            account.casefold().removesuffix("$"), "Unknown"
+        )
+        if status == "Successful":
+            status = "[red]✗ Successful[/red]"
+        table.add_row(object_text([account]), status)
+    if not pre2k_results["accounts"]:
+        table.add_row("-", "Not observed")
     console.print(table)
-
-    if findings and pre2k_results["accounts"]:
-        accounts = Table(title="Identified Pre-Created Accounts")
-        accounts.add_column("Object", style="cyan")
-        for account in pre2k_results["accounts"]:
-            accounts.add_row(object_text([account]))
-        console.print()
-        console.print(accounts)
 
     record_findings(findings)

@@ -72,6 +72,7 @@ def kerberoast_check(
             "-request",
             "-outputfile", str(output_file),
         ],
+        kerberos_dc=dc_ip,
     )
 
     if "No entries found!" in output:

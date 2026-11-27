@@ -40,7 +40,7 @@ Or run specific checks:
 
 ```bash
 ad-kit check ldap
-ad-kit check run ldap,pass-pol,smb
+ad-kit check ldap pass-pol smb
 ```
 
 Each assessment run generates:

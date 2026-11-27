@@ -94,6 +94,7 @@ def asreproast_check(
             "-usersfile", str(users_file),
             "-no-pass",
         ],
+        kerberos_dc=dc_ip,
     )
 
     if not output_file.exists():

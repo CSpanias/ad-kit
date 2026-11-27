@@ -268,7 +268,7 @@ def test_ldap_and_nopac_continue_after_failed_controller(monkeypatch):
     assert ldap_findings[0].affected_assets == ["DC1.EXAMPLE"]
     assert ldap_results[1]["signing"] == "[yellow]⚠ Unknown[/yellow]"
 
-    def nopac_run(name, _command, sensitive_values):
+    def nopac_run(name, _command, sensitive_values, *, kerberos_dc):
         if name.endswith("2"):
             raise failure(name)
         return "TGT with PAC size 1800\nTGT without PAC size 1700\nVULNERABLE"

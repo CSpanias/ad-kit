@@ -13,8 +13,9 @@ def test_nopac_check_compares_ticket_sizes_and_finds_vulnerable_dc(monkeypatch):
     )
     commands = []
 
-    def fake_run_check(name, command, sensitive_values):
+    def fake_run_check(name, command, sensitive_values, *, kerberos_dc):
         commands.append((name, command, sensitive_values))
+        assert kerberos_dc in {"192.0.2.1", "192.0.2.2", "192.0.2.3"}
         return next(outputs)
 
     monkeypatch.setattr(nopac, "run_check", fake_run_check)

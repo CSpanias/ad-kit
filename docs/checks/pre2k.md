@@ -21,9 +21,9 @@ nxc ldap <dc_ip> -u <username> -p <password> -M pre2k
 
 ## What it checks
 
-When the check produces a finding, the console lists identified pre-created
-accounts. These names do not establish which individual accounts obtained a
-ticket.
+The console lists identified pre-created accounts and their individual TGT
+acquisition results when NetExec reports them. An unknown result means the
+account's ticket outcome could not be determined from the command output.
 
 ad-kit finds pre-created computer accounts and attempts to request a Ticket
 Granting Ticket (TGT) using the default machine-account password.

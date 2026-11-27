@@ -1,4 +1,5 @@
 import io
+import struct
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -8,6 +9,117 @@ from rich.console import Console
 
 from ad_kit.core import checks
 from ad_kit.core.exceptions import CheckExecutionError
+
+
+@pytest.mark.parametrize("stream", ["stdout", "stderr"])
+def test_kerberos_skew_prompts_and_retries_with_evidence(monkeypatch, tmp_path, stream):
+    calls = []
+
+    def fake_run(command, **_kwargs):
+        calls.append(command)
+        if len(calls) == 1:
+            return subprocess.CompletedProcess(
+                command, 1, stdout="KRB_AP_ERR_SKEW" if stream == "stdout" else "",
+                stderr="KRB_AP_ERR_SKEW" if stream == "stderr" else "",
+            )
+        return subprocess.CompletedProcess(command, 0, stdout="success", stderr="")
+
+    synced = []
+    monkeypatch.setattr(checks, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(checks.subprocess, "run", fake_run)
+    monkeypatch.setattr(checks.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(checks.typer, "confirm", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(checks, "_sync_clock_to_dc", synced.append)
+
+    with checks.capture_check_evidence() as records:
+        output = checks.run_check(
+            "pre2k", ["nxc", "-p", "secret"], kerberos_dc="192.0.2.10"
+        )
+    assert output == "success"
+    assert len(calls) == 2
+    assert synced == ["192.0.2.10"]
+    assert len(records) == 2
+    evidence = (tmp_path / "evidence" / "pre2k.txt").read_text(encoding="utf-8")
+    assert "KRB_AP_ERR_SKEW" in evidence and "success" in evidence
+    assert "secret" not in evidence
+
+
+@pytest.mark.parametrize("case", ["declined", "noninteractive", "sync-failed", "retry-skew"])
+def test_kerberos_skew_fails_explicitly_without_success(monkeypatch, tmp_path, case):
+    calls = []
+    monkeypatch.setattr(checks, "get_artefacts_dir", lambda: tmp_path)
+    monkeypatch.setattr(checks.sys.stdin, "isatty", lambda: case != "noninteractive")
+    monkeypatch.setattr(checks.typer, "confirm", lambda *_args, **_kwargs: case != "declined")
+
+    def fake_run(command, **_kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="KRB_AP_ERR_SKEW", stderr="")
+
+    def sync(_dc):
+        if case == "sync-failed":
+            raise OSError("NTP timed out")
+
+    monkeypatch.setattr(checks.subprocess, "run", fake_run)
+    monkeypatch.setattr(checks, "_sync_clock_to_dc", sync)
+    with pytest.raises(CheckExecutionError) as error:
+        checks.run_check("pre2k", ["nxc"], kerberos_dc="192.0.2.10")
+    assert len(calls) == (2 if case == "retry-skew" else 1)
+    assert "clock" in str(error.value).lower()
+    if case == "sync-failed":
+        assert "NTP timed out" in str(error.value)
+
+
+@pytest.mark.parametrize("valid", [True, False])
+def test_clock_sync_validates_dc_ntp_response(monkeypatch, valid):
+    sent = []
+
+    class NtpSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
+        def settimeout(self, _timeout):
+            pass
+
+        def connect(self, address):
+            assert address == ("192.0.2.10", 123)
+
+        def sendall(self, request):
+            sent.append(bytes(request))
+
+        def recv(self, _size):
+            response = bytearray(48)
+            response[0] = 0x24
+            response[1] = 2
+            response[24:32] = sent[0][40:48]
+            if not valid:
+                response[24] ^= 1
+            struct.pack_into("!II", response, 40, 2208989800, 0)
+            return bytes(response)
+
+    commands = []
+    monkeypatch.setattr(checks.socket, "getaddrinfo", lambda *_args, **_kwargs: [
+        (2, 2, 17, "", ("192.0.2.10", 123)),
+    ])
+    monkeypatch.setattr(checks.socket, "socket", lambda *_args: NtpSocket())
+    monkeypatch.setattr(checks.time, "time", lambda: 1000)
+    monkeypatch.setattr(checks.time, "monotonic", lambda: 10)
+    monkeypatch.setattr(checks.os, "geteuid", lambda: 1000, raising=False)
+    monkeypatch.setattr(
+        checks.subprocess, "run", lambda command, **kwargs: commands.append((command, kwargs))
+    )
+    with monkeypatch.context() as platform:
+        platform.setattr(checks.os, "name", "posix")
+        if valid:
+            checks._sync_clock_to_dc("192.0.2.10")
+        else:
+            with pytest.raises(RuntimeError, match="Invalid NTP response"):
+                checks._sync_clock_to_dc("192.0.2.10")
+    assert commands == (
+        [(["sudo", "date", "--set", "@1000.000000"], {"check": True})] if valid else []
+    )
 
 
 def test_run_check_redacts_password_from_progress_and_evidence(

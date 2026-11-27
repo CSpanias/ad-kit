@@ -408,32 +408,33 @@ def test_selected_check_reports_preserve_other_runs(monkeypatch, tmp_path):
     assert full_xml.read_text(encoding="utf-8") == "full xml"
 
 
-@pytest.mark.parametrize("modules", [["ldap", "smb"], ["ldap,smb"]])
-def test_excluded_checks_are_not_in_report_filename(monkeypatch, tmp_path, modules):
+def test_excluded_checks_are_not_in_report_filename(monkeypatch, tmp_path):
     monkeypatch.setattr(check, "get_artefacts_dir", lambda: tmp_path)
     for module in ("ldap", "smb"):
         monkeypatch.setitem(
             check.AVAILABLE_CHECKS, module, check.CheckDefinition(lambda password: password, False)
         )
 
-    result = CliRunner().invoke(app, ["check", "run", *modules, "--exclude", "smb"])
+    result = CliRunner().invoke(app, ["check", "ldap", "smb", "--exclude", "smb"])
 
     assert result.exit_code == 0, result.output
     assert (tmp_path / "ad-kit_findings_ldap.html").exists()
     assert not (tmp_path / "ad-kit_findings_ldap_smb.html").exists()
 
 
-def test_comma_separated_checks_use_individual_names_in_report_filename(monkeypatch, tmp_path):
+def test_direct_multiple_checks_write_one_combined_report(monkeypatch, tmp_path):
     monkeypatch.setattr(check, "get_artefacts_dir", lambda: tmp_path)
     for module in ("ldap", "smb"):
         monkeypatch.setitem(
             check.AVAILABLE_CHECKS, module, check.CheckDefinition(lambda password: password, False)
         )
 
-    result = CliRunner().invoke(app, ["check", "run", "ldap,smb"])
+    result = CliRunner().invoke(app, ["check", "ldap", "smb"])
 
     assert result.exit_code == 0, result.output
     assert (tmp_path / "ad-kit_findings_ldap_smb.html").exists()
+    assert not (tmp_path / "ad-kit_findings_ldap.html").exists()
+    assert not (tmp_path / "ad-kit_findings_smb.html").exists()
 
 
 @pytest.mark.parametrize(
@@ -442,10 +443,9 @@ def test_comma_separated_checks_use_individual_names_in_report_filename(monkeypa
         (["check"], "all"),
         (["check", "all"], "all"),
         (["check", "ldap"], ["ldap"]),
-        (["check", "run", "ldap", "smb"], ["ldap", "smb"]),
-        (["check", "run", "pass-pol,dns"], ["pass-pol", "dns"]),
-        (["check", "run", "pass-pol,", "dns"], ["pass-pol", "dns"]),
-        (["check", "run", "ldap, smb", "pass-pol"], ["ldap", "smb", "pass-pol"]),
+        (["check", "ldap", "smb", "pass-pol"], ["ldap", "smb", "pass-pol"]),
+        (["check", "script-path", "delegation"], ["scriptPath", "delegation"]),
+        (["check", "pass-pol", "dns"], ["pass-pol", "dns"]),
     ],
 )
 def test_cli_dispatches_checks(monkeypatch, args, expected):
@@ -462,14 +462,26 @@ def test_cli_dispatches_checks(monkeypatch, args, expected):
     assert calls == [expected]
 
 
-@pytest.mark.parametrize("modules", ["ldap,,smb", ",ldap", "ldap,", " , "])
-def test_cli_rejects_empty_selected_check_names(monkeypatch, modules):
+@pytest.mark.parametrize("module", ["", " "])
+def test_cli_rejects_empty_selected_check_names(monkeypatch, module):
     monkeypatch.setattr(
         check, "run_selected_checks", lambda *_args, **_kwargs: pytest.fail("checks ran")
     )
-    result = CliRunner().invoke(app, ["check", "run", modules])
+    result = CliRunner().invoke(app, ["check", "ldap", module])
     assert result.exit_code != 0
     assert "Check names cannot be empty" in result.output
+
+
+def test_cli_rejects_removed_run_command():
+    result = CliRunner().invoke(app, ["check", "run", "ldap"])
+    assert result.exit_code != 0
+    assert "No such command" in ANSI_ESCAPE_PATTERN.sub("", result.output)
+
+
+def test_check_help_shows_direct_multiple_check_syntax():
+    result = CliRunner().invoke(app, ["check", "--help"])
+    assert result.exit_code == 0
+    assert "ad-kit check ldap smb" in ANSI_ESCAPE_PATTERN.sub("", result.output)
 
 
 @pytest.mark.parametrize("args", [["check", "--markdown"], ["check", "ldap", "--markdown"]])

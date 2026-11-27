@@ -81,6 +81,7 @@ def nopac_check(
                     "-M", "nopac",
                 ],
                 sensitive_values=[password],
+                kerberos_dc=dc_ip,
             )
         except CheckExecutionError as exc:
             record_incomplete("NoPAC", dc_ip, str(exc))

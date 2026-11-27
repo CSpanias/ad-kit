@@ -53,7 +53,7 @@ def test_impact_confirmation_gates_selected_checks(monkeypatch, answer, expected
     calls = []
     monkeypatch.setattr(cli, "check_preflight", lambda modules: calls.append(("preflight", modules)))
     monkeypatch.setattr(check, "run_selected_checks", lambda modules: calls.append(("run", modules)) or True)
-    result = CliRunner().invoke(cli.app, ["check", "run", "ldap,dns"], input=answer)
+    result = CliRunner().invoke(cli.app, ["check", "ldap", "dns"], input=answer)
     assert result.exit_code == expected
     assert "temporary DNS record" in result.output
     assert "manual removal" in result.output
@@ -68,7 +68,7 @@ def test_read_only_selection_does_not_prompt_or_include_excluded_impact(monkeypa
     calls = []
     monkeypatch.setattr(cli, "check_preflight", lambda modules: calls.append(modules))
     monkeypatch.setattr(check, "run_selected_checks", lambda modules: calls.append(modules) or True)
-    result = CliRunner().invoke(cli.app, ["check", "run", "ldap,dns", "--exclude", "dns"])
+    result = CliRunner().invoke(cli.app, ["check", "ldap", "dns", "--exclude", "dns"])
     assert result.exit_code == 0, result.output
     assert "temporary DNS record" not in result.output
     assert "Continue with these checks?" not in result.output

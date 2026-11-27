@@ -100,7 +100,7 @@ $ ad-kit -h
 
      ad-kit check all
      ad-kit check ldap
-     ad-kit check run ldap pass-pol
+     ad-kit check ldap pass-pol
 ```
 
 `tools` displays all tools registered in AD-Kit and their installation source:
