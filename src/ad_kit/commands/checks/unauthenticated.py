@@ -169,7 +169,7 @@ def run_ldap_checks() -> None:
     table.add_column("DC", style="cyan")
     table.add_column("LDAP Signing", style="green")
     table.add_column("Channel Binding", style="green")
-    table.add_column("Anonymous Bind", style="green")
+    table.add_column("Anonymous User Enumeration", style="green")
 
     for result in ldap_results:
 
@@ -292,23 +292,8 @@ def run_tombstone_checks(
 
 def _anonymous_enumeration_status(result: dict, *, enumerate_users: bool) -> str:
     if result["anonymous_shares"] or result["anonymous_users"]:
-        return "Guest" if result.get("guest_auth", False) else "Enabled"
-    if result["null_auth"] is False:
-        return "Disabled"
-    if (
-        (result["null_auth"] is True or result.get("guest_auth", False))
-        and result["anonymous_shares"] == 0
-        and (
-            not enumerate_users
-            or (
-                result["anonymous_users"] == 0
-                and result.get("anonymous_users_complete", False)
-            )
-        )
-        and not result["anonymous_incomplete"]
-    ):
-        return "Disabled"
-    return "Unknown"
+        return "Permitted"
+    return "Disabled"
 
 
 def _summarise_smb_systems(finding: Finding, hosts: list[str], dcs: set[str]) -> None:
@@ -485,10 +470,8 @@ def run_smb_checks(
             result["signing"],
             result["smbv1"],
             {
-                "Enabled": "[red]✗ Enabled[/red]",
+                "Permitted": "[red]✗ Permitted[/red]",
                 "Disabled": "[green]✓ Disabled[/green]",
-                "Unknown": "[yellow]⚠ Unknown[/yellow]",
-                "Guest": "[yellow]⚠ Guest[/yellow]",
             }[status],
         ]
         if show_shares:
@@ -527,9 +510,6 @@ def run_smb_checks(
         _anonymous_enumeration_status(result, enumerate_users=False)
         for result in host_results
     ]
-    guest = statuses.count("Guest")
-    if guest:
-        host_table.add_column("Guest", justify="right")
 
     for label, key in (("SMB Signing", "signing"), ("SMBv1", "smbv1")):
         enabled_status = "[green]✓ Enabled[/green]" if key == "signing" else "[red]✗ Enabled[/red]"
@@ -539,18 +519,14 @@ def run_smb_checks(
         enabled = sum(result[key] == enabled_status for result in host_results)
         disabled = sum(result[key] == disabled_status for result in host_results)
         row = [label, str(enabled), str(disabled), str(len(host_targets) - enabled - disabled)]
-        if guest:
-            row.append("-")
         host_table.add_row(*row)
 
-    enabled = statuses.count("Enabled")
+    permitted = statuses.count("Permitted")
     disabled = statuses.count("Disabled")
     row = [
-        "Anonymous Enumeration", str(enabled), str(disabled),
-        str(len(host_targets) - enabled - disabled - guest),
+        "Anonymous Enumeration", str(permitted), str(disabled),
+        str(len(host_targets) - len(host_results)),
     ]
-    if guest:
-        row.append(str(guest))
     host_table.add_row(*row)
 
     console.print(host_table)

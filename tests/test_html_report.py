@@ -267,7 +267,7 @@ def test_group_headings_and_copyable_introductions_expand_abbreviations(category
     ("password_policy", ["PASS-001", "PASS-002", "PASS-003"]),
     ("asreproast", ["ASREP-001", "ASREP-002"]),
     ("kerberoast", ["KERB-001", "KERB-002"]),
-    ("delegations", ["DELEG-001", "DELEG-002", "DELEG-003"]),
+    ("delegations", ["DELEG-001", "DELEG-002", "DELEG-003", "DELEG-004"]),
     ("adcs", ["ADCS-ESC1", "ADCS-ESC8", "ADCS-ESC15"]),
     ("privileged_excessive", ["PRIV-001", "PRIV-002", "PRIV-003", "PRIV-004", "PRIV-005"]),
     ("local_admin", ["LA-001", "LA-002"]),

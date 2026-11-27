@@ -27,7 +27,7 @@ from ad_kit.reporting.markdown import format_finding_sections, format_paragraphs
             "LDAP 192.168.239.130 389 MOLLYSEC-DC01 [-] Error in "
             "searchRequest -> operationsError: successful bind must be "
             "completed on the connection.\n",
-            "[yellow]⚠ Unknown[/yellow]",
+            "[green]✓ Disabled[/green]",
             None,
         ),
         (
@@ -104,8 +104,8 @@ def test_ldap_user_search_without_results_is_not_treated_as_denied(monkeypatch):
         ldap, "load_finding", lambda *_args: ldap.Finding("LDAP-003", "", "", "")
     )
     results, findings = ldap.ldap_check()
-    assert results[0]["anonymous_bind"] == "[red]✗ Permitted[/red]"
-    assert findings[0].id == "LDAP-003"
+    assert results[0]["anonymous_bind"] == "[green]✓ Disabled[/green]"
+    assert not findings
     assert any("No confirmed user enumeration" in entry[2] for entry in incomplete)
 
 
@@ -120,22 +120,11 @@ def test_ldap_user_search_without_results_is_not_treated_as_denied(monkeypatch):
     ),
     (
         [5, 0, None],
-        "Anonymous user account enumeration was confirmed on one domain controller. "
-        "No user accounts were returned on one domain controller. "
-        "Anonymous user enumeration could not be confirmed on one domain controller.",
-    ),
-    (
-        [None, "inconclusive"],
-        "Anonymous user enumeration could not be confirmed on two domain controllers.",
-    ),
-    (
-        [0],
-        "No user accounts were returned on one domain controller.",
+        "Anonymous user account enumeration was confirmed on the affected domain controller.",
     ),
     (
         [3] * 10 + [None],
-        "Anonymous user account enumeration was confirmed on 10 domain controllers. "
-        "Anonymous user enumeration could not be confirmed on one domain controller.",
+        "Anonymous user account enumeration was confirmed on all affected domain controllers.",
     ),
 ])
 def test_ldap_anonymous_finding_reports_user_enumeration(monkeypatch, outputs, expected):
@@ -163,6 +152,12 @@ def test_ldap_anonymous_finding_reports_user_enumeration(monkeypatch, outputs, e
     for result in results:
         output = output_by_host[result["dc_hostname"]]
         assert result["anonymous_users"] == (output if isinstance(output, int) else None)
+        if isinstance(output, int) and output > 0:
+            assert result["anonymous_bind"] == "[red]✗ Permitted[/red]"
+        elif isinstance(output, int):
+            assert result["anonymous_bind"] == "[green]✓ Disabled[/green]"
+        else:
+            assert result["anonymous_bind"] == "[green]✓ Disabled[/green]"
     assert format_paragraphs(finding.commentary).endswith(expected)
     assert expected in render_html([finding])
     assert "shares" not in expected
@@ -170,7 +165,7 @@ def test_ldap_anonymous_finding_reports_user_enumeration(monkeypatch, outputs, e
         entry for entry in incomplete if entry[0] == "LDAP anonymous user enumeration"
     ]
     assert len(incomplete_enumerations) == (
-        outputs.count(0) + outputs.count(None) + outputs.count("inconclusive")
+        outputs.count(None) + outputs.count("inconclusive")
     )
 
 

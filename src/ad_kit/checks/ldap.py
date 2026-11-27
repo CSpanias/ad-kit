@@ -65,10 +65,11 @@ def _check_controller(
         "dc_hostname": dc_hostname,
         "signing": _UNKNOWN,
         "channel_binding": _UNKNOWN,
-        "anonymous_bind": _UNKNOWN,
+        "anonymous_bind": "[green]✓ Disabled[/green]",
         "anonymous_users": None,
     }
     incomplete: list[tuple[str, str]] = []
+    anonymous_bind_confirmed = False
 
     with capture_check_evidence() as evidence:
         try:
@@ -113,9 +114,9 @@ def _check_controller(
                 success_message = line.split("[+]", 1)[1].strip()
                 identity = success_message.split(":", 1)[0].strip()
                 if identity.endswith(chr(92)):
-                    result["anonymous_bind"] = "[red]✗ Permitted[/red]"
+                    anonymous_bind_confirmed = True
 
-        if result["anonymous_bind"] == "[red]✗ Permitted[/red]":
+        if anonymous_bind_confirmed:
             evidence_name = f"ldap-anonymous-users-{dc_hostname}"
             try:
                 users_output = run_check(
@@ -129,18 +130,27 @@ def _check_controller(
                 users_match = re.search(r"Enumerated\s+(\d+)\s+domain users:", users_output, re.I)
                 if users_match:
                     result["anonymous_users"] = int(users_match.group(1))
-                if result["anonymous_users"] is None or result["anonymous_users"] == 0:
+                if result["anonymous_users"] is not None and result["anonymous_users"] > 0:
+                    result["anonymous_bind"] = "[red]✗ Permitted[/red]"
+                elif result["anonymous_users"] is not None:
+                    result["anonymous_bind"] = "[green]✓ Disabled[/green]"
+                else:
                     incomplete.append((
                         "LDAP anonymous user enumeration",
                         f"No confirmed user enumeration; see {evidence_name}.txt",
                     ))
+        else:
+            incomplete.append((
+                "LDAP anonymous user enumeration",
+                f"No confirmed anonymous bind; user enumeration not attempted; "
+                f"see ldap-{dc_hostname}.txt",
+            ))
 
     unknown = [
         label
         for key, label in (
             ("signing", "signing"),
             ("channel_binding", "channel binding"),
-            ("anonymous_bind", "anonymous bind"),
         )
         if result[key] == _UNKNOWN
     ]

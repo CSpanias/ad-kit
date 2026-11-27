@@ -1,11 +1,62 @@
+import io
 import xml.etree.ElementTree as ET
 from contextlib import nullcontext
 
 import pytest
+from rich.console import Console
 
+from ad_kit.checks import ldap_info
 from ad_kit.commands.checks import privileged
 from ad_kit.reporting import json as json_report
 from ad_kit.reporting import sureformat
+
+
+@pytest.mark.parametrize("label", ["Info", "info"])
+def test_info_module_output_separates_username_and_preserves_value(monkeypatch, label):
+    monkeypatch.setattr(ldap_info, "track_items", lambda items, _label: items)
+    monkeypatch.setattr(
+        ldap_info,
+        "run_check",
+        lambda name, *_args, **_kwargs: (
+            f"GET-INFO-USERS dc 389 DC User: freya    {label}: Lab credential token: FAKE-TOKEN"
+            if name == "ldap-info-users" else ""
+        ),
+    )
+
+    result = ldap_info.ldap_info_check("dc", "user", "password")
+
+    assert result["info_fields"] == [
+        {"user": "freya", "value": "Lab credential token: FAKE-TOKEN"}
+    ]
+
+
+def test_ldap_info_table_shows_masked_previews(monkeypatch):
+    output = io.StringIO()
+    monkeypatch.setattr(privileged, "console", Console(file=output, width=160))
+    monkeypatch.setattr(privileged, "print_section", lambda *_args: None)
+    monkeypatch.setattr(privileged, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user",
+    })
+    monkeypatch.setattr(privileged, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(privileged, "record_findings", lambda *_args: None)
+    monkeypatch.setattr(privileged, "ldap_info_check", lambda *_args: {
+        "descriptions": [{"user": "freya", "value": "password=secret"}],
+        "info_fields": [{"user": "freya", "value": "token=abc"}],
+        "user_passwords": ["User: freya userPassword: TestSecret"],
+        "unix_passwords": ["User: freya unixUserPassword: abc"],
+    })
+
+    privileged.run_ldap_info_checks("password")
+
+    text = output.getvalue()
+    assert "Value preview" in text
+    assert "pass[REDACTED]" in text
+    assert "toke[REDACTED]" in text
+    assert "Test[REDACTED]" in text
+    assert "password=secret" not in text
+    assert "token=abc" not in text
+    assert "TestSecret" not in text
+    assert "abc" not in text
 
 
 @pytest.mark.parametrize(

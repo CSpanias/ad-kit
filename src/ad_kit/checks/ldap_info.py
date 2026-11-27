@@ -99,29 +99,14 @@ def ldap_info_check(
     #---------------------------------------------------------------------------
 
     for line in info_output.splitlines():
-
-        if "User:" not in line:
+        match = re.search(r"\bUser:\s*(.*?)\s+info:\s*(.*)$", line, re.IGNORECASE)
+        if not match:
             continue
-
-        if "info:" not in line.lower():
-            continue
-
-        user = (
-            line.split("User:", 1)[1]
-            .split("info:", 1)[0]
-            .strip()
-        )
-
-        value = (
-            line.lower()
-            .split("info:", 1)[1]
-            .strip()
-        )
 
         info_fields.append(
             {
-                "user": user,
-                "value": value,
+                "user": match.group(1).strip(),
+                "value": match.group(2).strip(),
             }
         )
 

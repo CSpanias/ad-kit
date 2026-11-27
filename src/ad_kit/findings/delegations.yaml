@@ -170,3 +170,25 @@ DELEG-003:
     - https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-constrained-delegation-overview
     - https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-authentication-overview
     - https://learn.microsoft.com/en-us/entra/architecture/service-accounts-govern-on-premises
+
+DELEG-004:
+  id: DELEG-004
+  title: Resource-Based Constrained Delegation Configured
+  commentary: |
+    A review of Active Directory (AD) identified resource-based constrained
+    delegation (RBCD) relationships reported by NetExec. RBCD allows a resource
+    to specify principals that may request delegated access to its services.
+    These relationships can be legitimate and do not by themselves establish
+    effective access, exploitability, or unauthorised configuration.
+
+    An attacker who controls a permitted principal may be able to impersonate
+    eligible users to the resource, subject to Kerberos and access controls.
+    Review the reported relationships in their operational context.
+  remediation: |
+    - Review the resource's delegation security descriptor and confirm that
+    each permitted principal and its access are required.
+    - Remove unnecessary permissions and restrict who can modify the descriptor.
+    - Protect delegated service accounts and monitor delegated authentication.
+  references:
+    - https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-constrained-delegation-overview
+    - https://www.tiraniddo.dev/2022/05/exploiting-rbcd-using-normal-user.html

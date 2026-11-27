@@ -19,6 +19,7 @@ from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import format_counted_commentary
 from ad_kit.reporting.html import render_html
+from ad_kit.reporting.json import integration_finding
 from ad_kit.reporting.markdown import format_finding_sections
 
 
@@ -178,6 +179,9 @@ def test_delegation_parses_enabled_accounts_from_netexec_table(monkeypatch):
         row("AzureADKerberos$", "Computer", "Unconstrained", "N/A"),
         row("other", "Person", "Constrained", "HTTP/web"),
         row("rbcd", "Computer", "Resource-Based Constrained", "server$"),
+        row("rbcd", "Computer", "Resource-Based Constrained", "server$"),
+        row("rbcd", "Computer", "Resource-Based Constrained", "other server$"),
+        row("poppy", "Person", "Resource-Based Constrained", "freya"),
     ])
     calls = []
 
@@ -195,9 +199,18 @@ def test_delegation_parses_enabled_accounts_from_netexec_table(monkeypatch):
             "SQL Service", "fifteenlettersx  service", "very-long-service-account"
         ],
         "protocol_transition": ["SQL Service"],
+        "resource_based": [
+            ("poppy", "freya"), ("rbcd", "other server$"), ("rbcd", "server$")
+        ],
     }
-    assert [finding.id for finding in findings] == ["DELEG-001", "DELEG-002", "DELEG-003"]
+    assert [finding.id for finding in findings] == [
+        "DELEG-001", "DELEG-002", "DELEG-004", "DELEG-003"
+    ]
     assert "one privileged delegated account was identified." in findings[-1].evidence[-1]
+    rbcd_finding = findings[2]
+    assert rbcd_finding.evidence_in_commentary
+    assert len(rbcd_finding.evidence) == 3
+    assert "`poppy`" in rbcd_finding.evidence[0] and "`freya`" in rbcd_finding.evidence[0]
 
 
 @pytest.mark.parametrize("output", [
@@ -217,7 +230,26 @@ def test_delegation_rejects_failed_or_unrecognised_output(output):
 
 def test_delegation_accepts_netexec_empty_result():
     output = "LDAP 10.0.0.1 389 DC01 [-] No entries found!"
-    assert delegations.parse_delegation_output(output) == (set(), set())
+    assert delegations.parse_delegation_output(output) == (set(), set(), set())
+
+
+def test_rbcd_only_is_recorded_with_principal_and_resource(monkeypatch):
+    prefix = "LDAP 192.0.2.1 389 DC01 "
+    header = f"{'AccountName':<15} {'AccountType':<15} {'DelegationType':<35} DelegationRightsTo"
+    row = f"{'poppy':<15} {'Person':<15} {'Resource-Based Constrained':<35} freya"
+    monkeypatch.setattr(
+        delegations, "run_check", lambda *_args: prefix + header + "\n" + prefix + row
+    )
+    monkeypatch.setattr(delegations, "load_dc_hostnames", lambda: ["dc01.example.test"])
+    monkeypatch.setattr(delegations, "get_privileged_users", lambda *_args: set())
+
+    result, findings = delegations.delegation_check("dc", "user", "pw")
+
+    assert result["resource_based"] == [("poppy", "freya")]
+    assert [finding.id for finding in findings] == ["DELEG-004"]
+    assert "poppy" in render_html(findings) and "freya" in render_html(findings)
+    description = integration_finding(findings[0])["description"]
+    assert "`poppy`" in description and "`freya`" in description
 
 
 def test_delegation_parses_older_dynamic_width_netexec_table():
@@ -225,7 +257,7 @@ def test_delegation_parses_older_dynamic_width_netexec_table():
     header = f"{'AccountName':<30} {'AccountType':<16} {'DelegationType':<35} DelegationRightsTo"
     row = f"{'service account':<30} {'Person':<16} {'Unconstrained':<35} N/A"
     assert delegations.parse_delegation_output(prefix + header + "\n" + prefix + row) == (
-        {"service account"}, set()
+        {"service account"}, set(), set()
     )
 
 
@@ -243,11 +275,16 @@ def test_affected_accounts_are_shown_in_correct_rows(monkeypatch, kind):
     })
     if kind == "delegation":
         monkeypatch.setattr(module, "delegation_check", lambda *_args: (
-            {"unconstrained": ["service[red]"], "protocol_transition": []}, []
+            {
+                "unconstrained": ["service[red]"],
+                "protocol_transition": [],
+                "resource_based": [("poppy", "freya")],
+            }, []
         ))
         module.run_delegation_checks("pw")
         assert "service[red]" in output.getvalue()
         assert "Protocol Transition" in output.getvalue()
+        assert "poppy -> freya" in output.getvalue()
     elif kind == "kerberoast":
         monkeypatch.setattr(module, "kerberoast_check", lambda *_args: (
             {"account_count": 1, "accounts": ["svc"]}, []

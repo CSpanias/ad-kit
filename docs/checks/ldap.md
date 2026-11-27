@@ -1,6 +1,6 @@
 # LDAP Check
 
-Evaluates LDAP signing, LDAP channel binding, and anonymous bind configuration
+Evaluates LDAP signing, LDAP channel binding, and anonymous user enumeration
 across every discovered Domain Controller.
 
 ```bash
@@ -21,15 +21,15 @@ nxc ldap <controller> -u '' -p '' --users
 ```
 
 The user enumeration command runs when NetExec reports a successful anonymous
-bind. A search failure does not prove that the bind was rejected, and an empty
-result does not confirm that enumeration was denied. The finding distinguishes
-controllers where user enumeration was confirmed from those where no accounts
-were returned or the result was inconclusive. It does not report SMB shares.
+bind. Anonymous enumeration is marked as permitted only when NetExec confirms
+that domain users were returned. If NetExec does not confirm enumeration, it is
+reported as disabled; this does not prove that the bind or search was denied.
+Incomplete attempts are recorded separately. It does not report SMB shares.
 If NetExec reports `No TLS cert`, channel binding is recorded as unknown rather
 than not enforced, because the TLS connection did not establish its setting.
 Controllers are checked concurrently, with four workers by default; use
 `--workers` to choose between one and 16.
-The console shows one current-run anonymous bind sample, including up to ten
+The console shows one current-run confirmed anonymous enumeration sample, including up to ten
 user rows when available. It prefers a controller that returned user rows;
 evidence for every controller remains in the evidence directory.
 
@@ -40,8 +40,8 @@ ad-kit records:
 - **LDAP signing** - whether the controller requires signed LDAP traffic.
 - **Channel binding** - whether LDAPS authentication is bound to the TLS
   session.
-- **Anonymous bind** - whether the controller accepts unauthenticated LDAP
-  binds.
+- **Anonymous user enumeration** - whether unauthenticated user enumeration
+  was confirmed.
 
 ## How it works
 

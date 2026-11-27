@@ -70,6 +70,10 @@ _DETAILS = {
         "delegation configured on privileged accounts",
         "expanded access following privileged account compromise",
     ),
+    "DELEG-004": (
+        "resource-based constrained delegation relationships",
+        "impersonation following compromise of a permitted principal",
+    ),
     "ADCS-ESC1": ("certificate templates vulnerable to ESC1", "certificate-based impersonation"),
     "ADCS-ESC8": ("certificate enrolment vulnerable to ESC8", "authentication relay"),
     "ADCS-ESC15": ("certificate templates vulnerable to ESC15", "certificate-based impersonation"),
@@ -109,6 +113,7 @@ _ACTIONS = {
     "DELEG-001": "remove unnecessary unconstrained delegation",
     "DELEG-002": "review and restrict delegation with protocol transition",
     "DELEG-003": "review delegation assigned to privileged accounts",
+    "DELEG-004": "review resource-based delegation permissions",
     "ADCS-ESC1": "secure vulnerable certificate templates",
     "ADCS-ESC8": "protect certificate enrolment against authentication relay",
     "ADCS-ESC15": "secure vulnerable certificate templates",

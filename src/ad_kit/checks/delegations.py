@@ -10,6 +10,7 @@ or compromise of privileged accounts.
 """
 
 import re
+from typing import TypedDict
 
 from ad_kit.core.checks import ANSI_ESCAPE_PATTERN, load_dc_hostnames, run_check
 from ad_kit.core.exceptions import CheckExecutionError
@@ -25,13 +26,22 @@ IGNORED_DELEGATION_ACCOUNTS = {
 NXC_LDAP_LINE = re.compile(r"^\s*LDAP\s+\S+\s+\d+\s+\S+\s+(.*)$")
 DELEGATION_ROW = re.compile(
     r"^(.*?)\s+(Unconstrained|Constrained w/ Protocol Transition|"
-    r"Resource-Based Constrained|Constrained)\s+.+$"
+    r"Resource-Based Constrained|Constrained)\s+(.+)$"
 )
 
 
-def parse_delegation_output(output: str) -> tuple[set[str], set[str]]:
+class DelegationResult(TypedDict):
+    unconstrained: list[str]
+    protocol_transition: list[str]
+    resource_based: list[tuple[str, str]]
+
+
+def parse_delegation_output(
+    output: str,
+) -> tuple[set[str], set[str], set[tuple[str, str]]]:
     unconstrained: set[str] = set()
     protocol_transition: set[str] = set()
+    resource_based: set[tuple[str, str]] = set()
     type_column = None
     row_count = 0
     no_entries = False
@@ -91,6 +101,8 @@ def parse_delegation_output(output: str) -> tuple[set[str], set[str]]:
             unconstrained.add(account)
         elif row.group(2) == "Constrained w/ Protocol Transition":
             protocol_transition.add(account)
+        elif row.group(2) == "Resource-Based Constrained":
+            resource_based.add((account, row.group(3).strip()))
 
     if (type_column is None or not row_count) and not no_entries:
         raise CheckExecutionError(
@@ -100,19 +112,19 @@ def parse_delegation_output(output: str) -> tuple[set[str], set[str]]:
         raise CheckExecutionError(
             "delegation-find", [], stderr="NetExec returned conflicting delegation results."
         )
-    return unconstrained, protocol_transition
+    return unconstrained, protocol_transition, resource_based
 
 
 def delegation_check(
     dc_ip: str,
     username: str,
     password: str,
-) -> tuple[dict, list[Finding]]:
+) -> tuple[DelegationResult, list[Finding]]:
     """
     Assess Active Directory delegation configurations.
 
-    This check identifies accounts configured for unconstrained delegation and 
-    Kerberos constrained delegation with protocol transition.
+    This check identifies unconstrained delegation, constrained delegation with
+    protocol transition, and resource-based constrained delegation.
 
     Args:
         dc_ip:
@@ -131,9 +143,10 @@ def delegation_check(
         - Generated findings.
     """
 
-    results = {
+    results: DelegationResult = {
         "unconstrained": [],
         "protocol_transition": [],
+        "resource_based": [],
     }
 
     findings: list[Finding] = []
@@ -152,7 +165,6 @@ def delegation_check(
         for dc in load_dc_hostnames()
     }
 
-    # NetExec reports enabled delegation entries for both checks in one table.
     output = run_check(
         "delegation-find",
         [
@@ -167,7 +179,9 @@ def delegation_check(
         ],
     )
 
-    unconstrained_accounts, protocol_transition_accounts = parse_delegation_output(output)
+    unconstrained_accounts, protocol_transition_accounts, resource_based = (
+        parse_delegation_output(output)
+    )
     unconstrained_accounts = {
         account for account in unconstrained_accounts
         if account.lower() not in IGNORED_DELEGATION_ACCOUNTS
@@ -219,6 +233,17 @@ def delegation_check(
             for account in protocol_transition_accounts
             if account.lower() in privileged_users
         ]
+
+    results["resource_based"] = sorted(resource_based)
+    if resource_based:
+        finding = load_finding("delegations", "DELEG-004")
+        finding.evidence_in_commentary = True
+        for principal, resource in sorted(resource_based):
+            finding.evidence.append(
+                f"NetExec reported principal `{principal}` in the resource-based "
+                f"delegation configuration for `{resource}`."
+            )
+        findings.append(finding)
 
     privileged_delegated_accounts = sorted(
         set(privileged_unconstrained + privileged_protocol_transition)

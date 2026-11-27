@@ -2,7 +2,8 @@
 
 Reviews Active Directory Kerberos delegation configuration and flags accounts
 configured with unconstrained delegation or constrained delegation with
-protocol transition, including any that are privileged.
+protocol transition, including any that are privileged. It also reports
+resource-based constrained delegation (RBCD) relationships for review.
 
 ```bash
 ad-kit check delegation
@@ -32,6 +33,12 @@ accounts with constrained delegation and protocol transition
 Controller machine accounts and the Azure AD Kerberos trust object, then flags
 delegated accounts that are also members of a monitored privileged group.
 The results table lists affected accounts alongside each delegation count.
+For RBCD it lists each reported delegating principal and resource as
+`principal -> resource`. The count is the number of distinct relationships.
+NetExec's reported relationships require security descriptor review; they do
+not by themselves prove effective permissions or an exploitable condition.
+NetExec's enumeration excludes disabled accounts and may omit principals it
+cannot resolve.
 
 ## How it works
 
@@ -61,6 +68,7 @@ Delegation, or migrating to Group Managed Service Accounts.
 | DELEG-001 | Unconstrained Delegation Enabled |
 | DELEG-002 | Kerberos Constrained Delegation with Protocol Transition Enabled |
 | DELEG-003 | Delegation Configured on Privileged Accounts |
+| DELEG-004 | Resource-Based Constrained Delegation Configured |
 
 ## Tooling
 

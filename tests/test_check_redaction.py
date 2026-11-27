@@ -92,6 +92,27 @@ def test_capture_is_current_run_redacted_and_preserves_failed_output(monkeypatch
     assert next_run == []
 
 
+def test_format_check_evidence_filters_python_syntax_warnings():
+    record = checks.CheckEvidence(
+        "dns-record-create",
+        ["bloodyAD", "add", "dnsRecord", "ad-kit-test", "192.0.2.1"],
+        "[+] ad-kit-test has been successfully added",
+        "/home/kali/tool/badldap/wintypes/winerror.py:13895: "
+        "SyntaxWarning: \"\\<\" is an invalid escape sequence\n"
+        '  0x80004017: { "code": "CO_E_RUNAS_SYNTAX" }\n'
+        "/tmp/other.py:1: SyntaxWarning: invalid escape sequence\n"
+        "actual tool error",
+    )
+
+    formatted = checks.format_check_evidence(record)
+
+    assert "winerror.py" not in formatted
+    assert "0x80004017" not in formatted
+    assert (
+        "[stderr]\n/tmp/other.py:1: SyntaxWarning: invalid escape sequence\nactual tool error"
+    ) in formatted
+
+
 def test_redaction_handles_overlapping_passwords(monkeypatch, tmp_path):
     monkeypatch.setattr(checks, "get_artefacts_dir", lambda: tmp_path)
     monkeypatch.setattr(

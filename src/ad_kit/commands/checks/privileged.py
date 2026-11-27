@@ -216,8 +216,8 @@ def run_delegation_checks(
     """
     Execute Active Directory delegation assessment checks.
 
-    This check identifies accounts configured for Unconstrained Delegation and 
-    Kerberos Constrained Delegation with Protocol Transition.
+    This check identifies unconstrained delegation, constrained delegation with
+    protocol transition, and resource-based constrained delegation.
 
     Findings are generated where delegation configurations introduce an 
     increased risk of impersonation, privilege escalation, or compromise of 
@@ -258,6 +258,15 @@ def run_delegation_checks(
         "Protocol Transition",
         str(len(delegation_results["protocol_transition"])),
         object_text(delegation_results["protocol_transition"]),
+    )
+
+    table.add_row(
+        "Resource-Based Constrained Delegation",
+        str(len(delegation_results["resource_based"])),
+        object_text([
+            f"{principal} -> {resource}"
+            for principal, resource in delegation_results["resource_based"]
+        ]),
     )
 
     console.print(table)
@@ -447,7 +456,7 @@ def run_ldap_info_checks(
     console.print(table)
 
     exposed_accounts = [
-        (user, attribute) for user, _, attribute in sensitive_attributes
+        (user, attribute, value) for user, value, attribute in sensitive_attributes
     ]
     for attribute, lines in (
         ("userPassword", ldap_info_results["user_passwords"]),
@@ -455,19 +464,23 @@ def run_ldap_info_checks(
     ):
         for line in lines:
             match = re.search(
-                r"\bUser:\s*(.*?)\s+" + re.escape(attribute) + r":",
+                r"\bUser:\s*(.*?)\s+" + re.escape(attribute) + r":\s*(.*)$",
                 line,
                 re.IGNORECASE,
             )
             if match and match.group(1).strip():
-                exposed_accounts.append((match.group(1).strip(), attribute))
+                exposed_accounts.append(
+                    (match.group(1).strip(), attribute, match.group(2).strip())
+                )
 
     if exposed_accounts:
         detail_table = Table(title="Affected LDAP Attributes")
         detail_table.add_column("Object", style="cyan")
         detail_table.add_column("Attribute", style="yellow")
-        for user, attribute in sorted(set(exposed_accounts)):
-            detail_table.add_row(object_text([user]), attribute)
+        detail_table.add_column("Value preview")
+        for user, attribute, value in sorted(set(exposed_accounts)):
+            preview = (value[:4] if len(value) > 4 else "") + "[REDACTED]"
+            detail_table.add_row(object_text([user]), attribute, object_text([preview]))
         console.print()
         console.print(detail_table)
 

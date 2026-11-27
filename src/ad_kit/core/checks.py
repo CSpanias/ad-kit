@@ -84,11 +84,33 @@ def append_captured_evidence(records: list[CheckEvidence]) -> None:
         captured.extend(records)
 
 
+def clean_check_stderr(stderr: str) -> str:
+    """Remove known interpreter noise without hiding command failures."""
+    lines = stderr.splitlines()
+    cleaned = []
+    skip_source_line = False
+    for line in lines:
+        if re.search(
+            r"(?i)(?:^|[/\\])badldap[/\\]wintypes[/\\]winerror\.py:\d+: "
+            r"SyntaxWarning: .*invalid escape sequence",
+            line,
+        ):
+            skip_source_line = True
+            continue
+        if skip_source_line and re.match(r"\s+0x[0-9A-Fa-f]+:", line):
+            skip_source_line = False
+            continue
+        skip_source_line = False
+        cleaned.append(line)
+    return "\n".join(cleaned).strip()
+
+
 def format_check_evidence(record: CheckEvidence, stdout: str | None = None) -> str:
     output = record.stdout if stdout is None else stdout
     text = f"$ {shlex.join(record.command)}\n{output.rstrip()}"
-    if record.stderr:
-        text += f"\n[stderr]\n{record.stderr.rstrip()}"
+    stderr = clean_check_stderr(record.stderr)
+    if stderr:
+        text += f"\n[stderr]\n{stderr}"
     return ANSI_ESCAPE_PATTERN.sub("", text)
 
 

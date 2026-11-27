@@ -57,17 +57,17 @@ needed.
 
 The host configuration table summarises signing, SMBv1, and anonymous
 enumeration counts in one row each. Unknown counts include hosts without usable
-results. A separate Guest column appears when enumeration succeeds through a
-Guest-mapped session.
+configuration results.
 
-Both tables report anonymous enumeration as **Enabled** when share names or
-users are observed, **Guest** when those results are obtained through a
-Guest-mapped session, and **Disabled** when empty-credential authentication is
-denied or all attempted enumerations complete without returning objects.
-Inconclusive results are **Unknown**. User enumeration is attempted only on
-DCs. The DC table includes share and user count columns only when the
-corresponding objects are observed on at least one DC. This status describes
-enumeration results, not whether a null session was established.
+The DC table reports anonymous enumeration as **Permitted** when share names or
+users are observed, including through Guest-mapped sessions. Otherwise it
+reports **Disabled**, meaning enumeration was not confirmed, not necessarily
+that access was denied. The host summary counts confirmed enumeration as
+**Enabled** and other assessed hosts as **Disabled**. Incomplete checks remain
+recorded separately. User enumeration is attempted only on DCs. The DC table
+includes share and user count columns only when the corresponding objects are
+observed on at least one DC. This status describes enumeration results, not
+whether a null session was established.
 The SMB signing and SMBv1 findings summarise the number of affected systems,
 including the number of Domain Controllers where applicable, rather than
 listing each host. Raw per-host command output remains in the evidence
