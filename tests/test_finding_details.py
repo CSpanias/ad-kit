@@ -1,11 +1,11 @@
 import io
 from contextlib import contextmanager, nullcontext
+from types import SimpleNamespace
 
 import pytest
-from impacket.krb5 import constants
-from impacket.krb5.asn1 import AS_REP, seq_set
+from impacket.krb5.ccache import CCache, CountedOctetString, Credential, KeyBlockV4, Times
+from impacket.krb5.ccache import Principal as CachePrincipal
 from impacket.krb5.types import Principal
-from pyasn1.codec.der import encoder
 from rich.console import Console
 
 from ad_kit.checks import (
@@ -222,8 +222,8 @@ def test_pre2k_shows_each_account_and_its_ticket_result(monkeypatch, tmp_path):
         "dc_ip": "dc", "standard_user": "user", "domain": "example.test",
         "dc_controllers": [{"ip": "dc", "hostname": "dc.example.test"}],
     })
-    monkeypatch.setattr(policy, "get_evidence_dir", lambda: tmp_path)
-    monkeypatch.setattr(policy, "validate_pre2k_ldap", lambda *_args: (True, ["validated"], ""))
+    monkeypatch.setattr(policy, "pre2k_cache_dir", lambda: tmp_path)
+    monkeypatch.setattr(policy, "validate_pre2k_ldap", lambda *_args: (True, ""))
     monkeypatch.setattr(policy, "pre2k_check", lambda *_args: ({
         "accounts": ["FIRST$", "SECOND$", "THIRD$"],
         "account_tgts": {"first": "Successful", "second": "Failed"},
@@ -236,127 +236,125 @@ def test_pre2k_shows_each_account_and_its_ticket_result(monkeypatch, tmp_path):
     assert "Accounts Identified" not in text
 
 
-def _pre2k_ticket(client="LONG-COMPUTER-NAME$", realm="EXAMPLE.TEST"):
-    response = AS_REP()
-    response["pvno"] = 5
-    response["msg-type"] = constants.ApplicationTagNumbers.AS_REP.value
-    response["crealm"] = realm
-    seq_set(
-        response, "cname",
-        Principal(client, type=constants.PrincipalNameType.NT_PRINCIPAL.value).components_to_asn1,
+def _mock_pre2k_cache(monkeypatch, client=b"lab-pre2k@EXAMPLE.TEST",
+                       server=b"krbtgt/EXAMPLE.TEST@EXAMPLE.TEST"):
+    def principal(value):
+        return SimpleNamespace(prettyPrint=lambda: value)
+
+    credential = {"client": principal(client), "server": principal(server)}
+    cache = SimpleNamespace(
+        principal=principal(client), getCredential=lambda *_args, **_kwargs: credential
     )
-    ticket = response["ticket"]
-    ticket["tkt-vno"] = 5
-    ticket["realm"] = realm
-    seq_set(
-        ticket, "sname",
-        Principal(f"krbtgt/{realm}", type=constants.PrincipalNameType.NT_SRV_INST.value)
-        .components_to_asn1,
-    )
-    ticket["enc-part"]["etype"] = 18
-    ticket["enc-part"]["cipher"] = b"ticket"
-    response["enc-part"]["etype"] = 18
-    response["enc-part"]["cipher"] = b"encrypted"
-    return encoder.encode(response)
+    monkeypatch.setattr(pre2k.CCache, "loadFile", lambda _path: cache)
 
 
-def test_pre2k_uses_obtained_tgt_for_ldap_bind(monkeypatch):
-    ticket, cipher, session_key = _pre2k_ticket(), object(), object()
+def test_pre2k_uses_current_netexec_tgt_for_ldap(monkeypatch, tmp_path):
+    cache = tmp_path / "lab-pre2k.ccache"
+    cache.write_bytes(b"old")
+    before = pre2k.snapshot_pre2k_caches(tmp_path)
+    cache.write_bytes(b"new-current-cache")
+    _mock_pre2k_cache(monkeypatch, client=b"LAB-PRE2K$@EXAMPLE.TEST")
     calls = []
 
-    def get_tgt(principal, password, domain, lmhash, nthash, *, kdcHost):
-        calls.append(("tgt", str(principal), password, domain, lmhash, nthash, kdcHost))
-        return ticket, cipher, object(), session_key
+    def run(name, command, **kwargs):
+        calls.append((name, command, kwargs))
+        return "LDAP 192.0.2.1 389 DC01 [+] EXAMPLE.TEST\\lab-pre2k from ccache"
 
-    class Connection:
-        def __init__(self, url, *, dstIp):
-            calls.append(("connect", url, dstIp))
-
-        def kerberosLogin(self, user, password, **kwargs):
-            calls.append(("bind", user, password, kwargs))
-            return True
-
-        def close(self):
-            calls.append(("close",))
-
-    monkeypatch.setattr(pre2k, "getKerberosTGT", get_tgt)
-    monkeypatch.setattr(pre2k, "LDAPConnection", Connection)
-    success, lines, reason = pre2k.validate_pre2k_ldap(
-        "LONG-COMPUTER-NAME$", "example.test", "192.0.2.1", "dc.example.test"
+    monkeypatch.setattr(pre2k, "run_check", run)
+    success, reason = pre2k.validate_pre2k_ldap(
+        "LAB-PRE2K$", "example.test", "192.0.2.1", tmp_path, before
     )
     assert success and not reason
-    assert calls[0] == (
-        "tgt", "long-computer-name", "long-computer-", "example.test", "", "", "192.0.2.1",
+    assert calls[0][1] == [
+        "env", f"KRB5CCNAME={cache}", "nxc", "ldap", "192.0.2.1", "--use-kcache",
+        "--kdcHost", "192.0.2.1", "--dns-server", "192.0.2.1",
+    ]
+
+
+def test_pre2k_reads_a_serialized_impacket_ticket_cache(monkeypatch, tmp_path):
+    cache = CCache()
+    cache.setDefaultHeader()
+    cache.principal = CachePrincipal()
+    cache.principal.fromPrincipal(Principal("lab-pre2k@EXAMPLE.TEST"))
+    server = CachePrincipal()
+    server.fromPrincipal(Principal("krbtgt/EXAMPLE.TEST@EXAMPLE.TEST"))
+    credential = Credential()
+    credential["client"] = cache.principal
+    credential["server"] = server
+    credential["key"] = KeyBlockV4()
+    credential["key"]["keytype"] = 18
+    credential["key"]["keyvalue"] = b"test-key"
+    credential["key"]["keylen"] = len(b"test-key")
+    credential["time"] = Times()
+    credential.ticket = CountedOctetString()
+    credential.ticket["data"] = b"test-ticket"
+    credential.ticket["length"] = len(b"test-ticket")
+    credential.secondTicket = CountedOctetString()
+    credential.secondTicket["data"] = b""
+    credential.secondTicket["length"] = 0
+    cache.credentials.append(credential)
+    (tmp_path / "lab-pre2k.ccache").write_bytes(cache.getData())
+    monkeypatch.setattr(
+        pre2k, "run_check",
+        lambda *_args, **_kwargs: "LDAP dc 389 DC [+] example.test\\lab-pre2k from ccache",
     )
-    assert calls[1] == ("connect", "ldap://dc.example.test", "192.0.2.1")
-    assert calls[2][1:3] == ("LONG-COMPUTER-NAME$", "")
-    assert calls[2][3]["TGT"] == {"KDC_REP": ticket, "cipher": cipher, "sessionKey": session_key}
-    assert calls[2][3]["useCache"] is False
-    assert calls[3] == ("close",)
-    assert any("LDAP authentication succeeded" in line for line in lines)
-    assert "long-computer-" not in "\n".join(lines).replace("long-computer-name", "")
+    assert pre2k.validate_pre2k_ldap("LAB-PRE2K$", "example.test", "dc", tmp_path, {}) == (
+        True, ""
+    )
 
 
-@pytest.mark.parametrize("stage", ["tgt", "ldap", "ldap-unconfirmed"])
-def test_pre2k_validation_failures_are_explicit_and_redacted(monkeypatch, stage):
-    closed = []
+@pytest.mark.parametrize("data", [b"", b"\x05\x01", b"\x05\x04"])
+def test_pre2k_handles_corrupt_or_unsupported_real_caches(monkeypatch, tmp_path, data):
+    (tmp_path / "lab-pre2k.ccache").write_bytes(data)
+    monkeypatch.setattr(
+        pre2k, "run_check", lambda *_args, **_kwargs: pytest.fail("Unexpected bind")
+    )
+    success, reason = pre2k.validate_pre2k_ldap(
+        "LAB-PRE2K$", "example.test", "dc", tmp_path, {}
+    )
+    assert not success and "could not be read or verified" in reason
 
-    def get_tgt(*_args, **_kwargs):
-        if stage == "tgt":
-            raise OSError("KDC failed for lab-pre2k")
-        return _pre2k_ticket("lab-pre2k$"), object(), object(), object()
 
-    class Connection:
-        def __init__(self, *_args, **_kwargs):
-            pass
-
-        def kerberosLogin(self, *_args, **_kwargs):
-            if stage == "ldap":
-                raise OSError("LDAP rejected lab-pre2k")
-            return False
-
-        def close(self):
-            closed.append(True)
-
-    monkeypatch.setattr(pre2k, "getKerberosTGT", get_tgt)
-    monkeypatch.setattr(pre2k, "LDAPConnection", Connection)
-    success, lines, reason = pre2k.validate_pre2k_ldap(
-        "LAB-PRE2K$", "example.test", "dc", "dc.example.test"
+@pytest.mark.parametrize("case", ["missing", "stale", "client", "server", "malformed"])
+def test_pre2k_rejects_unusable_ticket_caches(monkeypatch, tmp_path, case):
+    cache = tmp_path / "lab-pre2k.ccache"
+    if case != "missing":
+        cache.write_bytes(b"old")
+    before = pre2k.snapshot_pre2k_caches(tmp_path)
+    if case not in {"missing", "stale"}:
+        cache.write_bytes(b"new-current-cache")
+    _mock_pre2k_cache(
+        monkeypatch,
+        client=b"OTHER@EXAMPLE.TEST" if case == "client" else b"lab-pre2k@EXAMPLE.TEST",
+        server=b"ldap/DC@EXAMPLE.TEST" if case == "server" else b"krbtgt/EXAMPLE.TEST@EXAMPLE.TEST",
+    )
+    if case == "malformed":
+        def malformed(_path):
+            raise ValueError("secret cache content")
+        monkeypatch.setattr(pre2k.CCache, "loadFile", malformed)
+    monkeypatch.setattr(
+        pre2k, "run_check", lambda *_args, **_kwargs: pytest.fail("Unexpected bind")
+    )
+    success, reason = pre2k.validate_pre2k_ldap(
+        "LAB-PRE2K$", "example.test", "dc", tmp_path, before
     )
     assert not success and reason
-    assert "lab-pre2k" not in reason
-    assert "LDAP authentication succeeded" not in "\n".join(lines)
-    assert closed == ([] if stage == "tgt" else [True])
+    assert "secret cache content" not in reason
 
 
-@pytest.mark.parametrize(("client", "realm"), [
-    ("OTHER$", "EXAMPLE.TEST"), ("LAB-PRE2K$", "OTHER.TEST"),
+@pytest.mark.parametrize("output", [
+    "LDAP dc 389 DC [+] example.test\\other from ccache",
+    "LDAP dc 389 DC [-] KDC_ERR_S_PRINCIPAL_UNKNOWN",
+    "LDAP dc 389 DC [+] example.test\\lab-pre2k",
 ])
-def test_pre2k_validation_rejects_mismatched_ticket_identity(monkeypatch, client, realm):
-    monkeypatch.setattr(
-        pre2k, "getKerberosTGT",
-        lambda *_args, **_kwargs: (_pre2k_ticket(client, realm), object(), object(), object()),
+def test_pre2k_requires_confirmed_matching_cache_authentication(monkeypatch, tmp_path, output):
+    (tmp_path / "lab-pre2k.ccache").write_bytes(b"ticket")
+    _mock_pre2k_cache(monkeypatch)
+    monkeypatch.setattr(pre2k, "run_check", lambda *_args, **_kwargs: output)
+    success, reason = pre2k.validate_pre2k_ldap(
+        "LAB-PRE2K$", "example.test", "dc", tmp_path, {}
     )
-    monkeypatch.setattr(
-        pre2k, "LDAPConnection", lambda *_args, **_kwargs: pytest.fail("Unexpected LDAP bind")
-    )
-    success, lines, reason = pre2k.validate_pre2k_ldap(
-        "LAB-PRE2K$", "example.test", "dc", "dc.example.test"
-    )
-    assert not success and "principal did not match" in reason
-    assert "LDAP authentication succeeded" not in "\n".join(lines)
-
-
-def test_pre2k_validation_does_not_expose_malformed_ticket_data(monkeypatch):
-    monkeypatch.setattr(
-        pre2k, "getKerberosTGT",
-        lambda *_args, **_kwargs: (b"secret-ticket-data", object(), object(), object()),
-    )
-    success, lines, reason = pre2k.validate_pre2k_ldap(
-        "LAB-PRE2K$", "example.test", "dc", "dc.example.test"
-    )
-    assert not success and "Invalid Kerberos or LDAP response" in reason
-    assert "secret-ticket-data" not in "\n".join(lines)
+    assert not success and "did not confirm" in reason
 
 
 def test_pre2k_command_evidence_and_validation_are_reported(monkeypatch, tmp_path):
@@ -367,7 +365,7 @@ def test_pre2k_command_evidence_and_validation_are_reported(monkeypatch, tmp_pat
         policy, "print_section", lambda title: console.print(f"[{title}]", markup=False)
     )
     monkeypatch.setattr(policy, "progress", lambda *_args: nullcontext())
-    monkeypatch.setattr(policy, "get_evidence_dir", lambda: tmp_path)
+    monkeypatch.setattr(policy, "pre2k_cache_dir", lambda: tmp_path)
     monkeypatch.setattr(policy, "require_session", lambda: {
         "dc_ip": "192.0.2.1", "standard_user": "user", "domain": "example.test",
         "dc_controllers": [
@@ -391,11 +389,21 @@ def test_pre2k_command_evidence_and_validation_are_reported(monkeypatch, tmp_pat
             "account_tgts": {"pc1": "Successful", "pc2": "Successful", "pc3": "Failed"},
         }, [finding]
 
-    def validate(account, domain, ip, hostname):
-        validations.append((account, domain, ip, hostname))
+    def validate(account, domain, ip, cache_dir, before):
+        validations.append((account, domain, ip, cache_dir, before))
+        name = account.removesuffix("$").lower()
+        append_captured_evidence([CheckEvidence(
+            f"pre2k-ldap-{name}",
+            ["env", f"KRB5CCNAME={cache_dir / (name + '.ccache')}", "nxc", "ldap", ip,
+             "--use-kcache", "--kdcHost", ip, "--dns-server", ip],
+            (
+                "LDAP dc 389 DC [-] LDAP failed" if account == "PC2$"
+                else "LDAP dc 389 DC [+] example.test\\pc1 from ccache"
+            ), "",
+        )])
         if account == "PC2$":
-            return False, ["PC2 LDAP failed"], "LDAP failed"
-        return True, ["PC1 TGT obtained", "PC1 LDAP authentication succeeded"], ""
+            return False, "LDAP failed"
+        return True, ""
 
     monkeypatch.setattr(policy, "pre2k_check", check)
     monkeypatch.setattr(policy, "validate_pre2k_ldap", validate)
@@ -404,25 +412,25 @@ def test_pre2k_command_evidence_and_validation_are_reported(monkeypatch, tmp_pat
     policy.run_pre2k_checks("secret")
     text = output.getvalue()
     assert [row[0] for row in validations] == ["PC1$", "PC2$"]
-    assert all(row[3] == "dc.example.test" for row in validations)
+    assert all(row[3] == tmp_path for row in validations)
     assert "LDAP Validation" in text and "Unknown" in text
     assert "$ nxc ldap dc -p '[REDACTED]' -M pre2k" in text
     assert "Successfully obtained TGT for pc1@example.test" in text
     assert "Pre-created computer account: PC1$" not in text
-    assert "PC1 LDAP authentication succeeded" in text and "PC2 LDAP failed" in text
+    assert "$ KRB5CCNAME=" in text and "nxc ldap 192.0.2.1 --use-kcache" in text
+    assert "example.test\\pc1 from ccache" in text and "LDAP failed" in text
+    assert "[Full output:" not in text and "env KRB5CCNAME" not in text
     assert incomplete == [("Pre2K LDAP validation", "PC2$", "LDAP failed")]
     assert recorded == [finding] and "`PC1$` authenticated to LDAP" in finding.evidence[0]
-    saved = (tmp_path / "pre2k-ldap-validation.txt").read_text(encoding="utf-8")
-    assert "PC1 TGT obtained" in saved and "PC2 LDAP failed" in saved
-    assert "secret" not in saved
+    assert "secret" not in text
 
 
-def test_pre2k_without_matching_dc_hostname_preserves_tgt_finding(monkeypatch, tmp_path):
+def test_pre2k_snapshot_error_preserves_tgt_finding(monkeypatch, tmp_path):
     output = io.StringIO()
     monkeypatch.setattr(policy, "console", Console(file=output, width=160))
     monkeypatch.setattr(policy, "print_section", lambda *_args: None)
     monkeypatch.setattr(policy, "progress", lambda *_args: nullcontext())
-    monkeypatch.setattr(policy, "get_evidence_dir", lambda: tmp_path)
+    monkeypatch.setattr(policy, "pre2k_cache_dir", lambda: tmp_path)
     monkeypatch.setattr(policy, "require_session", lambda: {
         "dc_ip": "192.0.2.1", "domain": "example.test", "standard_user": "user",
         "dc_controllers": [{"ip": "192.0.2.2", "hostname": "wrong.example.test"}],
@@ -431,18 +439,21 @@ def test_pre2k_without_matching_dc_hostname_preserves_tgt_finding(monkeypatch, t
     monkeypatch.setattr(policy, "pre2k_check", lambda *_args: ({
         "accounts": ["PC1$"], "tgt_obtained": True, "account_tgts": {"pc1": "Successful"},
     }, [finding]))
+    def failed_snapshot(_path):
+        raise PermissionError("cache access denied")
+
+    monkeypatch.setattr(policy, "snapshot_pre2k_caches", failed_snapshot)
     monkeypatch.setattr(
         policy, "validate_pre2k_ldap",
-        lambda *_args: pytest.fail("Must not authenticate to an unrelated DC"),
+        lambda *_args: pytest.fail("Must not use an unverified cache"),
     )
     recorded, incomplete = [], []
     monkeypatch.setattr(policy, "record_findings", recorded.extend)
     monkeypatch.setattr(policy, "record_incomplete", lambda *args: incomplete.append(args))
     policy.run_pre2k_checks("secret")
     assert recorded == [finding]
-    assert incomplete and "hostname" in incomplete[0][2]
+    assert incomplete and "cache access denied" in incomplete[0][2]
     assert "Unknown" in output.getvalue()
-    assert "hostname" in (tmp_path / "pre2k-ldap-validation.txt").read_text(encoding="utf-8")
 
 
 def test_pre2k_unattributed_tgt_records_incomplete(monkeypatch):
@@ -916,7 +927,7 @@ def test_other_checks_show_known_affected_objects(monkeypatch, tmp_path, kind):
         module.run_adcs_checks("pw")
         expected = "Template1"
     elif kind == "pre2k":
-        monkeypatch.setattr(module, "get_evidence_dir", lambda: tmp_path)
+        monkeypatch.setattr(module, "pre2k_cache_dir", lambda: tmp_path)
         monkeypatch.setattr(module, "record_incomplete", lambda *_args: None)
         monkeypatch.setattr(module, "pre2k_check", lambda *_args: (
             {

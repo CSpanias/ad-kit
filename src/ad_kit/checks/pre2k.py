@@ -10,18 +10,17 @@ Kerberos authentication can be achieved using predictable default machine
 account credentials.
 """
 
+import os
 import re
+import stat
 import struct
+from pathlib import Path
 
-from impacket.krb5 import constants
-from impacket.krb5.asn1 import AS_REP
-from impacket.krb5.kerberosv5 import KerberosError, SessionKeyDecryptionError, getKerberosTGT
-from impacket.krb5.types import KerberosException, Principal
-from impacket.ldap.ldap import LDAPConnection, LDAPSessionError
-from pyasn1.codec.der import decoder
+from impacket.krb5.ccache import CCache
 from pyasn1.error import PyAsn1Error
 
-from ad_kit.core.checks import run_check
+from ad_kit.core.checks import ANSI_ESCAPE_PATTERN, run_check
+from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import format_counted_commentary, load_finding
 
@@ -138,57 +137,87 @@ def pre2k_check(
     return results, findings
 
 
-def validate_pre2k_ldap(
-    account: str, domain: str, dc_ip: str, dc_hostname: str
-) -> tuple[bool, list[str], str]:
-    """Request a TGT and use that same ticket to authenticate to LDAP."""
-    principal = account.removesuffix("$").lower()
-    password = principal[:14]
-    lines = [
-        f"[*] Requesting a TGT for {principal}@{domain} (Impacket, in-process).",
-    ]
-    try:
-        tgt, cipher, _old_key, session_key = getKerberosTGT(
-            Principal(principal, type=constants.PrincipalNameType.NT_PRINCIPAL.value),
-            password, domain, "", "", kdcHost=dc_ip,
-        )
-        response, trailing = decoder.decode(tgt, asn1Spec=AS_REP())
-        ticket_principal = Principal().from_asn1(response, "crealm", "cname")
-        if (
-            trailing
-            or len(ticket_principal.components) != 1
-            or ticket_principal.components[0].casefold().removesuffix("$") != principal.casefold()
-            or ticket_principal.realm.casefold() != domain.casefold()
-        ):
-            reason = "The TGT client principal did not match the selected account and domain."
-            lines.append(f"[-] {reason}")
-            return False, lines, reason
-        lines.append(f"[+] TGT obtained for {principal}@{domain}.")
-        lines.append(f"[*] Authenticating to LDAP on {dc_hostname} using that TGT.")
-        connection = LDAPConnection(f"ldap://{dc_hostname}", dstIp=dc_ip)
-        try:
-            authenticated = connection.kerberosLogin(
-                ticket_principal.components[0], "", domain=domain, kdcHost=dc_ip,
-                TGT={"KDC_REP": tgt, "cipher": cipher, "sessionKey": session_key},
-                useCache=False,
-            )
-        finally:
-            connection.close()
-        if not authenticated:
-            reason = "LDAP authentication was not confirmed."
-            lines.append(f"[-] {reason}")
-            return False, lines, reason
-    except (PyAsn1Error, struct.error) as exc:
-        reason = f"{type(exc).__name__}: Invalid Kerberos or LDAP response."
-        lines.append(f"[-] Validation failed: {reason}")
-        return False, lines, reason
-    except (
-        KerberosError, KerberosException, SessionKeyDecryptionError,
-        LDAPSessionError, OSError,
-    ) as exc:
-        reason = f"{type(exc).__name__}: {exc}".replace(password, "[REDACTED]")
-        lines.append(f"[-] Validation failed: {reason}")
-        return False, lines, reason
+def pre2k_cache_dir() -> Path:
+    nxc_path = os.environ.get("NXC_PATH", str(Path.home() / ".nxc"))
+    return Path(os.path.normpath(nxc_path)) / "modules" / "pre2k" / "ccache"
 
-    lines.append(f"[+] LDAP authentication succeeded for {account} using the TGT.")
-    return True, lines, ""
+
+def _cache_signature(info: os.stat_result) -> tuple[int, int, int, int]:
+    return info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+
+
+def snapshot_pre2k_caches(cache_dir: Path) -> dict[str, tuple[int, int, int, int]]:
+    try:
+        with os.scandir(cache_dir) as entries:
+            return {
+                entry.name: _cache_signature(Path(entry.path).lstat())
+                for entry in entries
+                if entry.name.endswith(".ccache") and entry.is_file(follow_symlinks=False)
+            }
+    except FileNotFoundError:
+        return {}
+
+
+def validate_pre2k_ldap(
+    account: str,
+    domain: str,
+    dc_ip: str,
+    cache_dir: Path,
+    before: dict[str, tuple[int, int, int, int]],
+) -> tuple[bool, str]:
+    """Use only a newly written, matching NetExec TGT cache for an LDAP bind."""
+    principal = account.removesuffix("$").lower()
+    if not account.endswith("$") or not re.fullmatch(r"[a-z0-9_.-]+", principal):
+        return False, "Cannot safely determine the NetExec ticket cache filename."
+    cache_path = cache_dir / f"{principal}.ccache"
+    try:
+        info = cache_path.lstat()
+        if not stat.S_ISREG(info.st_mode):
+            return False, "The NetExec ticket cache is not a regular file."
+        if before.get(cache_path.name) == _cache_signature(info):
+            return False, "The NetExec ticket cache was not updated by this run."
+        cache = CCache.loadFile(str(cache_path))
+        if cache is None:
+            return False, "The NetExec ticket cache could not be loaded."
+        expected = f"{principal}@{domain}".casefold()
+        client = cache.principal.prettyPrint().decode("utf-8").casefold()
+        tgt_name = f"krbtgt/{domain}@{domain}".casefold()
+        credential = cache.getCredential(tgt_name, anySPN=False)
+        if credential is None:
+            return False, "The NetExec cache contains no matching TGT."
+        ticket_client = credential["client"].prettyPrint().decode("utf-8").casefold()
+        ticket_server = credential["server"].prettyPrint().decode("utf-8").casefold()
+        if (
+            client.replace("$@", "@") != expected
+            or ticket_client.replace("$@", "@") != expected
+            or ticket_server != tgt_name
+        ):
+            return False, "The NetExec ticket cache does not match the account and domain."
+    except FileNotFoundError:
+        return False, "NetExec did not save a ticket cache for this account."
+    except (
+        OSError, ValueError, UnicodeError, KeyError, TypeError, IndexError,
+        NotImplementedError, struct.error, PyAsn1Error,
+    ):
+        return False, "The NetExec ticket cache could not be read or verified."
+
+    try:
+        output = run_check(
+            f"pre2k-ldap-{principal}",
+            [
+                "env", f"KRB5CCNAME={cache_path}", "nxc", "ldap", dc_ip,
+                "--use-kcache", "--kdcHost", dc_ip, "--dns-server", dc_ip,
+            ],
+            show_progress=False, kerberos_dc=dc_ip,
+        )
+    except CheckExecutionError as exc:
+        return False, str(exc)
+    auth = re.compile(
+        r"^\s*LDAPS?\s+\S+\s+\d+\s+\S+\s+\[\+\]\s+"
+        + re.escape(domain) + r"\\" + re.escape(principal)
+        + r"\$?\s+from ccache\b",
+        re.IGNORECASE | re.MULTILINE,
+    )
+    if not auth.search(ANSI_ESCAPE_PATTERN.sub("", output)):
+        return False, "NetExec did not confirm LDAP authentication using the matching cache."
+    return True, ""

@@ -1,4 +1,5 @@
 import re
+import shlex
 
 import typer
 from rich.table import Table
@@ -18,12 +19,16 @@ from ad_kit.checks.passwords import (
     resultant_password_policy,
     resultant_policy_name,
 )
-from ad_kit.checks.pre2k import pre2k_check, validate_pre2k_ldap
+from ad_kit.checks.pre2k import (
+    pre2k_cache_dir,
+    pre2k_check,
+    snapshot_pre2k_caches,
+    validate_pre2k_ldap,
+)
 from ad_kit.core.checks import (
     capture_check_evidence,
     cleanup_test_artifact,
     format_check_evidence,
-    get_evidence_dir,
     warn_test_artifact_remaining,
 )
 from ad_kit.core.console import account_group_table, console, object_text, print_section
@@ -688,6 +693,7 @@ def run_maq_checks(
             "Retry machine account cleanup using Domain Administrator credentials?",
             default=False,
         )
+        console.print()
 
     if retry_cleanup:
 
@@ -940,6 +946,14 @@ def run_pre2k_checks(
 
         std_pass = (authenticate_standard_user())
 
+    cache_dir = pre2k_cache_dir()
+    try:
+        cache_snapshot = snapshot_pre2k_caches(cache_dir)
+        snapshot_error = ""
+    except OSError as exc:
+        cache_snapshot = None
+        snapshot_error = f"Could not inspect existing NetExec ticket caches: {exc}"
+
     with (
         capture_check_evidence() as evidence,
         progress("Checking pre-created computer accounts..."),
@@ -954,7 +968,7 @@ def run_pre2k_checks(
         )
 
     validations = {}
-    validation_lines = []
+    validation_evidence = []
     successful_accounts = [
         account for account in pre2k_results["accounts"]
         if pre2k_results["account_tgts"].get(account.casefold().removesuffix("$")) == "Successful"
@@ -965,27 +979,22 @@ def run_pre2k_checks(
             "NetExec reported a TGT but did not identify a matching account.",
         )
     if successful_accounts:
-        dc_hostname = next(
-            (
-                dc["hostname"] for dc in session_data.get("dc_controllers", [])
-                if dc.get("ip") == session_data["dc_ip"] and dc.get("hostname")
-            ),
-            None,
-        )
         domain = session_data.get("domain")
-        with progress("Validating Pre-Windows 2000 tickets against LDAP..."):
+        with (
+            capture_check_evidence() as validation_evidence,
+            progress("Validating Pre-Windows 2000 tickets against LDAP..."),
+        ):
             for account in successful_accounts:
-                if validation_lines:
-                    validation_lines.append("")
-                if not dc_hostname or not domain or not account.endswith("$") or len(account) < 2:
-                    reason = "A matching DC hostname, domain, or computer account name is missing."
-                    validation_lines.append(f"[-] {account}: {reason}")
+                if cache_snapshot is None:
+                    reason = snapshot_error
+                    success = False
+                elif not domain:
+                    reason = "The domain name is missing."
                     success = False
                 else:
-                    success, lines, reason = validate_pre2k_ldap(
-                        account, domain, session_data["dc_ip"], dc_hostname
+                    success, reason = validate_pre2k_ldap(
+                        account, domain, session_data["dc_ip"], cache_dir, cache_snapshot
                     )
-                    validation_lines.extend(lines)
                 validations[account.casefold()] = success
                 if success:
                     for finding in findings:
@@ -994,9 +1003,6 @@ def run_pre2k_checks(
                         )
                 else:
                     record_incomplete("Pre2K LDAP validation", account, reason)
-        (get_evidence_dir() / "pre2k-ldap-validation.txt").write_text(
-            "\n".join(validation_lines) + "\n", encoding="utf-8"
-        )
 
     table = Table()
 
@@ -1033,10 +1039,17 @@ def run_pre2k_checks(
                     or re.search(r"\bfound\s+\d+\s+pre-created computer accounts?\b", line, re.I)
                 ]
                 excerpt = "\n".join(lines)
-                excerpt += "\n[Full output: ad-kit/evidence/pre2k.txt]"
                 console.print(format_check_evidence(record, excerpt), markup=False, highlight=False)
-        if validation_lines:
+        for record in validation_evidence:
             console.print()
-            console.print("\n".join(validation_lines), markup=False, highlight=False)
+            formatted = format_check_evidence(record)
+            cache_path = record.command[1].partition("=")[2]
+            command = (
+                f"$ KRB5CCNAME={shlex.quote(cache_path)} "
+                f"{shlex.join(record.command[2:])}"
+            )
+            console.print(
+                command + formatted[formatted.index("\n"):], markup=False, highlight=False
+            )
 
     record_findings(findings)
