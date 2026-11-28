@@ -18,14 +18,18 @@ ad-kit runs Impacket
 
 ```bash
 GetUserSPNs.py <domain>/<username>:<password> -dc-ip <dc_ip> -request -outputfile <outfile>
+nxc ldap <dc_ip> -u <username> -p <password> --groups <privileged_group>
 ```
 
 ## What it checks
 
 ad-kit enumerates SPN-associated accounts and requests their Kerberos service
 tickets, then cross-references the results against the monitored privileged
-groups.
-The results table lists the affected account names alongside the count.
+groups, querying each monitored group. The results table lists each affected
+account once and adds a Privileged Group column when direct membership is
+identified. If membership cannot be assessed, it is shown as unknown and
+recorded as incomplete; the account finding is retained. Nested membership is
+not established by these queries.
 
 ## How it works
 

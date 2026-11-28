@@ -961,6 +961,9 @@ def test_ldap_anonymous_evidence_limits_results_and_marks_missing_rows(monkeypat
     monkeypatch.setattr(unauthenticated, "console", Console(file=output, width=200))
     records = [
         unauthenticated.CheckEvidence(
+            "ldap-DC", ["nxc", "ldap", "DC"], "standalone login", "",
+        ),
+        unauthenticated.CheckEvidence(
             "ldap-anonymous-users-DC",
             ["nxc", "ldap", "DC", "-u", "", "-p", "", "--users"],
             "LDAP dc 389 DC Enumerated 12 domain users: EXAMPLE\n"
@@ -975,6 +978,8 @@ def test_ldap_anonymous_evidence_limits_results_and_marks_missing_rows(monkeypat
     unauthenticated._show_anonymous_evidence(records, result, "ldap")
     text = output.getvalue()
     assert "Anonymous evidence - DC\n\n$ nxc ldap" in text
+    assert "$ nxc ldap DC -u '' -p '' --users" in text
+    assert "standalone login" not in text
     assert "Enumerated 12 domain users" in text
     assert "user09" in text and "user10" not in text
     monkeypatch.setattr(console_helpers, "console", unauthenticated.console)
@@ -984,7 +989,7 @@ def test_ldap_anonymous_evidence_limits_results_and_marks_missing_rows(monkeypat
 
     output.seek(0)
     output.truncate()
-    records[0] = unauthenticated.CheckEvidence(
+    records[1] = unauthenticated.CheckEvidence(
         "ldap-anonymous-users-DC", ["nxc", "ldap", "DC", "--users"],
         "LDAP dc 389 DC [-] search denied", "",
     )
@@ -1018,7 +1023,8 @@ def test_anonymous_evidence_separates_records_without_trailing_blank(monkeypatch
     )
     console_helpers.print_section("Next")
     text = output.getvalue()
-    assert "first output\n\n$ second\n" in text
+    assert "first output" not in text
+    assert "$ second\n" in text
     assert "No user or share rows confirmed in this output.\n\n[Next]\n" in text
 
 

@@ -20,6 +20,7 @@ in unauthenticated mode against the filtered domain user list:
 
 ```bash
 GetNPUsers.py <domain>/ -dc-ip <dc_ip> -format hashcat -outputfile <outfile> -usersfile <users_file> -no-pass
+nxc ldap <dc_ip> -u <username> -p <password> --groups <privileged_group>
 ```
 
 ## What it checks
@@ -29,8 +30,11 @@ ad-kit scans the domain user list for accounts with the
 flag set (the "Do not require Kerberos pre-authentication" option), extracts the
 affected account names from the returned AS-REP hashes, and, when a Standard
 User password is available, checks whether any affected account belongs to a
-monitored privileged group.
-The results table lists the affected and confirmed privileged accounts.
+monitored privileged group. The group query is run for each monitored group.
+The results table lists each affected account once and adds a Privileged Group
+column when direct membership is identified. If membership cannot be assessed,
+it is shown as unknown and recorded as incomplete. Nested membership is not
+established by these queries.
 
 ## How it works
 

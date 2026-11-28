@@ -11,7 +11,10 @@ other privilege-related security assessments.
 """
 
 
-from ad_kit.core.checks import run_check
+import re
+
+from ad_kit.core.checks import ANSI_ESCAPE_PATTERN, run_check
+from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.util import require_session, track_items
 
 PRIVILEGED_GROUPS = (
@@ -43,7 +46,7 @@ def get_privileged_group_members(
     session_data = require_session()
 
     excluded_users = {
-        user.lower()
+        user.casefold()
         for user in session_data.get("excluded_users", [])
     }
 
@@ -67,26 +70,40 @@ def get_privileged_group_members(
         )
 
         members = []
-
-        for line in output.splitlines():
-
-            if (
-                "[+]" in line
-                or "[*]" in line
-                or not line.strip()
-            ):
+        authenticated = False
+        empty_group = False
+        member_rows = 0
+        evidence_name = f"privileged-{group.lower().replace(' ', '-')}"
+        for line in ANSI_ESCAPE_PATTERN.sub("", output).splitlines():
+            match = re.match(r"^\s*LDAPS?\s+\S+\s+\d+\s+\S+\s+(.*)$", line, re.I)
+            if not match:
                 continue
-
-            member = line.split()[-1].strip()
-
-            if not member:
+            member = match.group(1).strip()
+            if member.startswith("[+]"):
+                authenticated = True
                 continue
-
-            if member.lower() in excluded_users:
+            if member.startswith("[-]"):
+                if member.casefold() in {
+                    f"[-] group '{group}' not found".casefold(),
+                    f"[-] group '{group}' has no members".casefold(),
+                }:
+                    empty_group = True
+                    continue
+                raise CheckExecutionError(
+                    evidence_name, [], stderr=f"NetExec reported an error; see {evidence_name}.txt."
+                )
+            if not member or member.startswith(("[*]", "[!]")):
                 continue
-
+            member_rows += 1
+            if member.casefold() in excluded_users:
+                continue
             members.append(member)
 
+        if not authenticated or (not member_rows and not empty_group):
+            raise CheckExecutionError(
+                evidence_name, [],
+                stderr=f"Could not determine group membership; see {evidence_name}.txt.",
+            )
         groups[group] = sorted(set(members))
 
     return groups
@@ -107,10 +124,24 @@ def get_privileged_users(
         password,
     )
 
-    users = set()
+    users: set[str] = set()
 
     for members in groups.values():
 
-        users.update(user.lower() for user in members)
+        users.update(user.casefold() for user in members)
 
     return users
+
+
+def get_account_privileged_groups(
+    dc_ip: str, username: str, password: str, accounts: list[str]
+) -> dict[str, list[str]]:
+    """Return monitored direct memberships, keyed by case-folded account name."""
+    wanted = {account.casefold() for account in accounts}
+    memberships: dict[str, list[str]] = {}
+    for group, members in get_privileged_group_members(dc_ip, username, password).items():
+        for member in members:
+            key = member.casefold()
+            if key in wanted:
+                memberships.setdefault(key, []).append(group)
+    return memberships

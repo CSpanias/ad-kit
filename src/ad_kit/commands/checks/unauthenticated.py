@@ -21,7 +21,14 @@ from ad_kit.core.checks import (
     load_dc_hostnames,
     load_domain_computers,
 )
-from ad_kit.core.console import console, object_text, print_info, print_section, print_warning
+from ad_kit.core.console import (
+    account_group_table,
+    console,
+    object_text,
+    print_info,
+    print_section,
+    print_warning,
+)
 from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import EvidenceTable, Finding
 from ad_kit.core.findings import format_counted_commentary, load_finding
@@ -121,46 +128,37 @@ def _show_anonymous_evidence(
             console.print(format_check_evidence(record, excerpt), markup=False, highlight=False)
         return True
 
-    sample: tuple[str, tuple[str, ...], list[CheckEvidence]] | None = None
+    sample: tuple[str, CheckEvidence] | None = None
     best_rank = 3
     for result in results:
         host = result["dc_hostname"]
         if result["anonymous_bind"] != "[red]✗ Permitted[/red]":
             continue
-        names = (f"ldap-{host}", f"ldap-anonymous-users-{host}")
-        selected = [record for record in records if record.name in names]
-        if not selected:
+        ldap_record = next(
+            (item for item in records if item.name == f"ldap-anonymous-users-{host}"),
+            None,
+        )
+        if ldap_record is None:
             continue
-        enumerations = [record for record in selected if record.name in names[1:]]
-        rank = 2
-        if any(_enumeration_excerpt(record.stdout, "users")[1] for record in enumerations):
-            rank = 0
+        rank = 0 if _enumeration_excerpt(ldap_record.stdout, "users")[1] else 2
         if rank < best_rank:
-            sample = (host, names, selected)
+            sample = (host, ldap_record)
             best_rank = rank
             if rank == 0:
                 break
 
     if sample is None:
         return False
-    host, names, selected = sample
+    host, record = sample
     console.print(f"\nAnonymous evidence - {host}\n", markup=False)
-    for index, record in enumerate(selected):
-        if index:
-            console.print()
-        if record.name == names[0]:
-            excerpt = record.stdout
-        else:
-            excerpt, found = _enumeration_excerpt(record.stdout, "users")
-            if not found:
-                lines = record.stdout.splitlines()
-                excerpt = "\n".join(lines[:10])
-                if len(lines) > 10:
-                    excerpt += "\n... Additional output omitted."
-                excerpt += "\nNo user or share rows confirmed in this output."
-        console.print(
-            format_check_evidence(record, excerpt), markup=False, highlight=False
-        )
+    excerpt, found = _enumeration_excerpt(record.stdout, "users")
+    if not found:
+        lines = record.stdout.splitlines()
+        excerpt = "\n".join(lines[:10])
+        if len(lines) > 10:
+            excerpt += "\n... Additional output omitted."
+        excerpt += "\nNo user or share rows confirmed in this output."
+    console.print(format_check_evidence(record, excerpt), markup=False, highlight=False)
     return True
 
 
@@ -839,8 +837,7 @@ def run_asreproast_checks(
         )
 
     record_findings(findings)
-    privileged_accounts: list[str] = []
-    privileged_assessed = True
+    groups: dict[str, list[str]] | None = {}
     if asrep_results["accounts"]:
         try:
             if std_pass is None:
@@ -850,7 +847,7 @@ def run_asreproast_checks(
                 "Checking AS-REP roastable accounts for privileged group "
                 "membership..."
             ):
-                privileged_accounts, privileged_findings = (
+                groups, privileged_findings = (
                     asreproast_privileged_check(
                         session_data["dc_ip"],
                         asrep_results["accounts"],
@@ -861,25 +858,8 @@ def run_asreproast_checks(
             record_findings(privileged_findings)
         except CheckExecutionError as exc:
             record_incomplete("AS-REP privileged membership", "", str(exc))
-            privileged_assessed = False
+            groups = None
 
-    table = Table()
-
-    table.add_column("Setting", style="cyan")
-    table.add_column("Value", style="green")
-    table.add_column("Object", style="yellow")
-
-    table.add_row(
-        "AS-REP Roastable Accounts",
-        str(asrep_results["account_count"]),
-        object_text(asrep_results["accounts"]),
-    )
-    table.add_row(
-        "Privileged AS-REP Roastable Accounts",
-        str(len(privileged_accounts)) if privileged_assessed else "Unknown",
-        object_text(privileged_accounts) if privileged_assessed else "Unknown",
-    )
-
-    console.print(table)
+    console.print(account_group_table(asrep_results["accounts"], groups))
 
     return std_pass

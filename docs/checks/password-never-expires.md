@@ -18,6 +18,7 @@ flag:
 
 ```bash
 nxc ldap <dc_ip> -u <username> -p <password> --password-never-expires
+nxc ldap <dc_ip> -u <username> -p <password> --groups <privileged_group>
 ```
 
 ## What it checks
@@ -27,6 +28,10 @@ user accounts. Machine accounts (names ending in `$`) are excluded because their
 secrets rotate independently of this flag. NetExec's current table filters out
 disabled accounts. Unrecognized or failed output is reported as incomplete rather
 than as an empty result.
+When accounts are found, ad-kit queries each monitored privileged group and
+shows direct memberships in an additional column and the finding evidence.
+Nested membership is not established by these queries. Failed membership
+lookups are reported as incomplete without discarding the account finding.
 
 ## How it works
 

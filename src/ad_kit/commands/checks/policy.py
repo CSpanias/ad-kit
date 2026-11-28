@@ -23,13 +23,15 @@ from ad_kit.core.checks import (
     format_check_evidence,
     warn_test_artifact_remaining,
 )
-from ad_kit.core.console import console, object_text, print_section
+from ad_kit.core.console import account_group_table, console, object_text, print_section
 from ad_kit.core.exceptions import ADKitError, CheckExecutionError
+from ad_kit.core.finding import Finding
 from ad_kit.core.findings import (
     format_counted_commentary,
     load_finding,
     load_finding_definition,
 )
+from ad_kit.core.privileged import get_account_privileged_groups
 from ad_kit.core.util import (
     count_form,
     count_text,
@@ -521,6 +523,34 @@ def run_password_policy_checks(
     finding.references = list(dict.fromkeys(references))
     record_findings([finding])
 
+def _password_account_groups(
+    check: str,
+    dc_ip: str,
+    username: str,
+    password: str,
+    accounts: list[str],
+    findings: list[Finding],
+) -> dict[str, list[str]] | None:
+    if not accounts:
+        return {}
+    try:
+        with progress("Checking affected accounts for privileged group membership..."):
+            groups = get_account_privileged_groups(
+                dc_ip, username, password, accounts
+            )
+    except CheckExecutionError as exc:
+        record_incomplete(f"{check} privileged membership", "", str(exc))
+        return None
+    for finding in findings:
+        for account in accounts:
+            memberships = groups.get(account.casefold(), [])
+            if memberships:
+                finding.evidence.append(
+                    f"`{account}` is a direct member of: {', '.join(memberships)}."
+                )
+    return groups
+
+
 def run_password_not_required_checks(
     std_pass: str | None = None,
 ) -> None:
@@ -545,17 +575,14 @@ def run_password_not_required_checks(
             std_pass,
         )
 
-    table = Table()
-    table.add_column("Enabled Account", style="cyan")
-    table.add_column("Status", style="yellow")
-
-    if results["accounts"]:
-        for account in results["accounts"]:
-            table.add_row(account, "PASSWD_NOTREQD set")
-    else:
-        table.add_row("None found", "[green]✓ OK[/green]")
-
-    console.print(table)
+    groups = _password_account_groups(
+        "Password not required", session_data["dc_ip"], session_data["standard_user"],
+        std_pass, results["accounts"], findings,
+    )
+    console.print(account_group_table(
+        results["accounts"], groups,
+        account_heading="Enabled Account", status="PASSWD_NOTREQD set",
+    ))
 
     record_findings(findings)
 
@@ -580,17 +607,14 @@ def run_password_never_expires_checks(
             std_pass,
         )
 
-    table = Table()
-    table.add_column("Enabled Account", style="cyan")
-    table.add_column("Status", style="yellow")
-
-    if results["accounts"]:
-        for account in results["accounts"]:
-            table.add_row(account, "Password never expires")
-    else:
-        table.add_row("None found", "[green]✓ OK[/green]")
-
-    console.print(table)
+    groups = _password_account_groups(
+        "Password never expires", session_data["dc_ip"], session_data["standard_user"],
+        std_pass, results["accounts"], findings,
+    )
+    console.print(account_group_table(
+        results["accounts"], groups,
+        account_heading="Enabled Account", status="Password never expires",
+    ))
 
     record_findings(findings)
 

@@ -2,6 +2,7 @@ import io
 import struct
 from contextlib import nullcontext
 
+import pytest
 from impacket.ldap.ldaptypes import (
     ACCESS_ALLOWED_ACE,
     ACCESS_MASK,
@@ -268,8 +269,31 @@ def test_scriptpath_acl_failure_is_recorded_as_incomplete(monkeypatch, tmp_path)
         ("scriptPath", r"\\dc\NETLOGON\test.ps1", "ACL query failed (NTSTATUS 0xC000000D).")
     ]
     assert "ACL query failed" in output.getvalue()
+    assert "Notes" in output.getvalue()
     assert "WRITE_DATA" not in output.getvalue()
     assert "WRITE_DATA" in (tmp_path / "scriptpath-permissions.txt").read_text()
+
+
+@pytest.mark.parametrize("with_result", [False, True])
+def test_scriptpath_omits_empty_notes_column(monkeypatch, tmp_path, with_result):
+    output = io.StringIO()
+    monkeypatch.setattr(hosts, "console", Console(file=output, width=160))
+    monkeypatch.setattr(hosts, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user", "domain": "example.test",
+    })
+    monkeypatch.setattr(hosts, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(hosts, "get_evidence_dir", lambda: tmp_path)
+    row = {
+        "username": "alice", "script_path": "test.ps1", "resolved_path": "test.ps1",
+        "acl_entries": [], "standard_user_writable": "No", "error": "",
+    }
+    monkeypatch.setattr(
+        hosts, "scriptpath_check", lambda *_args: ([row] if with_result else [], [])
+    )
+    monkeypatch.setattr(hosts, "record_findings", lambda *_args: None)
+    hosts.run_scriptpath_checks("password")
+    assert "Notes" not in output.getvalue()
+    assert ("alice" if with_result else "No scriptPath values found") in output.getvalue()
 
 
 def test_security_descriptor_without_dacl_is_reported_as_unrestricted():

@@ -109,7 +109,9 @@ def run_scriptpath_checks(
     table.add_column("ScriptPath", style="green")
     table.add_column("Resolved Path", style="yellow")
     table.add_column("Standard User Write", style="red")
-    table.add_column("Notes", style="white")
+    show_notes = any(result["error"] for result in results)
+    if show_notes:
+        table.add_column("Notes", style="white")
 
     if results:
         for result in results:
@@ -121,20 +123,21 @@ def run_scriptpath_checks(
                 if write_access == "No"
                 else "yellow"
             )
-            table.add_row(
+            row = [
                 result["username"],
                 result["script_path"],
                 result["resolved_path"],
                 f"[{status_style}]{write_access}[/{status_style}]",
-                result["error"] or "",
-            )
+            ]
+            if show_notes:
+                row.append(result["error"] or "")
+            table.add_row(*row)
     else:
         table.add_row(
             "No scriptPath values found",
             "",
             "",
             "N/A",
-            "",
         )
 
     console.print(table)

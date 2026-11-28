@@ -4,9 +4,9 @@ from contextlib import contextmanager
 import pytest
 from rich.console import Console
 
-from ad_kit.checks import ldap, nopac, smb
+from ad_kit.checks import kerberoast, ldap, nopac, smb
 from ad_kit.commands import check
-from ad_kit.commands.checks import privileged, unauthenticated
+from ad_kit.commands.checks import policy, privileged, unauthenticated
 from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
 from ad_kit.reporting import results
@@ -303,6 +303,91 @@ def test_asrep_finding_survives_privileged_lookup_failure(monkeypatch, tmp_path)
     assert "ASREP-001" in report
     assert "AS-REP privileged membership" in report
     results.reset()
+
+
+def test_kerberoast_finding_survives_privileged_lookup_failure(monkeypatch, tmp_path):
+    results.reset()
+    header = f"{'ServicePrincipalName':<32}  {'Name':<16}  {'MemberOf':<12}  PasswordLastSet"
+    row = f"{'HTTP/web.example.test':<32}  {'websvc':<16}  {'':<12}  <never>"
+    monkeypatch.setattr(kerberoast, "run_check", lambda *_args, **_kwargs: header + "\n" + row)
+    monkeypatch.setattr(kerberoast, "get_artefacts_dir", lambda: tmp_path)
+
+    def failed_lookup(*_args):
+        raise failure("privileged-lookup")
+
+    monkeypatch.setattr(kerberoast, "get_account_privileged_groups", failed_lookup)
+    result, findings = kerberoast.kerberoast_check("dc", "example.test", "user", "pw")
+    assert result["accounts"] == ["websvc"] and result["privileged_groups"] is None
+    assert [finding.id for finding in findings] == ["KERB-001"]
+    assert any("Kerberoast privileged membership" in entry for entry in results._incomplete)
+    results.reset()
+
+
+@pytest.mark.parametrize(("check_name", "run_name", "finding_id"), [
+    ("password_not_required_check", "run_password_not_required_checks", "PASS-002"),
+    ("password_never_expires_check", "run_password_never_expires_checks", "PASS-003"),
+])
+@pytest.mark.parametrize("lookup_result", [
+    {}, {"admin": ["Domain Admins", "DNSAdmins"]}, None,
+])
+def test_password_checks_preserve_findings_and_show_memberships(
+    monkeypatch, check_name, run_name, finding_id, lookup_result
+):
+    results.reset()
+    output = io.StringIO()
+    monkeypatch.setattr(policy, "console", Console(file=output, width=160))
+    monkeypatch.setattr(policy, "print_section", lambda *_args: None)
+    monkeypatch.setattr(policy, "progress", no_progress)
+    monkeypatch.setattr(policy, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user",
+    })
+    finding = Finding(finding_id, "Password", "Comment", "Fix")
+    monkeypatch.setattr(policy, check_name, lambda *_args: (
+        {"accounts": ["ordinary", "Admin"], "account_count": 2}, [finding]
+    ))
+
+    def lookup(*_args):
+        if lookup_result is None:
+            raise failure("privileged-lookup")
+        return lookup_result
+
+    monkeypatch.setattr(policy, "get_account_privileged_groups", lookup)
+    getattr(policy, run_name)("secret")
+    text = output.getvalue()
+    assert "ordinary" in text and "Admin" in text
+    assert ("Privileged Group" in text) == (lookup_result is None or bool(lookup_result))
+    assert results._findings == [finding]
+    if lookup_result:
+        assert "Domain Admins" in text and "DNSAdmins" in text
+        assert any("Domain Admins, DNSAdmins" in entry for entry in finding.evidence)
+    if lookup_result is None:
+        assert text.count("Unknown") == 2
+        assert any("privileged membership" in entry for entry in results._incomplete)
+    else:
+        assert not results._incomplete
+    results.reset()
+
+
+@pytest.mark.parametrize(("check_name", "run_name"), [
+    ("password_not_required_check", "run_password_not_required_checks"),
+    ("password_never_expires_check", "run_password_never_expires_checks"),
+])
+def test_password_checks_skip_membership_lookup_without_accounts(monkeypatch, check_name, run_name):
+    output = io.StringIO()
+    monkeypatch.setattr(policy, "console", Console(file=output, width=160))
+    monkeypatch.setattr(policy, "print_section", lambda *_args: None)
+    monkeypatch.setattr(policy, "progress", no_progress)
+    monkeypatch.setattr(policy, "require_session", lambda: {"dc_ip": "dc", "standard_user": "user"})
+    monkeypatch.setattr(policy, check_name, lambda *_args: ({"accounts": []}, []))
+    monkeypatch.setattr(policy, "record_findings", lambda *_args: None)
+
+    def unexpected_lookup(*_args):
+        raise AssertionError("Group queries must be skipped when there are no affected accounts")
+
+    monkeypatch.setattr(policy, "get_account_privileged_groups", unexpected_lookup)
+    getattr(policy, run_name)("secret")
+    assert "None found" in output.getvalue()
+    assert "Privileged Group" not in output.getvalue()
 
 
 def test_privileged_finding_survives_later_subcheck_failure(monkeypatch, tmp_path):

@@ -16,6 +16,7 @@ ad-kit runs NetExec directly:
 
 ```bash
 nxc ldap <dc_ip> -u <username> -p <password> --password-not-required
+nxc ldap <dc_ip> -u <username> -p <password> --groups <privileged_group>
 ```
 
 ## What it checks
@@ -23,6 +24,10 @@ nxc ldap <dc_ip> -u <username> -p <password> --password-not-required
 ad-kit lists accounts with the `PASSWD_NOTREQD` flag set and reports enabled
 user accounts. Machine accounts (names ending in `$`) are excluded because this
 flag is expected on them and does not indicate a weak or blank password.
+When accounts are found, ad-kit queries each monitored privileged group and
+shows direct memberships in an additional column and the finding evidence.
+Nested membership is not established by these queries. Failed membership
+lookups are reported as incomplete without discarding the account finding.
 
 ## How it works
 

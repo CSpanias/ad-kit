@@ -11,7 +11,7 @@ susceptible to AS-REP roasting attacks.
 from ad_kit.core.checks import run_check
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import format_counted_commentary, load_finding
-from ad_kit.core.privileged import get_privileged_users
+from ad_kit.core.privileged import get_account_privileged_groups
 from ad_kit.core.util import count_form, count_text, get_artefacts_dir
 
 
@@ -146,22 +146,18 @@ def asreproast_privileged_check(
     accounts: list[str],
     username: str,
     password: str,
-) -> tuple[list[str], list[Finding]]:
+) -> tuple[dict[str, list[str]], list[Finding]]:
     """
     Identify AS-REP roastable accounts that belong to monitored privileged
     groups.
     """
 
-    privileged_users = get_privileged_users(
-        dc_ip,
-        username,
-        password,
-    )
+    groups = get_account_privileged_groups(dc_ip, username, password, accounts)
 
     privileged_accounts_by_name = {
-        account.lower(): account
+        account.casefold(): account
         for account in accounts
-        if account.lower() in privileged_users
+        if account.casefold() in groups
     }
     privileged_accounts = sorted(
         privileged_accounts_by_name.values(),
@@ -177,7 +173,7 @@ def asreproast_privileged_check(
             finding.evidence.append(
                 f"Account '{account}' was configured without Kerberos "
                 "pre-authentication and is a member of a monitored privileged "
-                "group."
+                f"group: {', '.join(groups[account.casefold()])}."
             )
 
         finding.evidence.append(
@@ -187,4 +183,4 @@ def asreproast_privileged_check(
         )
         findings.append(finding)
 
-    return privileged_accounts, findings
+    return groups, findings

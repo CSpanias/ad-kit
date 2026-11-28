@@ -24,7 +24,7 @@ from ad_kit.core.checks import (
     format_check_evidence,
     load_dc_hostnames,
 )
-from ad_kit.core.console import console, object_text, print_info, print_section
+from ad_kit.core.console import account_group_table, console, object_text, print_info, print_section
 from ad_kit.core.exceptions import ADKitError
 from ad_kit.core.finding import EvidenceTable
 from ad_kit.core.findings import (
@@ -305,19 +305,9 @@ def run_kerberoast_checks(
             )
         )
 
-    table = Table()
-
-    table.add_column("Setting", style="cyan")
-    table.add_column("Value", style="green")
-    table.add_column("Object", style="yellow")
-
-    table.add_row(
-        "Kerberoastable Accounts",
-        str(kerberoast_results["account_count"]),
-        object_text(kerberoast_results["accounts"]),
-    )
-
-    console.print(table)
+    console.print(account_group_table(
+        kerberoast_results["accounts"], kerberoast_results["privileged_groups"]
+    ))
 
     record_findings(findings)
 

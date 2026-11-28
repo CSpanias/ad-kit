@@ -14,8 +14,9 @@ from ad_kit.core.checks import run_check
 from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
 from ad_kit.core.findings import format_counted_commentary, load_finding
-from ad_kit.core.privileged import get_privileged_users
+from ad_kit.core.privileged import get_account_privileged_groups
 from ad_kit.core.util import count_form, count_text, get_artefacts_dir
+from ad_kit.reporting.results import record_incomplete
 
 
 def kerberoast_check(
@@ -54,6 +55,7 @@ def kerberoast_check(
     results = {
         "account_count": 0,
         "accounts": [],
+        "privileged_groups": {},
     }
 
     findings: list[Finding] = []
@@ -95,10 +97,10 @@ def kerberoast_check(
             "kerberoast", [], stderr="Could not parse the GetUserSPNs account table."
         )
 
-    accounts = set()
+    account_set: set[str] = set()
     for line in lines[header_index + 1:]:
         if not line.strip():
-            if accounts:
+            if account_set:
                 break
             continue
         if line.startswith("-"):
@@ -107,14 +109,14 @@ def kerberoast_check(
             break
         account = line[header.start("name"):header.start("member")].strip()
         if account:
-            accounts.add(account)
+            account_set.add(account)
 
-    if not accounts:
+    if not account_set:
         raise CheckExecutionError(
             "kerberoast", [], stderr="The GetUserSPNs account table contained no readable accounts."
         )
 
-    accounts = sorted(accounts)
+    accounts = sorted(account_set)
 
     results["accounts"] = accounts
     results["account_count"] = len(accounts)
@@ -145,16 +147,18 @@ def kerberoast_check(
         findings.append(finding)
 
         # KERB-002
-        privileged_users = get_privileged_users(
-            dc_ip,
-            username,
-            password,
-        )
+        try:
+            groups = get_account_privileged_groups(dc_ip, username, password, accounts)
+        except CheckExecutionError as exc:
+            record_incomplete("Kerberoast privileged membership", "", str(exc))
+            results["privileged_groups"] = None
+            return results, findings
+        results["privileged_groups"] = groups
 
         privileged_accounts = [
             account
             for account in accounts
-            if account.lower() in privileged_users
+            if account.casefold() in groups
         ]
 
         if privileged_accounts:
@@ -176,7 +180,7 @@ def kerberoast_check(
 
                 finding.evidence.append(
                     "The account was identified as holding elevated privileges "
-                    "within AD."
+                    f"within AD: {', '.join(groups[account.casefold()])}."
                 )
 
             finding.evidence.append(

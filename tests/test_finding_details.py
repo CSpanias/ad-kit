@@ -14,6 +14,7 @@ from ad_kit.checks import (
 )
 from ad_kit.checks.ldap_info import is_sensitive_value
 from ad_kit.commands.checks import policy, privileged, unauthenticated
+from ad_kit.core import privileged as privileged_helpers
 from ad_kit.core.checks import CheckEvidence
 from ad_kit.core.exceptions import CheckExecutionError
 from ad_kit.core.finding import Finding
@@ -73,16 +74,21 @@ def test_kerberoast_parses_names_not_spns_and_ignores_other_output(monkeypatch, 
     ])
     monkeypatch.setattr(kerberoast, "run_check", lambda *_args, **_kwargs: output)
     monkeypatch.setattr(kerberoast, "get_artefacts_dir", lambda: tmp_path)
-    monkeypatch.setattr(kerberoast, "get_privileged_users", lambda *_args: {"websvc"})
+    monkeypatch.setattr(
+        kerberoast, "get_account_privileged_groups",
+        lambda *_args: {"websvc": ["Domain Admins", "DNSAdmins"]},
+    )
 
     result, findings = kerberoast.kerberoast_check("dc", "example.test", "user", "pw")
     assert result["accounts"] == ["SQL Service", "websvc"]
     assert result["account_count"] == 2
+    assert result["privileged_groups"] == {"websvc": ["Domain Admins", "DNSAdmins"]}
     assert [finding.id for finding in findings] == ["KERB-001", "KERB-002"]
     assert "identified\ntwo accounts associated" in findings[0].commentary
     assert "identified one\nprivileged account associated" in findings[1].commentary
     assert "two Kerberoastable accounts were identified." in findings[0].evidence[-1]
     assert "one privileged Kerberoastable account was identified." in findings[1].evidence[-1]
+    assert any("Domain Admins, DNSAdmins" in entry for entry in findings[1].evidence)
     for finding in findings:
         assert "Service Principal Names (SPNs)" in finding.commentary
         assert all("Service Principal Name" not in entry for entry in finding.evidence)
@@ -115,7 +121,10 @@ def test_asreproast_finding_counts_use_correct_grammar(monkeypatch, tmp_path, co
     )
     monkeypatch.setattr(asreproast, "get_artefacts_dir", lambda: tmp_path)
     monkeypatch.setattr(asreproast, "run_check", lambda *_args, **_kwargs: "")
-    monkeypatch.setattr(asreproast, "get_privileged_users", lambda *_args: set(accounts))
+    monkeypatch.setattr(
+        asreproast, "get_account_privileged_groups",
+        lambda *_args: {account: ["Domain Admins"] for account in accounts},
+    )
     result, findings = asreproast.asreproast_check("dc", "example.test")
     _, privileged_findings = asreproast.asreproast_privileged_check(
         "dc", result["accounts"], "user", "pw"
@@ -346,7 +355,7 @@ def test_affected_accounts_are_shown_in_correct_rows(monkeypatch, kind):
         assert "poppy -> freya" in output.getvalue()
     elif kind == "kerberoast":
         monkeypatch.setattr(module, "kerberoast_check", lambda *_args: (
-            {"account_count": 1, "accounts": ["svc"]}, []
+            {"account_count": 1, "accounts": ["svc"], "privileged_groups": {}}, []
         ))
         module.run_kerberoast_checks("pw")
         assert "svc" in output.getvalue()
@@ -355,11 +364,135 @@ def test_affected_accounts_are_shown_in_correct_rows(monkeypatch, kind):
         monkeypatch.setattr(module, "asreproast_check", lambda *_args: (
             {"account_count": 2, "accounts": ["alice", "admin"]}, []
         ))
-        monkeypatch.setattr(module, "asreproast_privileged_check", lambda *_args: (["admin"], []))
+        monkeypatch.setattr(
+            module, "asreproast_privileged_check",
+            lambda *_args: ({"admin": ["Domain Admins", "DNSAdmins"]}, []),
+        )
         module.run_asreproast_checks("pw")
         text = output.getvalue()
         assert "alice" in text
-        assert text.count("admin") == 2
+        assert text.count("admin") == 1
+        assert "Domain Admins" in text and "DNSAdmins" in text
+
+
+def test_privileged_group_members_parse_accounts_and_fail_closed(monkeypatch):
+    monkeypatch.setattr(privileged_helpers, "require_session", lambda: {
+        "excluded_users": ["excluded"]
+    })
+    monkeypatch.setattr(privileged_helpers, "PRIVILEGED_GROUPS", (
+        "Domain Admins", "DNSAdmins", "Exchange Windows Permissions",
+    ))
+    monkeypatch.setattr(privileged_helpers, "track_items", lambda items, _label: items)
+    prefix = "LDAP dc 389 DC "
+
+    def run(_name, command):
+        group = command[-1]
+        if group == "Domain Admins":
+            return prefix + "[+] example\\user:********\n" + "\n".join(
+                prefix + name for name in ("SQL Service", "ALICE", "excluded")
+            )
+        if group == "DNSAdmins":
+            return prefix + "[+] example\\user:********\n" + prefix + "Alice"
+        return (
+            prefix + "[+] example\\user:********\n"
+            + prefix + f"[-] Group '{group}' not found"
+        )
+
+    monkeypatch.setattr(privileged_helpers, "run_check", run)
+    groups = privileged_helpers.get_privileged_group_members("dc", "user", "pw")
+    assert groups["Domain Admins"] == ["ALICE", "SQL Service"]
+    assert groups["Exchange Windows Permissions"] == []
+    assert privileged_helpers.get_account_privileged_groups(
+        "dc", "user", "pw", ["alice", "SQL Service", "ordinary"]
+    ) == {"alice": ["Domain Admins", "DNSAdmins"], "sql service": ["Domain Admins"]}
+
+    monkeypatch.setattr(
+        privileged_helpers, "run_check",
+        lambda _name, command: prefix + "[+] example\\user:********\n" + prefix
+        + f"[-] Group '{command[-1]}' has no members",
+    )
+    assert all(not members for members in
+               privileged_helpers.get_privileged_group_members("dc", "user", "pw").values())
+
+    monkeypatch.setattr(
+        privileged_helpers, "run_check",
+        lambda *_args: prefix + "[+] example\\user:********\n" + prefix
+        + "[-] LDAP search failed",
+    )
+    with pytest.raises(CheckExecutionError, match="NetExec reported an error"):
+        privileged_helpers.get_privileged_group_members("dc", "user", "pw")
+
+    monkeypatch.setattr(
+        privileged_helpers, "run_check", lambda *_args: prefix + "[+] example\\user:********"
+    )
+    with pytest.raises(CheckExecutionError, match="Could not determine group membership"):
+        privileged_helpers.get_privileged_group_members("dc", "user", "pw")
+
+
+@pytest.mark.parametrize("kind", ["asreproast", "kerberoast"])
+@pytest.mark.parametrize("groups", [{}, {"admin": ["Domain Admins", "DNSAdmins"]}, None])
+def test_roasting_tables_show_groups_only_when_known_or_unknown(monkeypatch, kind, groups):
+    output = io.StringIO()
+    module = unauthenticated if kind == "asreproast" else privileged
+    monkeypatch.setattr(module, "console", Console(file=output, width=160))
+    monkeypatch.setattr(module, "print_section", lambda *_args: None)
+    monkeypatch.setattr(module, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(module, "record_findings", lambda *_args: None)
+    monkeypatch.setattr(module, "require_session", lambda: {
+        "dc_ip": "dc", "domain": "example.test", "standard_user": "user",
+        "domain_users_exported": True,
+    })
+    if kind == "asreproast":
+        monkeypatch.setattr(module, "require_collected_data", lambda *_args: None)
+        monkeypatch.setattr(module, "asreproast_check", lambda *_args: (
+            {"accounts": ["alice", "Admin"], "account_count": 2}, []
+        ))
+        def lookup(*_args):
+            if groups is None:
+                raise CheckExecutionError("groups", [], stderr="lookup failed")
+            return groups, []
+        monkeypatch.setattr(module, "asreproast_privileged_check", lookup)
+        monkeypatch.setattr(module, "record_incomplete", lambda *_args: None)
+        module.run_asreproast_checks("pw")
+    else:
+        monkeypatch.setattr(module, "kerberoast_check", lambda *_args: (
+            {"accounts": ["alice", "Admin"], "account_count": 2, "privileged_groups": groups}, []
+        ))
+        module.run_kerberoast_checks("pw")
+    text = output.getvalue()
+    assert text.count("alice") == 1 and text.count("Admin ") == 1
+    assert ("Privileged Group" in text) == (groups is None or bool(groups))
+    if groups:
+        assert "Domain Admins" in text and "DNSAdmins" in text
+    if groups is None:
+        assert text.count("Unknown") == 2
+
+
+@pytest.mark.parametrize("kind", ["asreproast", "kerberoast"])
+def test_roasting_tables_show_no_accounts(monkeypatch, kind):
+    output = io.StringIO()
+    module = unauthenticated if kind == "asreproast" else privileged
+    monkeypatch.setattr(module, "console", Console(file=output, width=160))
+    monkeypatch.setattr(module, "print_section", lambda *_args: None)
+    monkeypatch.setattr(module, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(module, "record_findings", lambda *_args: None)
+    monkeypatch.setattr(module, "require_session", lambda: {
+        "dc_ip": "dc", "domain": "example.test", "standard_user": "user",
+        "domain_users_exported": True,
+    })
+    if kind == "asreproast":
+        monkeypatch.setattr(module, "require_collected_data", lambda *_args: None)
+        monkeypatch.setattr(module, "asreproast_check", lambda *_args: (
+            {"accounts": [], "account_count": 0}, []
+        ))
+        module.run_asreproast_checks("pw")
+    else:
+        monkeypatch.setattr(module, "kerberoast_check", lambda *_args: (
+            {"accounts": [], "account_count": 0, "privileged_groups": {}}, []
+        ))
+        module.run_kerberoast_checks("pw")
+    assert "None found" in output.getvalue()
+    assert "Privileged Group" not in output.getvalue()
 
 
 def test_ldap_info_displays_accounts_without_sensitive_values(monkeypatch):

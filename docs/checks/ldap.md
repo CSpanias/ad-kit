@@ -30,9 +30,10 @@ If NetExec reports `No TLS cert`, channel binding is recorded as unknown rather
 than not enforced, because the TLS connection did not establish its setting.
 Controllers are checked concurrently, with four workers by default; use
 `--workers` to choose between one and 16.
-The console shows one current-run confirmed anonymous enumeration sample, including up to ten
-user rows when available. It prefers a controller that returned user rows;
-evidence for every controller remains in the evidence directory.
+The console shows one current-run confirmed anonymous user enumeration
+command and its output, including up to ten user rows when available. It
+prefers a controller that returned user rows; evidence for both commands on
+every controller remains in the evidence directory.
 
 ## What it checks
 
