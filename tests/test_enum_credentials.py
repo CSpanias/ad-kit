@@ -1,3 +1,4 @@
+import io
 import json
 import shlex
 import subprocess
@@ -5,6 +6,7 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 
 import pytest
+from rich.console import Console
 
 from ad_kit.commands import enum
 from ad_kit.core import util
@@ -125,6 +127,39 @@ def test_failed_admin_validation_without_standard_user_stops(monkeypatch):
     )
     assert enum.run_enumeration() is False
     assert saved == []
+
+
+def test_enumeration_prompts_are_separated(monkeypatch):
+    output = io.StringIO()
+    console = Console(file=output)
+    monkeypatch.setattr(enum, "console", console)
+    monkeypatch.setattr(enum, "print_section", lambda *_args: console.print("Configuration\n"))
+    monkeypatch.setattr(
+        enum.typer, "prompt", lambda label, **_kwargs: console.print(f"{label}: input") or "test"
+    )
+    responses = iter([True, True, True, True, False])
+    monkeypatch.setattr(
+        enum.typer, "confirm",
+        lambda label, **_kwargs: console.print(f"{label} yes") or next(responses),
+    )
+    monkeypatch.setattr(enum, "enum_preflight", lambda **_kwargs: None)
+    monkeypatch.setattr(enum, "confirm_enum_impact", lambda **_kwargs: False)
+    monkeypatch.setattr(enum, "print_warning", lambda message: console.print(message))
+
+    assert enum.run_enumeration() is False
+    text = output.getvalue()
+    for preceding, following in [
+        ("Domain Controller IP Address: input", "Validate Standard User account?"),
+        ("Validate Standard User account? yes", "Standard User Username:"),
+        ("Standard User Username: input", "Enter the Standard User password:"),
+        ("Enter the Standard User password: input", "Validate Domain Admin account?"),
+        ("Validate Domain Admin account? yes", "Domain Admin Username:"),
+        ("Domain Admin Username: input", "Domain Admin Password:"),
+        ("Domain Admin Password: input", "Run RustHound collection?"),
+        ("Run RustHound collection? yes", "Dump NTDS hashes?"),
+        ("Dump NTDS hashes? yes", "Generate SCP retrieval command?"),
+    ]:
+        assert f"{preceding}\n\n{following}" in text
 
 
 def test_scp_retrieval_selects_interface_and_quotes_actual_paths(monkeypatch, tmp_path):

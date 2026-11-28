@@ -563,7 +563,12 @@ def run_check(
                 f"Kerberos clock skew detected for {kerberos_dc}. Synchronizing changes "
                 "this machine's clock using unauthenticated DC time and may affect other services."
             )
-            if not typer.confirm("Synchronize this machine's clock and retry once?", default=False):
+            console.print()
+            sync_clock = typer.confirm(
+                "Synchronize this machine's clock and retry once?", default=False
+            )
+            console.print()
+            if not sync_clock:
                 raise CheckExecutionError(
                     name, display_command, stderr="Kerberos clock skew; synchronization declined."
                 )

@@ -225,6 +225,7 @@ def run_tombstone_checks(
         return
 
     if std_pass is None:
+        console.print()
         std_pass = authenticate_standard_user(trailing_blank=False)
 
     dc_ips = sorted(set(session_data.get("dc_ips") or [session_data["dc_ip"]]))
@@ -269,6 +270,14 @@ def run_tombstone_checks(
         )
 
     console.print(table)
+    if any(
+        result["deleted_objects"] is not None
+        and result["deleted_objects"] > len(result["sam_account_names"])
+        for result in results
+    ):
+        print_info(
+            "Only returned sAMAccountName values are listed; other objects may not have one."
+        )
 
     accessible_objects = [
         result
@@ -841,6 +850,7 @@ def run_asreproast_checks(
     if asrep_results["accounts"]:
         try:
             if std_pass is None:
+                console.print()
                 std_pass = authenticate_standard_user()
 
             with progress(

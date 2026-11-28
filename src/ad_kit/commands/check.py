@@ -191,6 +191,7 @@ def run_selected_checks(modules: list[str], *, csacyber: bool = False) -> bool:
         if check.requires_authentication and std_pass is None:
             if auth_error is None:
                 try:
+                    console.print()
                     std_pass = authenticate_standard_user(trailing_blank=False)
                 except (ADKitError, OSError, ValueError, RuntimeError) as exc:
                     auth_error = exc
@@ -259,6 +260,7 @@ def run_checks(
             if std_pass is None:
                 if auth_error is None:
                     try:
+                        console.print()
                         std_pass = authenticate_standard_user(trailing_blank=False)
                     except (ADKitError, OSError, ValueError, RuntimeError) as exc:
                         auth_error = exc

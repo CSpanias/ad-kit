@@ -137,7 +137,10 @@ def confirm_check_impact(modules: list[str]) -> bool:
     if "maq" in modules or "dns" in modules:
         print_warning("Cleanup can fail; manual removal may be required.")
     console.print()
-    return typer.confirm("Continue with these checks?", default=False)
+    confirmed = typer.confirm("Continue with these checks?", default=False)
+    if not confirmed:
+        console.print()
+    return confirmed
 
 
 def confirm_enum_impact(*, collect: bool, dump_ntds: bool) -> bool:
@@ -151,4 +154,7 @@ def confirm_enum_impact(*, collect: bool, dump_ntds: bool) -> bool:
         return True
     print_warning("NTDS extraction requests and saves sensitive password hashes.")
     console.print()
-    return typer.confirm("Continue with enumeration and NTDS extraction?", default=False)
+    confirmed = typer.confirm("Continue with enumeration and NTDS extraction?", default=False)
+    if not confirmed:
+        console.print()
+    return confirmed

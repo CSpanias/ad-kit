@@ -811,6 +811,7 @@ def test_declined_policy_prompt_is_separated_from_following_smb_progress(monkeyp
     )
     values, _ = _assess_policy()
     _run_policy(monkeypatch, values)
+    assert "\n\nAssess fine-grained password policies" in output.getvalue()
 
     monkeypatch.setattr(unauthenticated, "console", console)
     monkeypatch.setattr(unauthenticated, "print_section", lambda *_args: None)

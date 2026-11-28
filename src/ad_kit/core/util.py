@@ -126,7 +126,9 @@ def generate_scp_command(
     for index, (interface, address) in enumerate(addresses, 1):
         console.print(f"  {index}. {interface}: {address}")
     while True:
+        console.print()
         selection = typer.prompt("Interface address number", type=int)
+        console.print()
         if 1 <= selection <= len(addresses):
             break
         print_warning(f"Choose a number between 1 and {len(addresses)}.")
@@ -149,7 +151,6 @@ def generate_scp_command(
     ]
     command = shlex.join(["scp", *sources, "./"])
 
-    console.print()
     print_info(
         "From your local Kali VM, execute the following command to retrieve "
         "the assessment artefacts:"

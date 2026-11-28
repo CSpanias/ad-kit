@@ -55,10 +55,13 @@ def authenticate_standard_user(*, trailing_blank: bool = True) -> str:
         else:
             print_error("Unable to validate credentials.")
 
-        if not typer.confirm(
+        console.print()
+        retry = typer.confirm(
             "Try again?",
             default=True,
-        ):
+        )
+        console.print()
+        if not retry:
             raise RuntimeError("Authentication cancelled.")
 
 def authenticate_domain_admin() -> tuple[str, str]:
@@ -86,6 +89,7 @@ def authenticate_domain_admin() -> tuple[str, str]:
 
         da_user = typer.prompt("Domain Administrator Username")
 
+        console.print()
         da_pass = typer.prompt("Domain Administrator Password", hide_input=True)
 
         console.print()
@@ -117,5 +121,8 @@ def authenticate_domain_admin() -> tuple[str, str]:
 
             print_error("Unable to validate credentials.")
 
-        if not typer.confirm("Try again?", default=True):
+        console.print()
+        retry = typer.confirm("Try again?", default=True)
+        console.print()
+        if not retry:
             raise RuntimeError("Authentication cancelled.")

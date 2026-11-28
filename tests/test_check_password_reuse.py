@@ -3,7 +3,9 @@ from contextlib import nullcontext
 
 import pytest
 from rich.console import Console
+from typer.testing import CliRunner
 
+from ad_kit import cli
 from ad_kit.commands import check
 from ad_kit.commands.checks import credentials
 from ad_kit.core import console as console_helpers
@@ -36,6 +38,57 @@ def test_authentication_success_is_followed_by_blank_line(monkeypatch, admin):
         credentials.authenticate_standard_user()
         assert prompts == ["Enter the Standard User password"]
     assert output.getvalue().endswith("Authentication succeeded.\n\n")
+
+
+def test_read_only_check_separates_impact_from_password_prompt(monkeypatch):
+    monkeypatch.setattr(cli, "check_preflight", lambda *_args: None)
+    monkeypatch.setattr(credentials, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user",
+    })
+    monkeypatch.setattr(credentials, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(credentials, "validate_credentials", lambda *_args: "valid")
+    monkeypatch.setattr(check, "run_tombstone_checks", lambda _password: None)
+    monkeypatch.setattr(check.results, "write_reports", lambda *_args, **_kwargs: None)
+    result = CliRunner().invoke(cli.app, ["check", "tombstone"], input="password\n")
+    assert result.exit_code == 0, result.output
+    assert (
+        "Selected checks query or probe targets; no test object creation is planned.\n\n"
+        "Enter the Standard User password:"
+    ) in result.output
+
+
+@pytest.mark.parametrize("admin", [False, True])
+def test_credential_prompts_and_retry_are_separated(monkeypatch, admin):
+    output = io.StringIO()
+    console = Console(file=output)
+    monkeypatch.setattr(credentials, "console", console)
+    monkeypatch.setattr(credentials, "print_error", lambda message: console.print(message))
+    monkeypatch.setattr(credentials, "print_success", lambda message: console.print(message))
+    monkeypatch.setattr(credentials, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user",
+    })
+    monkeypatch.setattr(credentials, "progress", lambda *_args: nullcontext())
+    statuses = iter(["invalid", "valid"])
+    monkeypatch.setattr(credentials, "validate_credentials", lambda *_args: next(statuses))
+    monkeypatch.setattr(
+        credentials.typer, "prompt",
+        lambda label, **_kwargs: console.print(f"{label}: (input)") or "test",
+    )
+    monkeypatch.setattr(
+        credentials.typer, "confirm",
+        lambda label, **_kwargs: console.print(f"{label} yes") or True,
+    )
+    if admin:
+        credentials.authenticate_domain_admin()
+        assert (
+            "Domain Administrator Username: (input)\n\n"
+            "Domain Administrator Password:"
+        ) in output.getvalue()
+        first_prompt = "Domain Administrator Username:"
+    else:
+        credentials.authenticate_standard_user()
+        first_prompt = "Enter the Standard User password:"
+    assert f"Invalid credentials.\n\nTry again? yes\n\n{first_prompt}" in output.getvalue()
 
 
 @pytest.mark.parametrize(("module", "runner", "heading"), [

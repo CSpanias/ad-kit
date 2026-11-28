@@ -960,6 +960,32 @@ def test_other_checks_show_known_affected_objects(monkeypatch, tmp_path, kind):
         assert "one deleted object on 'DC1'" in recorded_findings[0].evidence[0]
 
 
+@pytest.mark.parametrize(("count", "names", "show_note"), [
+    (36, ["account"], True),
+    (1, ["account"], False),
+    (0, [], False),
+    (None, [], False),
+])
+def test_tombstone_explains_fewer_account_names(monkeypatch, count, names, show_note):
+    notes = []
+    monkeypatch.setattr(unauthenticated, "console", Console(file=io.StringIO()))
+    monkeypatch.setattr(unauthenticated, "print_section", lambda *_args: None)
+    monkeypatch.setattr(unauthenticated, "print_info", notes.append)
+    monkeypatch.setattr(unauthenticated, "progress", lambda *_args: nullcontext())
+    monkeypatch.setattr(unauthenticated, "record_findings", lambda *_args: None)
+    monkeypatch.setattr(unauthenticated, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user",
+    })
+    monkeypatch.setattr(unauthenticated, "tombstone_check", lambda *_args: {
+        "dc_hostname": "DC1", "deleted_objects": count,
+        "sam_account_names": names, "status": "Enumerated",
+    })
+    unauthenticated.run_tombstone_checks("pw")
+    assert bool(notes) is show_note
+    if show_note:
+        assert "Only returned sAMAccountName values are listed" in notes[0]
+
+
 def test_local_admin_dc_finding_preserves_affected_hosts(monkeypatch):
     findings = []
     monkeypatch.setattr(policy, "console", Console(file=io.StringIO(), width=160))

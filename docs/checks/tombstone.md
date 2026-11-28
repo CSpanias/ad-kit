@@ -20,7 +20,8 @@ nxc ldap <dc_ip> -u <username> -p <password> -M tombstone -o ACTION=query
 ## What it checks
 
 The results table includes returned `sAMAccountName` values when available;
-some deleted objects may not have a name.
+some deleted objects may not have a name. When fewer names than objects are
+returned, a note explains the difference.
 
 ad-kit retrieves objects in the Deleted Objects container with a read-only
 query action. The query never restores or deletes anything.

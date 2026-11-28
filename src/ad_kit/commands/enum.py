@@ -602,26 +602,28 @@ def run_enumeration() -> bool:
             "Validate Standard User account?",
             default=True,
         )
+        console.print()
 
         if validate_std:
 
             std_user = typer.prompt("Standard User Username")
+            console.print()
             std_pass = typer.prompt("Enter the Standard User password", hide_input=True)
-
-        console.print()
+            console.print()
 
         # Validate Domain Admin
         validate_da = typer.confirm(
             "Validate Domain Admin account?",
             default=True,
         )
+        console.print()
 
         if validate_da:
     
             da_user = typer.prompt("Domain Admin Username")
+            console.print()
             da_pass = typer.prompt("Domain Admin Password", hide_input=True)
-
-        console.print()
+            console.print()
 
         collect = typer.confirm("Run RustHound collection?", default=True)
         console.print()

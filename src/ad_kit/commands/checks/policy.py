@@ -215,10 +215,12 @@ def run_password_policy_checks(
     resultant_checked = False
     resultant_dn = None
     resultant_pso: FineGrainedPolicy | None = None
-    if typer.confirm(
+    console.print()
+    assess_fgpp = typer.confirm(
         "Assess fine-grained password policies using Domain Administrator credentials?",
         default=False,
-    ):
+    )
+    if assess_fgpp:
         console.print()
         da_user, da_pass = authenticate_domain_admin()
         try:
@@ -320,6 +322,8 @@ def run_password_policy_checks(
         if status == UNKNOWN
     ]
     if unknown:
+        if fgpp_skipped:
+            console.print()
         details = password_policy.get("lockout_duration_error")
         record_incomplete(
             "pass-pol",
@@ -841,6 +845,7 @@ def run_dns_checks(
     if dns_results["cleanup_method"] == "Domain Admin Required":
 
         try:
+            console.print()
             da_user, da_pass = authenticate_domain_admin()
 
             with capture_check_evidence() as cleanup_evidence:
