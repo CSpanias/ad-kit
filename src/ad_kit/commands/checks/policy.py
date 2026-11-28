@@ -1,3 +1,5 @@
+import re
+
 import typer
 from rich.table import Table
 from rich.text import Text
@@ -16,11 +18,12 @@ from ad_kit.checks.passwords import (
     resultant_password_policy,
     resultant_policy_name,
 )
-from ad_kit.checks.pre2k import pre2k_check
+from ad_kit.checks.pre2k import pre2k_check, validate_pre2k_ldap
 from ad_kit.core.checks import (
     capture_check_evidence,
     cleanup_test_artifact,
     format_check_evidence,
+    get_evidence_dir,
     warn_test_artifact_remaining,
 )
 from ad_kit.core.console import account_group_table, console, object_text, print_section
@@ -678,10 +681,15 @@ def run_maq_checks(
         ),
     )
 
-    if maq_results["cleanup_method"] == "Domain Admin Required" and typer.confirm(
-        "Retry machine account cleanup using Domain Administrator credentials?",
-        default=False,
-    ):
+    retry_cleanup = False
+    if maq_results["cleanup_method"] == "Domain Admin Required":
+        console.print()
+        retry_cleanup = typer.confirm(
+            "Retry machine account cleanup using Domain Administrator credentials?",
+            default=False,
+        )
+
+    if retry_cleanup:
 
         try:
             da_user, da_pass = authenticate_domain_admin()
@@ -932,7 +940,10 @@ def run_pre2k_checks(
 
         std_pass = (authenticate_standard_user())
 
-    with progress("Checking pre-created computer accounts..."):
+    with (
+        capture_check_evidence() as evidence,
+        progress("Checking pre-created computer accounts..."),
+    ):
 
         pre2k_results, findings = (
             pre2k_check(
@@ -942,19 +953,90 @@ def run_pre2k_checks(
             )
         )
 
+    validations = {}
+    validation_lines = []
+    successful_accounts = [
+        account for account in pre2k_results["accounts"]
+        if pre2k_results["account_tgts"].get(account.casefold().removesuffix("$")) == "Successful"
+    ]
+    if pre2k_results.get("tgt_obtained") and not successful_accounts:
+        record_incomplete(
+            "Pre2K LDAP validation", "",
+            "NetExec reported a TGT but did not identify a matching account.",
+        )
+    if successful_accounts:
+        dc_hostname = next(
+            (
+                dc["hostname"] for dc in session_data.get("dc_controllers", [])
+                if dc.get("ip") == session_data["dc_ip"] and dc.get("hostname")
+            ),
+            None,
+        )
+        domain = session_data.get("domain")
+        with progress("Validating Pre-Windows 2000 tickets against LDAP..."):
+            for account in successful_accounts:
+                if validation_lines:
+                    validation_lines.append("")
+                if not dc_hostname or not domain or not account.endswith("$") or len(account) < 2:
+                    reason = "A matching DC hostname, domain, or computer account name is missing."
+                    validation_lines.append(f"[-] {account}: {reason}")
+                    success = False
+                else:
+                    success, lines, reason = validate_pre2k_ldap(
+                        account, domain, session_data["dc_ip"], dc_hostname
+                    )
+                    validation_lines.extend(lines)
+                validations[account.casefold()] = success
+                if success:
+                    for finding in findings:
+                        finding.evidence.append(
+                            f"`{account}` authenticated to LDAP using a Kerberos TGT."
+                        )
+                else:
+                    record_incomplete("Pre2K LDAP validation", account, reason)
+        (get_evidence_dir() / "pre2k-ldap-validation.txt").write_text(
+            "\n".join(validation_lines) + "\n", encoding="utf-8"
+        )
+
     table = Table()
 
     table.add_column("Account", style="cyan")
     table.add_column("TGT Acquisition")
+    if successful_accounts:
+        table.add_column("LDAP Validation")
     for account in pre2k_results["accounts"]:
         status = pre2k_results["account_tgts"].get(
             account.casefold().removesuffix("$"), "Unknown"
         )
         if status == "Successful":
             status = "[red]✗ Successful[/red]"
-        table.add_row(object_text([account]), status)
+        row = [object_text([account]), status]
+        if successful_accounts:
+            validated = validations.get(account.casefold())
+            row.append(
+                "[red]✗ Successful[/red]" if validated is True
+                else "[yellow]Unknown[/yellow]" if validated is False
+                else "-"
+            )
+        table.add_row(*row)
     if not pre2k_results["accounts"]:
         table.add_row("-", "Not observed")
     console.print(table)
+
+    if findings:
+        print_section("Pre-Windows 2000 Computer Accounts - Command Evidence")
+        for record in evidence:
+            if record.name == "pre2k":
+                lines = [
+                    line for line in record.stdout.splitlines()
+                    if "successfully obtained tgt" in line.casefold()
+                    or re.search(r"\bfound\s+\d+\s+pre-created computer accounts?\b", line, re.I)
+                ]
+                excerpt = "\n".join(lines)
+                excerpt += "\n[Full output: ad-kit/evidence/pre2k.txt]"
+                console.print(format_check_evidence(record, excerpt), markup=False, highlight=False)
+        if validation_lines:
+            console.print()
+            console.print("\n".join(validation_lines), markup=False, highlight=False)
 
     record_findings(findings)

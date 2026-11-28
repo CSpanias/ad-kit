@@ -27,6 +27,14 @@ account's ticket outcome could not be determined from the command output.
 
 ad-kit finds pre-created computer accounts and attempts to request a Ticket
 Granting Ticket (TGT) using the default machine-account password.
+For each account with a confirmed TGT, it requests a fresh TGT in memory and
+uses that ticket to attempt a Kerberos LDAP bind to the same Domain Controller.
+LDAP validation failures are recorded as incomplete; they do not erase a
+successful NetExec TGT result. The console displays the NetExec command and
+selected results, followed by the in-process validation steps. Full NetExec
+output is saved in `ad-kit/evidence/pre2k.txt`, and validation results in
+`ad-kit/evidence/pre2k-ldap-validation.txt`. These results do not explicitly
+print the derived password or ticket contents.
 
 ## How it works
 

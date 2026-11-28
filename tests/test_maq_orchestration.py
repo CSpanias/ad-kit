@@ -1,3 +1,4 @@
+import io
 from contextlib import contextmanager, nullcontext
 from types import SimpleNamespace
 
@@ -140,3 +141,34 @@ def test_maq_admin_cleanup_can_be_declined(monkeypatch):
     assert warnings == [("machine account", "ADKIT-TEST$", "maq-create-machine")]
     assert len(findings) == 1
     assert any("manual remediation" in item for item in findings[0].evidence)
+
+
+def test_maq_separates_cleanup_warning_from_prompt(monkeypatch):
+    output = io.StringIO()
+    console = Console(file=output, width=160)
+    monkeypatch.setattr(policy, "console", console)
+    monkeypatch.setattr(policy, "print_section", lambda *_args: None)
+    monkeypatch.setattr(policy, "require_session", lambda: {
+        "dc_ip": "dc", "standard_user": "user",
+    })
+    monkeypatch.setattr(policy, "progress", lambda *_args: nullcontext())
+    result = {
+        "machine_account_quota": "0", "machine_join_group": "Authenticated Users",
+        "machine_created": True, "machine_deleted": False,
+        "cleanup_method": "Domain Admin Required", "machine_name": "ADKIT-TEST",
+    }
+
+    def check(*_args):
+        console.print("[!] Cleanup was not confirmed.", markup=False)
+        return result
+
+    def confirm(message, **_kwargs):
+        console.print(message)
+        return False
+
+    monkeypatch.setattr(policy, "maq_check", check)
+    monkeypatch.setattr(policy.typer, "confirm", confirm)
+    monkeypatch.setattr(policy, "warn_test_artifact_remaining", lambda *_args: None)
+    monkeypatch.setattr(policy, "record_findings", lambda *_args: None)
+    policy.run_maq_checks("password")
+    assert "Cleanup was not confirmed.\n\nRetry machine account cleanup" in output.getvalue()

@@ -11,6 +11,15 @@ account credentials.
 """
 
 import re
+import struct
+
+from impacket.krb5 import constants
+from impacket.krb5.asn1 import AS_REP
+from impacket.krb5.kerberosv5 import KerberosError, SessionKeyDecryptionError, getKerberosTGT
+from impacket.krb5.types import KerberosException, Principal
+from impacket.ldap.ldap import LDAPConnection, LDAPSessionError
+from pyasn1.codec.der import decoder
+from pyasn1.error import PyAsn1Error
 
 from ad_kit.core.checks import run_check
 from ad_kit.core.finding import Finding
@@ -127,3 +136,59 @@ def pre2k_check(
         findings.append(finding)
 
     return results, findings
+
+
+def validate_pre2k_ldap(
+    account: str, domain: str, dc_ip: str, dc_hostname: str
+) -> tuple[bool, list[str], str]:
+    """Request a TGT and use that same ticket to authenticate to LDAP."""
+    principal = account.removesuffix("$").lower()
+    password = principal[:14]
+    lines = [
+        f"[*] Requesting a TGT for {principal}@{domain} (Impacket, in-process).",
+    ]
+    try:
+        tgt, cipher, _old_key, session_key = getKerberosTGT(
+            Principal(principal, type=constants.PrincipalNameType.NT_PRINCIPAL.value),
+            password, domain, "", "", kdcHost=dc_ip,
+        )
+        response, trailing = decoder.decode(tgt, asn1Spec=AS_REP())
+        ticket_principal = Principal().from_asn1(response, "crealm", "cname")
+        if (
+            trailing
+            or len(ticket_principal.components) != 1
+            or ticket_principal.components[0].casefold().removesuffix("$") != principal.casefold()
+            or ticket_principal.realm.casefold() != domain.casefold()
+        ):
+            reason = "The TGT client principal did not match the selected account and domain."
+            lines.append(f"[-] {reason}")
+            return False, lines, reason
+        lines.append(f"[+] TGT obtained for {principal}@{domain}.")
+        lines.append(f"[*] Authenticating to LDAP on {dc_hostname} using that TGT.")
+        connection = LDAPConnection(f"ldap://{dc_hostname}", dstIp=dc_ip)
+        try:
+            authenticated = connection.kerberosLogin(
+                ticket_principal.components[0], "", domain=domain, kdcHost=dc_ip,
+                TGT={"KDC_REP": tgt, "cipher": cipher, "sessionKey": session_key},
+                useCache=False,
+            )
+        finally:
+            connection.close()
+        if not authenticated:
+            reason = "LDAP authentication was not confirmed."
+            lines.append(f"[-] {reason}")
+            return False, lines, reason
+    except (PyAsn1Error, struct.error) as exc:
+        reason = f"{type(exc).__name__}: Invalid Kerberos or LDAP response."
+        lines.append(f"[-] Validation failed: {reason}")
+        return False, lines, reason
+    except (
+        KerberosError, KerberosException, SessionKeyDecryptionError,
+        LDAPSessionError, OSError,
+    ) as exc:
+        reason = f"{type(exc).__name__}: {exc}".replace(password, "[REDACTED]")
+        lines.append(f"[-] Validation failed: {reason}")
+        return False, lines, reason
+
+    lines.append(f"[+] LDAP authentication succeeded for {account} using the TGT.")
+    return True, lines, ""
