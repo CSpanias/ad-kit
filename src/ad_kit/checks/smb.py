@@ -308,22 +308,19 @@ def smb_configuration_check(
     anonymous_users_complete = False
     incomplete: list[str] = []
     if null_auth or guest_auth:
-        command = [
-            "nxc", "smb", host,
-            "-u", "",
-            "-p", "",
-            "--shares",
-        ]
-        if enumerate_users:
-            command.append("--users")
-        command.extend(["--dns-server", dc_ip])
+        share_failed = False
+        user_failed = False
         try:
             enumeration_output = run_check(
                 f"smb-anonymous-enumeration-{host}",
-                command,
+                [
+                    "nxc", "smb", host, "-u", "", "-p", "",
+                    "--shares", "--dns-server", dc_ip,
+                ],
                 show_progress=False,
             )
         except CheckExecutionError as exc:
+            share_failed = True
             incomplete.append(str(exc))
         else:
             anonymous_shares = _parse_share_count(enumeration_output)
@@ -351,52 +348,42 @@ def smb_configuration_check(
                 r"error enumerating shares", enumeration_output, re.IGNORECASE
             ) and not share_denied:
                 incomplete.append("Share enumeration reported an error; see evidence")
-            if enumerate_users:
-                anonymous_users, anonymous_users_complete = _parse_user_count(
-                    enumeration_output
+
+        if enumerate_users:
+            try:
+                user_output = run_check(
+                    f"smb-anonymous-users-{host}",
+                    [
+                        "nxc", "smb", host, "-u", "", "-p", "",
+                        "--users", "--dns-server", dc_ip,
+                    ],
+                    show_progress=False,
                 )
+            except CheckExecutionError as exc:
+                user_failed = True
+                incomplete.append(str(exc))
+            else:
+                anonymous_users, anonymous_users_complete = _parse_user_count(
+                    user_output
+                )
+                user_null_auth, user_guest_auth = _parse_empty_credential_login(user_output)
                 if (
                     anonymous_users is None
                     and not anonymous_users_complete
-                    and not re.search(
-                        r"error enumerating domain user", enumeration_output, re.IGNORECASE
-                    )
+                    and (user_null_auth or user_guest_auth)
+                    and not re.search(r"\[-\]", user_output)
                 ):
-                    try:
-                        user_output = run_check(
-                            f"smb-anonymous-users-{host}",
-                            [
-                                "nxc", "smb", host, "-u", "", "-p", "",
-                                "--users", "--dns-server", dc_ip,
-                            ],
-                            show_progress=False,
-                        )
-                    except CheckExecutionError as exc:
-                        incomplete.append(str(exc))
-                    else:
-                        anonymous_users, anonymous_users_complete = _parse_user_count(
-                            user_output
-                        )
-                        user_null_auth, user_guest_auth = _parse_empty_credential_login(
-                            user_output
-                        )
-                        if (
-                            anonymous_users is None
-                            and not anonymous_users_complete
-                            and (user_null_auth or user_guest_auth)
-                            and not re.search(r"\[-\]", user_output)
-                        ):
-                            anonymous_users = 0
-                            anonymous_users_complete = True
-            missing = []
-            if anonymous_shares is None:
-                missing.append("share enumeration")
-            if enumerate_users and not anonymous_users_complete:
-                missing.append("user enumeration")
-            if missing:
-                incomplete.append(
-                    f"No complete result for {' and '.join(missing)}; see evidence"
-                )
+                    anonymous_users = 0
+                    anonymous_users_complete = True
+        missing = []
+        if anonymous_shares is None and not share_failed:
+            missing.append("share enumeration")
+        if enumerate_users and not anonymous_users_complete and not user_failed:
+            missing.append("user enumeration")
+        if missing:
+            incomplete.append(
+                f"No complete result for {' and '.join(missing)}; see evidence"
+            )
 
     if signing == "true":
         signing = "[green]✓ Enabled[/green]"

@@ -654,7 +654,10 @@ def run_maq_checks(
         ),
     )
 
-    if maq_results["cleanup_method"] == "Domain Admin Required":
+    if maq_results["cleanup_method"] == "Domain Admin Required" and typer.confirm(
+        "Retry machine account cleanup using Domain Administrator credentials?",
+        default=False,
+    ):
 
         try:
             da_user, da_pass = authenticate_domain_admin()
@@ -692,6 +695,12 @@ def run_maq_checks(
                 "machine account", f"{maq_results['machine_name']}$",
                 "maq-create-machine",
             )
+    elif maq_results["cleanup_method"] == "Domain Admin Required":
+        maq_results["cleanup_method"] = "Manual Intervention Required"
+        warn_test_artifact_remaining(
+            "machine account", f"{maq_results['machine_name']}$",
+            "maq-create-machine",
+        )
 
     table.add_row("Machine Cleanup", maq_results["cleanup_method"])
 

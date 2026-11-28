@@ -53,6 +53,9 @@ If cleanup cannot be confirmed, ad-kit warns with the machine account name and
 the creation evidence path. It may prompt for Domain Administrator credentials
 to retry cleanup over LDAP; otherwise, check whether the account remains and
 remove it.
+If the Standard User cannot remove the test account, ad-kit asks whether to
+retry with Domain Administrator credentials. Declining continues the assessment
+and reports that manual cleanup is required.
 
 When a finding is generated, the console shows the redacted commands and output
 from the current check, including attempted cleanup, without repeating any

@@ -79,6 +79,7 @@ def test_maq_admin_cleanup_uses_ldap(monkeypatch):
     })
     monkeypatch.setattr(policy, "progress", lambda _message: nullcontext())
     monkeypatch.setattr(policy, "maq_check", lambda *_args: results)
+    monkeypatch.setattr(policy.typer, "confirm", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(policy, "authenticate_domain_admin", lambda: ("admin", "admin-secret"))
     monkeypatch.setattr(
         policy, "cleanup_test_artifact",
@@ -99,3 +100,43 @@ def test_maq_admin_cleanup_uses_ldap(monkeypatch):
     )]
     assert results["machine_deleted"] is True
     assert results["cleanup_method"] == "Domain Administrator"
+
+
+def test_maq_admin_cleanup_can_be_declined(monkeypatch):
+    results = {
+        "machine_account_quota": "10",
+        "machine_join_group": "Authenticated Users",
+        "machine_created": True,
+        "machine_authenticated": True,
+        "machine_deleted": False,
+        "cleanup_method": "Domain Admin Required",
+        "machine_name": "ADKIT-TEST",
+        "machine_password": "machine-secret",
+    }
+    warnings = []
+    findings = []
+    monkeypatch.setattr(policy, "require_session", lambda: {
+        "dc_ip": "192.0.2.1", "standard_user": "test-user",
+    })
+    monkeypatch.setattr(policy, "progress", lambda _message: nullcontext())
+    monkeypatch.setattr(policy, "maq_check", lambda *_args: results)
+    monkeypatch.setattr(policy.typer, "confirm", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        policy, "authenticate_domain_admin",
+        lambda: pytest.fail("Declined cleanup must not request credentials"),
+    )
+    monkeypatch.setattr(
+        policy, "cleanup_test_artifact",
+        lambda *_args: pytest.fail("Declined cleanup must not run"),
+    )
+    monkeypatch.setattr(policy, "warn_test_artifact_remaining", lambda *args: warnings.append(args))
+    monkeypatch.setattr(policy, "load_finding", lambda *_args: SimpleNamespace(evidence=[]))
+    monkeypatch.setattr(policy, "record_findings", lambda entries: findings.extend(entries))
+
+    policy.run_maq_checks("standard-secret")
+
+    assert results["machine_deleted"] is False
+    assert results["cleanup_method"] == "Manual Intervention Required"
+    assert warnings == [("machine account", "ADKIT-TEST$", "maq-create-machine")]
+    assert len(findings) == 1
+    assert any("manual remediation" in item for item in findings[0].evidence)

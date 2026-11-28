@@ -18,15 +18,14 @@ ad-kit runs NetExec against the discovered hosts:
 ```bash
 nxc smb <host> -u '' -p '' --dns-server <dc_ip>
 nxc smb <host> -u '' -p '' --shares --dns-server <dc_ip>
-nxc smb <dc> -u '' -p '' --shares --users --dns-server <dc_ip>
 nxc smb <dc> -u '' -p '' --users --dns-server <dc_ip>
 nxc smb <host> -u <username> -p <password> --shares --dns-server <dc_ip>
 ```
 
 The anonymous enumeration commands run when the empty-credential login
-succeeds, including when it is mapped to a Guest session. User enumeration is
-restricted to discovered Domain Controllers. If the combined DC command does
-not return a user result, the user check is attempted separately.
+succeeds, including when it is mapped to a Guest session. Share and user
+enumeration are separate commands, so a failed share check does not prevent
+user enumeration. User enumeration is restricted to discovered Domain Controllers.
 The share-access checks use the Standard User account and are prompted only
 when needed. SMB configuration is checked on Domain Controllers first, and
 their results are displayed before the remaining hosts are checked. Each batch
@@ -87,11 +86,11 @@ systems and distinguishes null and Guest-mapped sessions. Its affected-assets
 and evidence sections are omitted from the report; raw per-host command output
 remains in the evidence directory.
 
-For confirmed anonymous-enumeration findings, the console displays one current-run sample:
-up to ten anonymous user rows from a Domain Controller where available,
-falling back to share rows from a controller or another host. An excerpt
-without rows does not establish that enumeration was denied. Captured evidence
-for other hosts remains in the evidence directory.
+For confirmed anonymous-enumeration findings, the console displays one current-run
+sample. It shows the separate share and user commands when both returned rows,
+or whichever returned rows, limited to ten per table. It prefers a controller
+and falls back to another host with share rows. Captured evidence for other hosts
+remains in the evidence directory.
 
 If a host or an individual enumeration command fails, ad-kit retains confirmed
 results from other checks and hosts. The console summarises affected host

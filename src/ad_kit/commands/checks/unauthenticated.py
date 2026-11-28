@@ -85,25 +85,49 @@ def _enumeration_excerpt(output: str, kind: str) -> tuple[str, bool]:
 def _show_anonymous_evidence(
     records: list[CheckEvidence], results: list[dict], protocol: str
 ) -> bool:
+    if protocol == "smb":
+        smb_sample: tuple[str, list[tuple[CheckEvidence, str]]] | None = None
+        best_rank = 3
+        for result in results:
+            if not (result["null_auth"] is True or result.get("guest_auth", False)):
+                continue
+            host = result["host"]
+            excerpts = []
+            kinds = set()
+            for name, kind in (
+                (f"smb-anonymous-enumeration-{host}", "shares"),
+                (f"smb-anonymous-users-{host}", "users"),
+            ):
+                for record in records:
+                    if record.name == name:
+                        excerpt, found = _enumeration_excerpt(record.stdout, kind)
+                        if found:
+                            excerpts.append((record, excerpt))
+                            kinds.add(kind)
+                        break
+            rank = 0 if len(kinds) == 2 else 1 if "users" in kinds else 2
+            if excerpts and rank < best_rank:
+                smb_sample = (host, excerpts)
+                best_rank = rank
+                if rank == 0:
+                    break
+        if smb_sample is None:
+            return False
+        host, excerpts = smb_sample
+        console.print(f"\nAnonymous evidence - {host}\n", markup=False)
+        for index, (record, excerpt) in enumerate(excerpts):
+            if index:
+                console.print()
+            console.print(format_check_evidence(record, excerpt), markup=False, highlight=False)
+        return True
+
     sample: tuple[str, tuple[str, ...], list[CheckEvidence]] | None = None
     best_rank = 3
     for result in results:
-        host = result["dc_hostname"] if protocol == "ldap" else result["host"]
-        permitted = (
-            result["anonymous_bind"] == "[red]✗ Permitted[/red]"
-            if protocol == "ldap"
-            else result["null_auth"] is True or result.get("guest_auth", False)
-        )
-        if not permitted:
+        host = result["dc_hostname"]
+        if result["anonymous_bind"] != "[red]✗ Permitted[/red]":
             continue
-        names = (
-            (f"ldap-{host}", f"ldap-anonymous-users-{host}")
-            if protocol == "ldap"
-            else (
-                f"smb-{host}", f"smb-anonymous-enumeration-{host}",
-                f"smb-anonymous-users-{host}",
-            )
-        )
+        names = (f"ldap-{host}", f"ldap-anonymous-users-{host}")
         selected = [record for record in records if record.name in names]
         if not selected:
             continue
@@ -111,10 +135,6 @@ def _show_anonymous_evidence(
         rank = 2
         if any(_enumeration_excerpt(record.stdout, "users")[1] for record in enumerations):
             rank = 0
-        elif protocol == "smb" and any(
-            _enumeration_excerpt(record.stdout, "shares")[1] for record in enumerations
-        ):
-            rank = 1
         if rank < best_rank:
             sample = (host, names, selected)
             best_rank = rank
@@ -132,8 +152,6 @@ def _show_anonymous_evidence(
             excerpt = record.stdout
         else:
             excerpt, found = _enumeration_excerpt(record.stdout, "users")
-            if not found and protocol == "smb":
-                excerpt, found = _enumeration_excerpt(record.stdout, "shares")
             if not found:
                 lines = record.stdout.splitlines()
                 excerpt = "\n".join(lines[:10])

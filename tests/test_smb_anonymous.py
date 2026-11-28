@@ -51,7 +51,7 @@ def test_smb_scopes_anonymous_users_and_displays_enumeration_status(monkeypatch,
                     "SMB host 445 HOST ----- ----------- ------\n"
                     "SMB host 445 HOST public READ files\n"
                 )
-                if host == "DC.EXAMPLE":
+                if name.startswith("smb-anonymous-users") and host == "DC.EXAMPLE":
                     output_text += (
                         "SMB dc 445 DC -Username- -Last PW Set- -BadPW- -Description-\n"
                         "SMB dc 445 DC alice 2024-01-01 0 example\n"
@@ -94,7 +94,9 @@ def test_smb_scopes_anonymous_users_and_displays_enumeration_status(monkeypatch,
     assert "Not attempted" not in table_output
     assert table_output.count("Anonymous evidence - ") == 1
     assert "Anonymous evidence - DC.EXAMPLE\n\n$ nxc smb" in dc_section
-    assert "[+] EXAMPLE\\:\n\n$ nxc smb DC.EXAMPLE" in dc_section
+    assert "[+] EXAMPLE\\:" not in dc_section
+    assert "--shares --dns-server" in dc_section
+    assert "--users --dns-server" in dc_section
     assert sorted(share_hosts) == ["DC.EXAMPLE", "FAIL", "HOST", "NO-NULL"]
     assert not any("FAIL" in entry and "share enumeration" in entry for entry in results._incomplete)
     finding = next(finding for finding in results._findings if finding.id == "SMB-003")
@@ -243,7 +245,7 @@ def test_smb_configuration_runs_in_parallel_and_keeps_sample_evidence(monkeypatc
                 "SMB host 445 HOST (signing:False) (SMBv1:False)\n"
                 "SMB host 445 HOST [-] EXAMPLE\\: STATUS_LOGON_FAILURE"
             )
-        elif name == "smb-anonymous-enumeration-DC1":
+        elif name == "smb-anonymous-users-DC1":
             text = (
                 "SMB dc 445 DC -Username- -Last PW Set- -BadPW- -Description-\n"
                 "SMB dc 445 DC alice 2024-01-01 0 example\n"
@@ -614,8 +616,9 @@ def test_share_failure_preserves_successful_dc_user_enumeration(monkeypatch):
                 "SMB dc 445 DC (signing:True) (SMBv1:False)\n"
                 "SMB dc 445 DC [+] EXAMPLE\\:"
             )
+        if name.startswith("smb-anonymous-enumeration"):
+            return "SMB dc 445 DC [-] Error enumerating shares: ACCESS_DENIED\n"
         return (
-            "SMB dc 445 DC [-] Error enumerating shares: ACCESS_DENIED\n"
             "SMB dc 445 DC -Username- -Last PW Set- -BadPW- -Description-\n"
             "SMB dc 445 DC alice 2024-01-01 0 example\n"
             "SMB dc 445 DC Enumerated 1 local users: EXAMPLE\n"
@@ -628,6 +631,26 @@ def test_share_failure_preserves_successful_dc_user_enumeration(monkeypatch):
     assert result["anonymous_users_complete"]
     assert result["anonymous_incomplete"] == []
     results.reset()
+
+
+def test_share_command_failure_does_not_prevent_user_enumeration(monkeypatch):
+    def run(name, _command, **_kwargs):
+        if name.startswith("smb-anonymous-enumeration"):
+            raise smb.CheckExecutionError(name, [], stderr="connection failed")
+        if name.startswith("smb-anonymous-users"):
+            return (
+                "SMB dc 445 DC -Username- -Last PW Set- -BadPW- -Description-\n"
+                "SMB dc 445 DC alice 2024-01-01 0 example\n"
+                "SMB dc 445 DC Enumerated 1 local users: EXAMPLE\n"
+            )
+        return "SMB dc 445 DC (signing:True) (SMBv1:False)\nSMB dc 445 DC [+] EXAMPLE\\:"
+
+    monkeypatch.setattr(smb, "run_check", run)
+    result = smb.smb_configuration_check("dc", "192.0.2.1", enumerate_users=True)
+    assert result["anonymous_shares"] is None
+    assert result["anonymous_users"] == 1
+    assert result["anonymous_users_complete"]
+    assert len(result["anonymous_incomplete"]) == 1
 
 
 @pytest.mark.parametrize(("users_output", "user_count", "incomplete"), [
@@ -722,6 +745,8 @@ def test_anonymous_evidence_includes_users_from_separate_check(monkeypatch):
     )
     assert "$ nxc smb DC --users" in output.getvalue()
     assert "alice" in output.getvalue()
+    assert "--shares" not in output.getvalue()
+    assert "Error enumerating shares" not in output.getvalue()
 
 
 @pytest.mark.parametrize(
@@ -876,41 +901,48 @@ def test_anonymous_finding_commentary_matches_observed_objects(
     results.reset()
 
 
-def test_anonymous_evidence_prefers_users_and_limits_rows(monkeypatch):
+def test_anonymous_evidence_displays_separate_share_and_user_rows(monkeypatch):
     output = io.StringIO()
     monkeypatch.setattr(unauthenticated, "console", Console(file=output, width=200))
     users = "".join(
         f"SMB dc 445 DC user{i:02} 2024-01-01 0 example\n" for i in range(12)
     )
-    record = unauthenticated.CheckEvidence(
-        "smb-anonymous-enumeration-DC",
-        ["nxc", "smb", "DC", "-u", "", "-p", "", "--shares", "--users"],
-        "SMB dc 445 DC Enumerated shares\n"
-        "SMB dc 445 DC Share Permissions Remark\n"
-        "SMB dc 445 DC public READ files\n"
-        "SMB dc 445 DC -Username- -Last PW Set- -BadPW- -Description-\n"
-        + users + "SMB dc 445 DC Enumerated 12 local users: EXAMPLE\n",
-        "",
-    )
+    records = [
+        unauthenticated.CheckEvidence("smb-DC", ["nxc", "smb", "DC"], "login only", ""),
+        unauthenticated.CheckEvidence(
+            "smb-anonymous-enumeration-DC", ["nxc", "smb", "DC", "--shares"],
+            "SMB dc 445 DC Enumerated shares\n"
+            "SMB dc 445 DC Share Permissions Remark\n"
+            "SMB dc 445 DC public READ files\n", "",
+        ),
+        unauthenticated.CheckEvidence(
+            "smb-anonymous-users-DC", ["nxc", "smb", "DC", "--users"],
+            "SMB dc 445 DC -Username- -Last PW Set- -BadPW- -Description-\n"
+            + users + "SMB dc 445 DC Enumerated 12 local users: EXAMPLE\n", "",
+        ),
+    ]
     unauthenticated._show_anonymous_evidence(
-        [record], [{"host": "DC", "null_auth": True}], "smb"
+        records, [{"host": "DC", "null_auth": True}], "smb"
     )
     text = output.getvalue()
     assert "Anonymous evidence - DC\n\n$ nxc smb" in text
-    assert "--users" in text
+    assert "$ nxc smb DC --shares" in text
+    assert "$ nxc smb DC --users" in text
+    assert text.index("--shares") < text.index("--users")
+    assert "login only" not in text
     assert "user00" in text and "user09" in text
     assert "user10" not in text and "user11" not in text
     assert "2 additional row(s) omitted" in text
-    assert "public READ" not in text
+    assert "public READ" in text
 
 
-def test_anonymous_evidence_falls_back_to_shares_and_preserves_errors(monkeypatch):
+def test_anonymous_evidence_shows_partial_shares_and_preserves_errors(monkeypatch):
     output = io.StringIO()
     monkeypatch.setattr(unauthenticated, "console", Console(file=output, width=200))
     record = unauthenticated.CheckEvidence(
         "smb-anonymous-enumeration-DC",
-        ["nxc", "smb", "DC", "--shares", "--users"],
-        "SMB dc 445 DC [-] Error enumerating domain user(s)\n"
+        ["nxc", "smb", "DC", "--shares"],
+        "SMB dc 445 DC [-] Error enumerating shares\n"
         "SMB dc 445 DC Enumerated shares\n"
         "SMB dc 445 DC Share Permissions Remark\n"
         "SMB dc 445 DC public READ files\n",
@@ -920,7 +952,7 @@ def test_anonymous_evidence_falls_back_to_shares_and_preserves_errors(monkeypatc
         [record], [{"host": "DC", "null_auth": True}], "smb"
     )
     text = output.getvalue()
-    assert "Error enumerating domain user" in text
+    assert "Error enumerating shares" in text
     assert "public READ files" in text
 
 
@@ -1024,7 +1056,12 @@ def test_smb_progress_and_heading_spacing(
     def configuration(host, *_args, **_kwargs):
         if with_evidence and host == "DC":
             append_captured_evidence([
-                unauthenticated.CheckEvidence("smb-DC", ["nxc", "smb", "DC"], "evidence", "")
+                unauthenticated.CheckEvidence(
+                    "smb-anonymous-enumeration-DC", ["nxc", "smb", "DC", "--shares"],
+                    "SMB dc 445 DC Enumerated shares\n"
+                    "SMB dc 445 DC Share Permissions Remark\n"
+                    "SMB dc 445 DC public READ evidence", "",
+                )
             ])
         return {
             "host": host, "signing": "[green]✓ Enabled[/green]",
